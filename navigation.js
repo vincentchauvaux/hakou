@@ -1,11 +1,12 @@
-import { getSectionFraming, spacecraftEase } from "./scene3d.js";
+import { getSectionFraming, spacecraftEase, isRestOrbitDragging } from "./scene3d.js";
 
-const SECTION_COUNT = 5;
+let sectionCount = 6;
+let scaleSectionMax = 5;
 const TRANSITION_MS = 3200;
 const LONG_JUMP_MS_PER_STEP = 900;
 const GATE_WHEEL_TOTAL = 140;
 const GATE_TOUCH_TOTAL = 72;
-const SECTION_THEMES = ["dark", "light", "mid", "mid", "light"];
+const SECTION_THEMES = ["dark", "light", "mid", "mid", "mid", "light"];
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -23,38 +24,32 @@ let glideT = 1;
 let longJump = false;
 
 let gateProgress = 0;
-let gateDirection = 0;
+let lastGateDir = 0;
 let gateResetTimer = 0;
 let touchStartY = 0;
 let touchGateAcc = 0;
 
 let overlay = null;
-let scrollGateFill = null;
+let solarScaleMarker = null;
 let panels = [];
 let navLinks = [];
 
+/** Intro (0) en bas de l’échelle, Contact (N) vers Soleil en haut — scroll ↑ = marqueur monte. */
+function updateSolarScale(section) {
+  if (!solarScaleMarker) return;
+  const t = clamp(section / scaleSectionMax, 0, 1);
+  const progress = 1 - t;
+  solarScaleMarker.style.setProperty("--scale-progress", String(progress));
+}
+
 function canMove(dir) {
-  return dir > 0 ? currentSection < SECTION_COUNT - 1 : currentSection > 0;
+  return dir > 0 ? currentSection < sectionCount - 1 : currentSection > 0;
 }
 
 function resetGate() {
   gateProgress = 0;
-  gateDirection = 0;
+  lastGateDir = 0;
   touchGateAcc = 0;
-  updateGateUI();
-}
-
-function updateGateUI() {
-  if (!scrollGateFill) return;
-  const pct = clamp(gateProgress, 0, 1) * 100;
-  scrollGateFill.style.height = `${pct}%`;
-  const scrollGate = scrollGateFill.parentElement;
-  if (!scrollGate) return;
-  if (gateDirection > 0) {
-    scrollGate.dataset.direction = "down";
-  } else if (gateDirection < 0) {
-    scrollGate.dataset.direction = "up";
-  }
 }
 
 function getUiSectionIndex() {
@@ -94,20 +89,39 @@ function longJumpFadeWeights(t) {
   return { fadeOut, fadeIn };
 }
 
+function getPanelZone(panel) {
+  return Number(panel.dataset.zone);
+}
+
+function syncNavLinks({ ariaIndex, highlightZones }) {
+  const highlight = new Set(highlightZones);
+  navLinks.forEach((link) => {
+    const zone = Number(link.dataset.zoneLink);
+    const active = highlight.has(zone);
+    link.classList.toggle("is-active", active);
+    if (zone === ariaIndex) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+}
+
 function syncLongJumpPanels(t) {
   const { fadeOut, fadeIn } = longJumpFadeWeights(t);
   const offsetFromVH = (glideFromIndex - glideToIndex) * 100;
-  panels.forEach((panel, i) => {
+  panels.forEach((panel) => {
+    const zone = getPanelZone(panel);
     panel.classList.remove("is-long-jump-from", "is-long-jump-to", "is-long-jump-hidden");
     panel.style.removeProperty("--long-jump-offset");
     panel.style.removeProperty("opacity");
 
-    if (i === glideFromIndex) {
+    if (zone === glideFromIndex) {
       panel.classList.add("is-long-jump-from");
       panel.style.setProperty("--long-jump-offset", `${offsetFromVH}vh`);
       panel.style.opacity = String(fadeOut);
       panel.classList.toggle("is-active", t < 0.5);
-    } else if (i === glideToIndex) {
+    } else if (zone === glideToIndex) {
       panel.classList.add("is-long-jump-to");
       panel.style.opacity = String(fadeIn);
       panel.classList.toggle("is-active", t >= 0.5);
@@ -126,12 +140,13 @@ function syncAdjacentGlidePanels(t) {
     overlay.dataset.adjacentGlide = "true";
   }
   const { fadeOut, fadeIn } = longJumpFadeWeights(t);
-  panels.forEach((panel, i) => {
+  panels.forEach((panel) => {
+    const zone = getPanelZone(panel);
     panel.style.removeProperty("opacity");
-    if (i === glideFromIndex) {
+    if (zone === glideFromIndex) {
       panel.style.opacity = String(fadeOut);
       panel.classList.toggle("is-active", t < 0.5);
-    } else if (i === glideToIndex) {
+    } else if (zone === glideToIndex) {
       panel.style.opacity = String(fadeIn);
       panel.classList.toggle("is-active", t >= 0.5);
     } else {
@@ -143,45 +158,31 @@ function syncAdjacentGlidePanels(t) {
 function syncUI() {
   if (isAnimating && longJump) {
     syncLongJumpPanels(glideT);
-    navLinks.forEach((link, i) => {
-      const active = i === glideFromIndex || i === glideToIndex;
-      link.classList.toggle("is-active", active);
-      if (i === glideToIndex && glideT >= 0.5) {
-        link.setAttribute("aria-current", "page");
-      } else if (i === glideFromIndex && glideT < 0.5) {
-        link.setAttribute("aria-current", "page");
-      } else {
-        link.removeAttribute("aria-current");
-      }
+    syncNavLinks({
+      ariaIndex: glideT >= 0.5 ? glideToIndex : glideFromIndex,
+      highlightZones: [glideFromIndex, glideToIndex],
     });
   } else if (isAnimating) {
     syncAdjacentGlidePanels(glideT);
-    const activeIndex = glideT < 0.5 ? glideFromIndex : glideToIndex;
-    navLinks.forEach((link, i) => {
-      const active = i === glideFromIndex || i === glideToIndex;
-      link.classList.toggle("is-active", active);
-      if (i === activeIndex) {
-        link.setAttribute("aria-current", "page");
-      } else {
-        link.removeAttribute("aria-current");
-      }
+    const ariaIndex = glideT < 0.5 ? glideFromIndex : glideToIndex;
+    syncNavLinks({
+      ariaIndex,
+      highlightZones: [glideFromIndex, glideToIndex],
     });
   } else {
     clearLongJumpPanels();
     const activeIndex = Math.round(displaySection);
-    panels.forEach((panel, i) => panel.classList.toggle("is-active", i === activeIndex));
-    navLinks.forEach((link, i) => {
-      const active = i === activeIndex;
-      link.classList.toggle("is-active", active);
-      if (active) {
-        link.setAttribute("aria-current", "page");
-      } else {
-        link.removeAttribute("aria-current");
-      }
+    panels.forEach((panel) => {
+      panel.classList.toggle("is-active", getPanelZone(panel) === activeIndex);
+    });
+    syncNavLinks({
+      ariaIndex: activeIndex,
+      highlightZones: [activeIndex],
     });
   }
   syncTheme();
   syncFraming();
+  updateSolarScale(displaySection);
 }
 
 function applyPanelFraming() {
@@ -207,7 +208,7 @@ function startGlide(toIndex, fromSection) {
 }
 
 function goToSection(index) {
-  const target = clamp(index, 0, SECTION_COUNT - 1);
+  const target = clamp(index, 0, sectionCount - 1);
   if (target === currentSection) {
     resetGate();
     return;
@@ -228,14 +229,13 @@ function feedGate(dir, amount) {
     return;
   }
 
-  if (gateDirection !== dir) {
-    gateDirection = dir;
+  if (lastGateDir !== dir) {
+    lastGateDir = dir;
     gateProgress = 0;
     touchGateAcc = 0;
   }
 
   gateProgress += amount / GATE_WHEEL_TOTAL;
-  updateGateUI();
 
   window.clearTimeout(gateResetTimer);
   gateResetTimer = window.setTimeout(resetGate, 220);
@@ -252,8 +252,9 @@ function onWheel(event) {
   const delta = event.deltaY;
   if (Math.abs(delta) < 0.5) return;
 
-  const dir = Math.sign(delta);
-  if (!canMove(dir)) return;
+  // Scroll vers le haut (deltaY < 0) = avancer vers le Soleil (index++).
+  const dir = delta < 0 ? 1 : delta > 0 ? -1 : 0;
+  if (!dir || !canMove(dir)) return;
 
   feedGate(dir, Math.abs(delta));
 }
@@ -262,9 +263,9 @@ function onKeyDown(event) {
   if (isAnimating) return;
 
   let dir = 0;
-  if (["ArrowDown", "PageDown", " "].includes(event.key)) {
+  if (["ArrowUp", "PageUp"].includes(event.key)) {
     dir = 1;
-  } else if (["ArrowUp", "PageUp"].includes(event.key)) {
+  } else if (["ArrowDown", "PageDown", " "].includes(event.key)) {
     dir = -1;
   }
 
@@ -282,6 +283,11 @@ function onTouchStart(event) {
 }
 
 function onTouchMove(event) {
+  if (isRestOrbitDragging()) {
+    event.preventDefault();
+    return;
+  }
+
   if (isAnimating) {
     event.preventDefault();
     return;
@@ -306,8 +312,10 @@ function onTouchMove(event) {
 
 export function initNavigation(root) {
   overlay = root.querySelector("#overlay");
-  scrollGateFill = root.querySelector("#scroll-gate-fill");
+  solarScaleMarker = root.querySelector("#solar-scale-marker");
   panels = [...root.querySelectorAll(".panel")];
+  sectionCount = panels.length;
+  scaleSectionMax = Math.max(sectionCount - 1, 1);
   navLinks = [...root.querySelectorAll(".nav-link")];
 
   navLinks.forEach((link) => {
@@ -371,7 +379,7 @@ export function getDisplaySection() {
 }
 
 export function getSectionCount() {
-  return SECTION_COUNT;
+  return sectionCount;
 }
 
 export function getIsAnimating() {
