@@ -1,173 +1,460 @@
-/**
- * Galerie Instagram statique — pas d’API Meta.
- * Posts : content/instagram-posts.json (permaliens /p/…).
- */
-(function () {
-  const PROFILE = {
-    username: "kat0gat0",
-    url: "https://www.instagram.com/kat0gat0/",
-    image: "./assets/instagram-profile.jpg",
-    label: "Gato",
-    initials: "KG",
-  };
-
-  const POSTS_URL = "./content/instagram-posts.json";
-
-  function normalizePermalink(raw) {
-    if (!raw || typeof raw !== "string") return null;
-    const trimmed = raw.trim();
-    const match = trimmed.match(
-      /instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/i
-    );
-    if (!match) return null;
-    const kind = /\/reel\//i.test(trimmed) ? "reel" : "p";
-    return `https://www.instagram.com/${kind}/${match[1]}/`;
-  }
-
-  function processEmbeds() {
-    if (window.instgrm && window.instgrm.Embeds) {
-      window.instgrm.Embeds.process();
-    }
-  }
-
-  function createProfileSlot() {
-    const a = document.createElement("a");
-    a.className = "instagram-slot instagram-slot--profile";
-    a.href = PROFILE.url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.setAttribute("aria-label", `Profil Instagram @${PROFILE.username}`);
-
-    const fallback = document.createElement("span");
-    fallback.className = "instagram-avatar-fallback";
-    fallback.setAttribute("aria-hidden", "true");
-    fallback.textContent = PROFILE.initials;
-
-    const img = document.createElement("img");
-    img.src = PROFILE.image;
-    img.alt = `Photo de profil @${PROFILE.username}`;
-    img.loading = "lazy";
-    img.width = 320;
-    img.height = 320;
-    img.addEventListener("error", () => {
-      a.classList.add("is-avatar-fallback");
-      img.remove();
-    });
-
-    const label = document.createElement("span");
-    label.className = "instagram-slot-label";
-    label.textContent = PROFILE.label;
-
-    a.append(fallback, img, label);
-    return a;
-  }
-
-  function createCtaSlot(kind) {
-    const isReel = kind === "reels";
-    const a = document.createElement("a");
-    a.className = "instagram-slot instagram-slot--cta";
-    a.href = isReel ? `${PROFILE.url}reels/` : PROFILE.url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.setAttribute(
-      "aria-label",
-      isReel
-        ? "Voir les reels sur Instagram"
-        : "Voir les publications sur Instagram"
-    );
-
-    const icon = document.createElement("span");
-    icon.className = "instagram-slot-icon";
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = isReel ? "▶" : "IG";
-
-    const label = document.createElement("span");
-    label.className = "instagram-slot-label";
-    label.textContent = isReel ? "Reels" : "Publications";
-
-    const hint = document.createElement("span");
-    hint.className = "instagram-slot-hint";
-    hint.textContent = "Ouvrir sur Instagram";
-
-    a.append(icon, label, hint);
-    return a;
-  }
-
-  function createEmbedSlot(permalink) {
-    const wrap = document.createElement("div");
-    wrap.className = "instagram-slot instagram-slot--embed";
-
-    const link = document.createElement("a");
-    link.href = permalink;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.className = "instagram-embed-link";
-    link.setAttribute("aria-label", "Voir la publication sur Instagram");
-
-    const blockquote = document.createElement("blockquote");
-    blockquote.className = "instagram-media";
-    blockquote.setAttribute("data-instgrm-permalink", permalink);
-    blockquote.setAttribute("data-instgrm-version", "14");
-    blockquote.style.cssText =
-      "background:#FFF;border:0;border-radius:12px;margin:0;max-width:100%;min-width:0;width:100%;";
-
-    link.append(blockquote);
-    wrap.append(link);
-    return wrap;
-  }
-
-  function setGalleryNote(grid, hasEmbeds) {
-    const card = grid.closest(".panel-card");
-    if (!card) return;
-    let note = card.querySelector(".instagram-gallery-note");
-    if (!note) {
-      note = document.createElement("p");
-      note.className = "instagram-gallery-note";
-      card.insertBefore(note, grid);
-    }
-    note.textContent = hasEmbeds
-      ? "Aperçus officiels Instagram — ouvrez une publication pour la voir en grand."
-      : "Les publications s’ouvrent sur Instagram. Ajoutez des permaliens dans content/instagram-posts.json pour afficher des aperçus ici.";
-  }
-
-  async function loadPosts() {
-    try {
-      const res = await fetch(POSTS_URL);
-      if (!res.ok) return [];
-      const data = await res.json();
-      const list = Array.isArray(data.posts) ? data.posts : [];
-      return list.map(normalizePermalink).filter(Boolean).slice(0, 6);
-    } catch {
-      return [];
-    }
-  }
-
-  async function init() {
-    const grid = document.querySelector("#instagram-grid");
-    if (!grid) return;
-
-    const posts = await loadPosts();
-    grid.replaceChildren(createProfileSlot());
-
-    if (posts.length) {
-      grid.classList.add("instagram-grid--embeds");
-      for (const permalink of posts.slice(0, 2)) {
-        grid.append(createEmbedSlot(permalink));
-      }
-      setGalleryNote(grid, true);
-      processEmbeds();
-      if (!window.instgrm) {
-        window.addEventListener("load", processEmbeds, { once: true });
-      }
-    } else {
-      grid.append(createCtaSlot("posts"), createCtaSlot("reels"));
-      setGalleryNote(grid, false);
-    }
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
-})();
+/**
+ * Galerie Instagram statique — pas d’API Meta côté serveur.
+ * Posts : content/instagram-posts.json (permaliens + miniatures locales).
+ * Repli navigateur : oEmbed live si thumbnail absent (souvent bloqué par CORS).
+ */
+
+(function () {
+  const PROFILE = {
+    username: "kat0gat0",
+    url: "https://www.instagram.com/kat0gat0/",
+    embedUrl: "https://www.instagram.com/kat0gat0/embed",
+  };
+
+  const POSTS_URL = "./content/instagram-posts.json";
+  const OEMBED_URL = "https://api.instagram.com/oembed";
+  const MAX_POSTS = 6;
+  const EMPTY_SLOTS = 6;
+
+  function normalizePermalink(raw) {
+    if (!raw || typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    const match = trimmed.match(
+      /instagram\.com\/(?:[^/]+\/)?(?:p|reel)\/([A-Za-z0-9_-]+)/i
+    );
+    if (!match) return null;
+    const kind = /\/reel\//i.test(trimmed) ? "reel" : "p";
+    return `https://www.instagram.com/${kind}/${match[1]}/`;
+  }
+
+  function shortcodeFromPermalink(permalink) {
+    const match = String(permalink).match(
+      /instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/i
+    );
+    return match ? match[1] : null;
+  }
+
+  function embedUrlFromPermalink(permalink) {
+    const code = shortcodeFromPermalink(permalink);
+    if (!code) return null;
+    const kind = /\/reel\//i.test(permalink) ? "reel" : "p";
+    return `https://www.instagram.com/${kind}/${code}/embed`;
+  }
+
+  function mediaPreviewUrl(permalink) {
+    const code = shortcodeFromPermalink(permalink);
+    if (!code) return null;
+    return `https://www.instagram.com/p/${code}/media/?size=l`;
+  }
+
+  function isVideoPost(permalink, post, oembed) {
+    if (post && typeof post.isVideo === "boolean") return post.isVideo;
+    if (/\/reel\//i.test(permalink)) return true;
+    if (oembed && (oembed.type === "video" || oembed.media_type === "video")) {
+      return true;
+    }
+    return false;
+  }
+
+  function normalizePostEntry(entry) {
+    if (!entry) return null;
+    if (typeof entry === "string") {
+      const url = normalizePermalink(entry);
+      return url ? { url, thumbnail: null, isVideo: /\/reel\//i.test(url) } : null;
+    }
+    if (typeof entry !== "object") return null;
+    const url = normalizePermalink(entry.url || entry.permalink || "");
+    if (!url) return null;
+    const thumbnail =
+      typeof entry.thumbnail === "string" && entry.thumbnail.trim()
+        ? entry.thumbnail.trim()
+        : null;
+    const isVideo =
+      typeof entry.isVideo === "boolean"
+        ? entry.isVideo
+        : /\/reel\//i.test(url);
+    return { url, thumbnail, isVideo };
+  }
+
+  function createCtaSlot(kind) {
+    const isReel = kind === "reels";
+    const a = document.createElement("a");
+    a.className = "instagram-slot instagram-slot--cta";
+    a.href = isReel ? `${PROFILE.url}reels/` : PROFILE.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.setAttribute(
+      "aria-label",
+      isReel
+        ? "Voir les reels sur Instagram"
+        : "Voir les publications sur Instagram"
+    );
+
+    const icon = document.createElement("span");
+    icon.className = "instagram-slot-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = isReel ? "▶" : "IG";
+
+    const label = document.createElement("span");
+    label.className = "instagram-slot-label";
+    label.textContent = isReel ? "Reels" : "Publications";
+
+    const hint = document.createElement("span");
+    hint.className = "instagram-slot-hint";
+    hint.textContent = "Ouvrir sur Instagram";
+
+    a.append(icon, label, hint);
+    return a;
+  }
+
+  function createEmptySlot(index) {
+    const wrap = document.createElement("div");
+    wrap.className = "instagram-slot instagram-slot--placeholder";
+
+    const label = document.createElement("span");
+    label.className = "instagram-slot-label";
+    label.textContent = `Post ${index + 1}`;
+
+    const hint = document.createElement("span");
+    hint.className = "instagram-slot-hint";
+    hint.textContent = "Collez le lien du post";
+
+    const code = document.createElement("code");
+    code.className = "instagram-slot-code";
+    code.textContent = "instagram-posts.json";
+
+    wrap.append(label, hint, code);
+    return wrap;
+  }
+
+  function createExternalLink(permalink) {
+    const ext = document.createElement("a");
+    ext.className = "instagram-thumb-external";
+    ext.href = permalink;
+    ext.target = "_blank";
+    ext.rel = "noopener noreferrer";
+    ext.setAttribute("aria-label", "Ouvrir sur Instagram");
+    ext.textContent = "↗";
+    return ext;
+  }
+
+  function bindPostThumb(wrap, permalink) {
+    const activate = (event) => {
+      if (event.target.closest(".instagram-thumb-external")) return;
+      event.preventDefault();
+      if (openPostModal) openPostModal(permalink);
+    };
+    wrap.addEventListener("click", activate);
+    wrap.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest(".instagram-thumb-external")) return;
+      event.preventDefault();
+      if (openPostModal) openPostModal(permalink);
+    });
+  }
+
+  function appendThumbImage(wrap, thumbSrc, alt) {
+    if (thumbSrc) {
+      const img = document.createElement("img");
+      img.src = thumbSrc;
+      img.alt = alt;
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.width = 640;
+      img.height = 640;
+      wrap.append(img);
+    } else {
+      wrap.classList.add("instagram-thumb--fallback");
+      const label = document.createElement("span");
+      label.className = "instagram-thumb-fallback-label";
+      label.textContent = alt;
+      wrap.append(label);
+    }
+  }
+
+  function createInteractiveThumb(permalink, preview, options) {
+    const { video = false } = options;
+    const wrap = document.createElement("div");
+    wrap.className = video
+      ? "instagram-thumb instagram-thumb--video"
+      : "instagram-thumb instagram-thumb--photo";
+    wrap.setAttribute("role", "button");
+    wrap.tabIndex = 0;
+    wrap.setAttribute(
+      "aria-label",
+      video ? "Lire la vidéo Instagram" : "Voir la publication Instagram"
+    );
+
+    appendThumbImage(
+      wrap,
+      preview.thumbnail_url || preview.thumbnail,
+      preview.title || preview.alt || (video ? "Vidéo Instagram" : "Publication Instagram")
+    );
+
+    if (video) {
+      const play = document.createElement("span");
+      play.className = "instagram-thumb-play";
+      play.setAttribute("aria-hidden", "true");
+      wrap.append(play);
+    }
+
+    wrap.append(createExternalLink(permalink));
+    bindPostThumb(wrap, permalink);
+    return wrap;
+  }
+
+  function createVideoThumb(permalink, preview) {
+    return createInteractiveThumb(permalink, preview, { video: true });
+  }
+
+  function createPhotoThumb(permalink, preview) {
+    return createInteractiveThumb(permalink, preview, { video: false });
+  }
+
+  function createThumb(permalink, post, preview) {
+    const video = isVideoPost(permalink, post, preview);
+    if (video) return createVideoThumb(permalink, preview);
+    return createPhotoThumb(permalink, preview);
+  }
+
+  function createFallbackThumb(permalink, post) {
+    const previewUrl =
+      (post && post.thumbnail) || mediaPreviewUrl(permalink);
+    if (previewUrl) {
+      return createThumb(permalink, post, {
+        thumbnail: previewUrl,
+        title: "Publication Instagram",
+      });
+    }
+
+    const video = isVideoPost(permalink, post, null);
+    if (video) {
+      return createVideoThumb(permalink, {
+        thumbnail: previewUrl,
+        title: "Vidéo Instagram",
+      });
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "instagram-thumb instagram-thumb--photo instagram-thumb--fallback";
+    wrap.setAttribute("role", "button");
+    wrap.tabIndex = 0;
+    wrap.setAttribute("aria-label", "Voir la publication Instagram");
+
+    const label = document.createElement("span");
+    label.className = "instagram-thumb-fallback-label";
+    label.textContent = "Instagram";
+
+    wrap.append(label, createExternalLink(permalink));
+    bindPostThumb(wrap, permalink);
+    return wrap;
+  }
+
+  let openPostModal = null;
+  let openProfileModal = null;
+
+  function initPostModal() {
+    const modal = document.getElementById("instagram-post-modal");
+    if (!modal) return;
+
+    const backdrop = modal.querySelector("[data-close-modal]");
+    const closeBtn = modal.querySelector(".instagram-modal__close");
+    const frameWrap = modal.querySelector(".instagram-modal__frame-wrap");
+    if (!frameWrap) return;
+
+    let escapeHandler = null;
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("instagram-modal-open");
+      frameWrap.replaceChildren();
+      frameWrap.classList.remove(
+        "instagram-modal__frame-wrap--reel",
+        "instagram-modal__frame-wrap--post"
+      );
+      if (escapeHandler) {
+        document.removeEventListener("keydown", escapeHandler);
+        escapeHandler = null;
+      }
+    }
+
+    escapeHandler = (event) => {
+      if (event.key === "Escape") closeModal();
+    };
+
+    openPostModal = function open(permalink) {
+      const src = embedUrlFromPermalink(permalink);
+      if (!src) return;
+
+      const iframe = document.createElement("iframe");
+      iframe.src = src;
+      iframe.allow = "autoplay; encrypted-media";
+      iframe.loading = "lazy";
+      iframe.title = "Publication Instagram";
+      frameWrap.replaceChildren(iframe);
+      frameWrap.classList.toggle(
+        "instagram-modal__frame-wrap--reel",
+        /\/reel\//i.test(permalink)
+      );
+      frameWrap.classList.toggle(
+        "instagram-modal__frame-wrap--post",
+        !/\/reel\//i.test(permalink)
+      );
+
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+      document.body.classList.add("instagram-modal-open");
+      document.addEventListener("keydown", escapeHandler);
+      closeBtn?.focus();
+    };
+
+    backdrop?.addEventListener("click", closeModal);
+    closeBtn?.addEventListener("click", closeModal);
+  }
+
+  function initProfileModal() {
+    const modal = document.getElementById("instagram-profile-modal");
+    if (!modal) return;
+
+    const backdrop = modal.querySelector("[data-close-modal]");
+    const closeBtn = modal.querySelector(".instagram-modal__close");
+    const iframe = modal.querySelector(".instagram-profile-modal__scroll iframe");
+    const fallback = modal.querySelector(".instagram-profile-modal__fallback");
+
+    let escapeHandler = null;
+
+    function closeModal() {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("instagram-modal-open");
+      if (escapeHandler) {
+        document.removeEventListener("keydown", escapeHandler);
+        escapeHandler = null;
+      }
+    }
+
+    escapeHandler = (event) => {
+      if (event.key === "Escape") closeModal();
+    };
+
+    openProfileModal = function open() {
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+      document.body.classList.add("instagram-modal-open");
+      document.addEventListener("keydown", escapeHandler);
+      closeBtn?.focus();
+    };
+
+    if (iframe) {
+      iframe.addEventListener("error", () => {
+        iframe.hidden = true;
+        if (fallback) fallback.hidden = false;
+      });
+    }
+
+    backdrop?.addEventListener("click", closeModal);
+    closeBtn?.addEventListener("click", closeModal);
+
+    document.querySelectorAll(".instagram-profile-trigger").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        openProfileModal();
+      });
+    });
+  }
+
+  async function fetchOembed(permalink) {
+    try {
+      const url = `${OEMBED_URL}?url=${encodeURIComponent(permalink)}&omitscript=true`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !data.thumbnail_url) return null;
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  async function createPostThumb(post) {
+    const permalink = post.url;
+    if (post.thumbnail) {
+      return createThumb(permalink, post, {
+        thumbnail: post.thumbnail,
+        title: "Publication Instagram",
+      });
+    }
+
+    const oembed = await fetchOembed(permalink);
+    if (oembed) return createThumb(permalink, post, oembed);
+
+    return createFallbackThumb(permalink, post);
+  }
+
+  function setGalleryNote(grid, mode) {
+    const card = grid.closest(".panel-card");
+    if (!card) return;
+    const note = card.querySelector(".instagram-gallery-note");
+    if (!note) return;
+    if (mode === "posts") {
+      note.hidden = true;
+      return;
+    }
+    note.hidden = false;
+    note.textContent =
+      mode === "empty"
+        ? "Ajoutez des permaliens dans content/instagram-posts.json."
+        : "";
+  }
+
+  async function loadPosts() {
+    try {
+      const res = await fetch(POSTS_URL);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const list = Array.isArray(data.posts) ? data.posts : [];
+      return list
+        .map(normalizePostEntry)
+        .filter(Boolean)
+        .slice(0, MAX_POSTS);
+    } catch {
+      return [];
+    }
+  }
+
+  async function init() {
+    initPostModal();
+    initProfileModal();
+    const grid = document.querySelector("#instagram-grid");
+    if (!grid) return;
+
+    const posts = await loadPosts();
+
+    if (posts.length) {
+      grid.classList.add("instagram-grid--has-posts");
+      grid.classList.remove("instagram-grid--empty");
+      setGalleryNote(grid, "posts");
+
+      const thumbs = await Promise.all(posts.map((post) => createPostThumb(post)));
+      grid.replaceChildren(...thumbs);
+    } else {
+      grid.classList.add("instagram-grid--empty");
+      grid.classList.remove("instagram-grid--has-posts");
+      const slots = [];
+      for (let i = 0; i < EMPTY_SLOTS - 1; i++) {
+        slots.push(createEmptySlot(i));
+      }
+      slots.push(createCtaSlot("reels"));
+      grid.replaceChildren(...slots);
+      setGalleryNote(grid, "empty");
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+

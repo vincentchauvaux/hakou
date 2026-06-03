@@ -1,4 +1,35 @@
 {
-  "_comment": "Ajoutez 2 à 6 permaliens de posts publics Instagram (ex. https://www.instagram.com/p/AbCdEfGhIjK/). Les aperçus utilisent l’embed officiel Meta ; laissez posts vide pour les tuiles « ouvrir sur Instagram ».",
-  "posts": []
+  "_comment": "Permaliens publics @kat0gat0 (juin 2026). Miniatures locales dans assets/instagram/ (curl media/?size=l ou oEmbed). Rafraîchir url + thumbnail si la grille change.",
+  "posts": [
+    {
+      "url": "https://www.instagram.com/p/C1-6KdrIu3L/",
+      "thumbnail": "./assets/instagram/thumb-0.jpg",
+      "isVideo": false
+    },
+    {
+      "url": "https://www.instagram.com/p/Cy4UwrXN_Oi/",
+      "thumbnail": "./assets/instagram/thumb-1.jpg",
+      "isVideo": false
+    },
+    {
+      "url": "https://www.instagram.com/p/CjBKbY9oc3H/",
+      "thumbnail": "./assets/instagram/thumb-2.jpg",
+      "isVideo": false
+    },
+    {
+      "url": "https://www.instagram.com/reel/CfuOyJeoYqG/",
+      "thumbnail": "./assets/instagram/thumb-3.jpg",
+      "isVideo": true
+    },
+    {
+      "url": "https://www.instagram.com/p/CeEwxsHoa2N/",
+      "thumbnail": "./assets/instagram/thumb-4.jpg",
+      "isVideo": false
+    },
+    {
+      "url": "https://www.instagram.com/p/CdodCb2oF46/",
+      "thumbnail": "./assets/instagram/thumb-5.jpg",
+      "isVideo": false
+    }
+  ]
 }

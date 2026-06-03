@@ -95,24 +95,14 @@
           sur YouTube.
         </p>
         <div class="video-grid">
-          <iframe
-            src="https://www.youtube.com/embed/AKtcrYIKgkU"
-            title="Bon repas — Vincent Chauvaux"
-            loading="lazy"
-            tabindex="-1"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerpolicy="strict-origin-when-cross-origin"
-            allowfullscreen
-          ></iframe>
-          <iframe
-            src="https://www.youtube.com/embed/M836C1DIto4"
-            title="Open Grink — Vincent Chauvaux"
-            loading="lazy"
-            tabindex="-1"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerpolicy="strict-origin-when-cross-origin"
-            allowfullscreen
-          ></iframe>
+          <div
+            data-video-id="AKtcrYIKgkU"
+            data-video-title="Bon repas — Vincent Chauvaux"
+          ></div>
+          <div
+            data-video-id="M836C1DIto4"
+            data-video-title="Open Grink — Vincent Chauvaux"
+          ></div>
         </div>
       </section>
 
@@ -120,25 +110,22 @@
         <p class="tag">Zone Visuel</p>
         <h2>Rendus et identite visuelle</h2>
         <p>
-          Galerie liee au profil Instagram
+          Galerie
           <a
-            class="inline-link"
+            class="inline-link instagram-profile-trigger"
             href="https://www.instagram.com/kat0gat0/"
-            target="_blank"
-            rel="noopener noreferrer"
             >@kat0gat0</a
-          > — les aperçus de posts passent par l’embed officiel ou des liens manuels (voir
-          <code>content/instagram-posts.json</code>).
+          >
+          — publications et reels lisibles ici ; ↗ ouvre Instagram.
         </p>
         <div class="panel-card">
           <p class="card-title">Galerie @kat0gat0</p>
-          <p class="instagram-gallery-note">
-            Les publications s’ouvrent sur Instagram. Ajoutez des permaliens dans
-            <code>content/instagram-posts.json</code> pour afficher des aperçus ici.
-          </p>
+          <p class="instagram-gallery-note" hidden></p>
           <div class="instagram-grid" id="instagram-grid"></div>
           <p class="embed-source instagram-cta">
-            <a href="https://www.instagram.com/kat0gat0/" target="_blank" rel="noopener noreferrer"
+            <a
+              class="instagram-profile-trigger"
+              href="https://www.instagram.com/kat0gat0/"
               >Voir sur Instagram →</a
             >
           </p>
@@ -191,7 +178,96 @@
       </section>
     </div>
 
-    <script async src="//www.instagram.com/embed.js"></script>
+    <div
+      id="youtube-video-modal"
+      class="youtube-video-modal"
+      hidden
+      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="youtube-video-modal-title"
+    >
+      <div class="youtube-video-modal__backdrop" data-close-modal></div>
+      <div class="youtube-video-modal__panel">
+        <button
+          type="button"
+          class="youtube-video-modal__close"
+          aria-label="Fermer la vidéo"
+        >
+          ×
+        </button>
+        <p id="youtube-video-modal-title" class="youtube-video-modal__title">
+          Vidéo YouTube
+        </p>
+        <div class="youtube-video-modal__frame-wrap"></div>
+      </div>
+    </div>
+
+    <div
+      id="instagram-post-modal"
+      class="instagram-modal instagram-modal--post"
+      hidden
+      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="instagram-post-modal-title"
+    >
+      <div class="instagram-modal__backdrop" data-close-modal></div>
+      <div class="instagram-modal__panel">
+        <button
+          type="button"
+          class="instagram-modal__close"
+          aria-label="Fermer la publication"
+        >
+          ×
+        </button>
+        <p id="instagram-post-modal-title" class="instagram-modal__title">
+          Publication Instagram
+        </p>
+        <div class="instagram-modal__body instagram-post-modal__scroll">
+          <div class="instagram-modal__frame-wrap"></div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="instagram-profile-modal"
+      class="instagram-modal instagram-modal--profile"
+      hidden
+      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="instagram-profile-modal-title"
+    >
+      <div class="instagram-modal__backdrop" data-close-modal></div>
+      <div class="instagram-modal__panel">
+        <button
+          type="button"
+          class="instagram-modal__close"
+          aria-label="Fermer le profil"
+        >
+          ×
+        </button>
+        <p id="instagram-profile-modal-title" class="instagram-modal__title">
+          Profil Instagram @kat0gat0
+        </p>
+        <div class="instagram-modal__body instagram-profile-modal__scroll">
+          <iframe
+            src="https://www.instagram.com/kat0gat0/embed"
+            title="Profil Instagram @kat0gat0"
+            loading="lazy"
+          ></iframe>
+          <p class="instagram-profile-modal__fallback" hidden>
+            Le profil ne peut pas s’afficher ici.
+            <a href="https://www.instagram.com/kat0gat0/" target="_blank" rel="noopener noreferrer"
+              >Ouvrir @kat0gat0 sur Instagram</a
+            >
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script src="./youtube-videos.js" defer></script>
     <script src="./instagram-gallery.js" defer></script>
     <script type="module" src="./main.js"></script>
   </body>

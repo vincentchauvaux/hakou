@@ -33,9 +33,6 @@ const GLIDE_LOOKAT_HERO_START = 0.95;
 const GLIDE_FOV_DIRECT_START = 0.9;
 /** Amplitude trajectoire toroïdale caméra (× distance leg) — révolution vers le Soleil. */
 const GLIDE_TORUS_REVOLUTION = 0.038;
-/** Planète origine : dérive orbitale lente pendant le glide (× REST_ORBIT_DRIFT). */
-const GLIDE_ORIGIN_DRIFT_MUL = 0.35;
-
 /** Rotation propre planète sur son axe (× spinSpeed × axialScale) — distincte de REST_ORBIT_DRIFT */
 const PLANET_SPIN_SCALE = 0.025;
 
@@ -47,6 +44,25 @@ const COMPOSITION_SLIDE = 2.6;
 
 /** Marge angulaire (rad) : axe caméra→Soleil hors du disque planète */
 const SUN_VISIBLE_MARGIN = 0.14;
+
+/** Sphère de collision Soleil (mesh + halo proche) + marge caméra. */
+const SUN_COLLISION_RADIUS = SUN_BASE_RADIUS * 2.05;
+/** Marge supplémentaire quand la trajectoire frôle le Soleil (sections 4–5). */
+const SUN_INNER_TRANSIT_EXTRA = SUN_BASE_RADIUS * 0.55;
+/** Seuil segment : repousse si le chemin passe à moins de (rayon Soleil + ceci). */
+const SUN_CORRIDOR_PAD = 2;
+/** Distance minimale caméra ↔ surface sphère corps (Soleil / planètes). */
+const CAMERA_BODY_CLEARANCE = 0.8;
+/** Marge renforcée pour planètes hors section d'ancrage (évite obstruction visuelle). */
+const PASSIVE_PLANET_CLEARANCE_MUL = 2.5;
+/** Rayon collision gonflé pour planètes passives — déflexion trajectoire plus précoce. */
+const PASSIVE_PLANET_RADIUS_MUL = 1.45;
+/** Rayon collision planète = taille × facteur (anneaux si Saturne section 1). */
+const PLANET_COLLISION_MARGIN = 1.22;
+/** Échantillons le long du segment caméra pour détecter traversée. */
+const PATH_COLLISION_SAMPLES = 16;
+/** Itérations max de repousse hors volumes. */
+const BODY_PUSH_MAX_ITER = 8;
 
 /**
  * Cadrage héro par section — planète sur un tiers via position caméra ; Soleil fixe au centre.
@@ -97,7 +113,7 @@ const SECTION_FRAMING = [
   },
   {
     planetSide: -1,
-    distScale: 1.04,
+    distScale: 1.1,
     tangentMul: 0.96,
     compositionSlide: 1.15,
     elevation: 0.18,
@@ -123,11 +139,11 @@ const SECTION_FRAMING = [
   },
   {
     planetSide: 1,
-    distScale: 0.86,
-    tangentMul: 0.76,
-    compositionSlide: 0.98,
-    elevation: 0.08,
-    limbElevation: 0.06,
+    distScale: 0.88,
+    tangentMul: 0.72,
+    compositionSlide: 0.92,
+    elevation: 0.04,
+    limbElevation: 0.03,
     lookSunLift: 0.04,
     dutch: -0.008,
     textAlign: "left",
@@ -150,7 +166,7 @@ function focalMmToFov(mm, sensorHeight = SENSOR_HEIGHT_MM) {
 const PLANETS = [
   {
     name: "Neptune",
-    orbitRadius: 44,
+    orbitRadius: 58,
     size: 1.4,
     color: 0x2848c8,
     emissive: 0x0a1848,
@@ -164,13 +180,13 @@ const PLANETS = [
     heroAngle: 0.78,
     startAngle: 0.78,
     section: 0,
-    camDistMul: 2.62,
+    camDistMul: 2.75,
     camLift: 0.1,
     camTangent: 0.34,
   },
   {
     name: "Saturn",
-    orbitRadius: 30,
+    orbitRadius: 42,
     size: 1.28,
     color: 0xe8c878,
     emissive: 0x3a2810,
@@ -185,14 +201,14 @@ const PLANETS = [
     startAngle: 2.14,
     hasRings: true,
     section: 1,
-    camDistMul: 1.38,
+    camDistMul: 1.45,
     camLift: 0.06,
     camTangent: 0.6,
     ringView: true,
   },
   {
     name: "Jupiter",
-    orbitRadius: 20,
+    orbitRadius: 28,
     size: 1.18,
     color: 0xd87840,
     emissive: 0x5a2810,
@@ -206,13 +222,13 @@ const PLANETS = [
     heroAngle: 3.42,
     startAngle: 3.42,
     section: 2,
-    camDistMul: 1.32,
+    camDistMul: 1.38,
     camLift: 0.1,
     camTangent: 0.5,
   },
   {
     name: "Uranus",
-    orbitRadius: 15.5,
+    orbitRadius: 35,
     size: 0.72,
     color: 0x7ec8e8,
     emissive: 0x1a3048,
@@ -232,7 +248,7 @@ const PLANETS = [
   },
   {
     name: "Mars",
-    orbitRadius: 11,
+    orbitRadius: 20,
     size: 0.36,
     color: 0xc84838,
     emissive: 0x4a1008,
@@ -252,7 +268,7 @@ const PLANETS = [
   },
   {
     name: "Mercury",
-    orbitRadius: 5.8,
+    orbitRadius: 13,
     size: 0.24,
     color: 0xb0a898,
     emissive: 0x302820,
@@ -267,9 +283,29 @@ const PLANETS = [
     startAngle: 6.02,
     section: 5,
     camDistMul: 1.02,
-    camLift: 0.06,
-    camTangent: 0.34,
+    camLift: 0.04,
+    camTangent: 0.3,
     nearSun: true,
+  },
+];
+
+/** Corps décoratifs (orbite + collision passive, pas de section UI). */
+const DECORATIVE_PLANETS = [
+  {
+    name: "Venus",
+    orbitRadius: 9.5,
+    size: 0.5,
+    color: 0xe8c878,
+    emissive: 0x4a3820,
+    accentColor: 0xffe8b0,
+    atmosphereColor: 0xffd890,
+    roughness: 0.78,
+    noiseScale: 4.5,
+    orbitSpeed: 0.62,
+    spinSpeed: 0.35,
+    axialScale: 0.88,
+    startAngle: 1.2,
+    section: null,
   },
 ];
 
@@ -299,6 +335,8 @@ const tmpAccentNext = new THREE.Color();
 const sunOrigin = new THREE.Vector3(0, 0.15, 0);
 const sunLookTarget = new THREE.Vector3();
 const tmpOrbitLook = new THREE.Vector3();
+const tmpCollideSample = new THREE.Vector3();
+const tmpBodyPushDir = new THREE.Vector3();
 
 const sectionCameras = Array.from({ length: SECTION_COUNT }, () => ({
   position: new THREE.Vector3(),
@@ -314,10 +352,9 @@ let lastGlideDestIndex = -1;
 let pendingGlideDestIndex = -1;
 let wasGlideAnimating = false;
 
-/** Snapshot angles orbitaux au début de chaque glide — évite téléportations mesh. */
-let glideStartAngles = null;
-let glideCaptureElapsed = 0;
-let capturedGlideKey = null;
+/** Section active au repos — reprise dérive vers heroAngle après glide. */
+let activeRestOrbitSince = -1;
+let activeRestOrbitStartElapsed = 0;
 
 /** Orbit utilisateur par section — conservée en mémoire pendant les glides. */
 const sectionUserOrbit = Array.from({ length: SECTION_COUNT }, () => ({
@@ -492,19 +529,7 @@ function getHeroPlanetPosition(planet, out = tmpPlanetPos) {
   return out;
 }
 
-function getPlanetOrbitBlend(displaySection, sectionIndex, glideState) {
-  if (glideState?.animating && glideState.from !== glideState.to) {
-    const t = clamp(glideState.t, 0, 1);
-    if (sectionIndex === glideState.from) {
-      return clamp(1 - easeInOutCubic(t) * 1.15, 0, 1);
-    }
-    if (sectionIndex === glideState.to) {
-      return clamp(easeInOutCubic(t) * 1.05, 0, 1);
-    }
-    if (isLongGlide(glideState)) {
-      return 0;
-    }
-  }
+function getPlanetOrbitBlend(displaySection, sectionIndex) {
   return clamp(1 - Math.abs(displaySection - sectionIndex) * 2.4, 0, 1);
 }
 
@@ -539,7 +564,7 @@ function getEffectiveDisplaySection(displaySection, glideState) {
   return displaySection;
 }
 
-function lerpShortestAngle(from, to, t) {
+function shortestAngleDelta(from, to) {
   let delta = to - from;
   while (delta > Math.PI) {
     delta -= Math.PI * 2;
@@ -547,70 +572,62 @@ function lerpShortestAngle(from, to, t) {
   while (delta < -Math.PI) {
     delta += Math.PI * 2;
   }
-  return from + delta * clamp(t, 0, 1);
+  return delta;
 }
 
 function getTargetHeroAngle(planet, sectionIndex) {
   return planet.heroAngle ?? planet.startAngle;
 }
 
-/** Angle repos (sans glide) — dérive lente sur la section active uniquement. */
-function getRestOrbitAngle(planet, sectionIndex, elapsed, displaySection) {
-  const hero = getTargetHeroAngle(planet, sectionIndex);
-  const restBlend = clamp(1 - Math.abs(displaySection - sectionIndex) * 2.4, 0, 1);
-  const drift = hero + elapsed * REST_ORBIT_DRIFT;
-  return hero + (drift - hero) * restBlend;
-}
-
-/** Capture les angles visuels une fois au début de chaque leg caméra. */
-function captureGlideStartAngles(elapsed, displaySection, glideState) {
-  const animating = glideState?.animating && glideState.from !== glideState.to;
-  if (!animating) {
-    glideStartAngles = null;
-    capturedGlideKey = null;
-    return;
-  }
-  const key = `${glideState.from}-${glideState.to}`;
-  if (capturedGlideKey === key) {
-    return;
-  }
-  capturedGlideKey = key;
-  glideCaptureElapsed = elapsed;
-  glideStartAngles = PLANETS.map((planet, i) =>
-    getRestOrbitAngle(planet, i, elapsed, displaySection)
-  );
+/** Orbite keplérienne continue — toutes planètes, tout le temps. */
+function getContinuousOrbitAngle(planet, elapsed) {
+  return planet.startAngle + elapsed * planet.orbitSpeed;
 }
 
 /**
- * Angle sur l'orbite : repos = heroAngle + dérive ; glide = trajet continu sans snap.
- * Destination : lerp start→hero sur tout le leg ; origine : dérive lente ; fond : orbitSpeed continu.
+ * Angle sur l'orbite : `startAngle + elapsed × orbitSpeed` en permanence.
+ * Au repos sur la section active : dérive lente vers heroAngle (chemin court, REST_ORBIT_DRIFT).
  */
 function getOrbitAngleForSection(planet, sectionIndex, elapsed, displaySection, glideState) {
-  const hero = getTargetHeroAngle(planet, sectionIndex);
+  const base = getContinuousOrbitAngle(planet, elapsed);
   const animating = glideState?.animating && glideState.from !== glideState.to;
-
-  if (!animating) {
-    return getRestOrbitAngle(planet, sectionIndex, elapsed, displaySection);
+  if (animating) {
+    return base;
   }
 
-  const legT = easeInOutCubic(clamp(glideState.t, 0, 1));
-  const startAngle = glideStartAngles?.[sectionIndex] ?? getRestOrbitAngle(planet, sectionIndex, elapsed, displaySection);
-  const elapsedSinceCapture = Math.max(0, elapsed - glideCaptureElapsed);
-
-  if (sectionIndex === glideState.to) {
-    const endAngle = hero + elapsed * REST_ORBIT_DRIFT;
-    return lerpShortestAngle(startAngle, endAngle, legT);
+  const activeIndex = clamp(Math.round(displaySection), 0, SECTION_COUNT - 1);
+  if (sectionIndex !== activeIndex) {
+    return base;
   }
 
-  if (sectionIndex === glideState.from) {
-    return startAngle + elapsedSinceCapture * REST_ORBIT_DRIFT * GLIDE_ORIGIN_DRIFT_MUL;
+  if (activeRestOrbitSince !== activeIndex) {
+    activeRestOrbitSince = activeIndex;
+    activeRestOrbitStartElapsed = elapsed;
   }
 
-  return startAngle + elapsedSinceCapture * planet.orbitSpeed;
+  const hero = getTargetHeroAngle(planet, sectionIndex);
+  const delta = shortestAngleDelta(base, hero);
+  const dist = Math.abs(delta);
+  if (dist < 1e-6) {
+    return hero;
+  }
+
+  const driftSpan = elapsed - activeRestOrbitStartElapsed;
+  const t = clamp((REST_ORBIT_DRIFT * driftSpan) / dist, 0, 1);
+  return base + delta * t;
 }
 
 function getPlanetPosition(planet, elapsed, displaySection, out = tmpPlanetPos, glideState = null) {
-  const angle = getOrbitAngleForSection(planet, planet.section, elapsed, displaySection, glideState);
+  const angle =
+    planet.section == null
+      ? getContinuousOrbitAngle(planet, elapsed)
+      : getOrbitAngleForSection(
+          planet,
+          planet.section,
+          elapsed,
+          displaySection,
+          glideState
+        );
   out.set(
     Math.cos(angle) * planet.orbitRadius,
     0,
@@ -626,6 +643,175 @@ function getPlanetOcclusionRadius(planet, sectionIndex) {
     return size * 1.62;
   }
   return size * 1.08;
+}
+
+/** Rayon sphère de collision physique (mesh + marge). */
+function getPlanetCollisionRadius(planet, sectionIndex) {
+  const size = planet.size;
+  const margin = PLANET_COLLISION_MARGIN;
+  if (planet.hasRings && sectionIndex === 1) {
+    return size * 1.55 * margin;
+  }
+  return size * 1.12 * margin;
+}
+
+/** Section d'ancrage caméra : repos = section arrondie ; glide = destination. */
+function getAnchorSectionForCollision(displaySection, glideState) {
+  if (glideState?.animating && glideState.from !== glideState.to) {
+    return glideState.to;
+  }
+  return clamp(Math.round(displaySection), 0, SECTION_COUNT - 1);
+}
+
+function isPlanetAnchorForCollision(planetSectionIndex, displaySection, glideState) {
+  if (planetSectionIndex == null) {
+    return false;
+  }
+  return planetSectionIndex === getAnchorSectionForCollision(displaySection, glideState);
+}
+
+function forEachCollisionBody(fn) {
+  PLANETS.forEach(fn);
+  DECORATIVE_PLANETS.forEach(fn);
+}
+
+/** Marge Soleil renforcée vers Mars / Mercure et quand displaySection approche le centre. */
+function getSunPushExtraMargin(fromIndex, toIndex, displaySection) {
+  let extra = 0;
+  const effTo = toIndex ?? clamp(Math.round(displaySection), 0, SECTION_COUNT - 1);
+  const effFrom = fromIndex ?? effTo;
+  if (effTo >= 4 || effFrom >= 4) {
+    extra += SUN_INNER_TRANSIT_EXTRA;
+  }
+  if (effTo >= 5) {
+    extra += SUN_BASE_RADIUS * 0.38;
+  }
+  if (displaySection >= 3.4) {
+    extra += SUN_BASE_RADIUS * 0.22 * clamp((displaySection - 3.4) / 1.6, 0, 1);
+  }
+  return extra;
+}
+
+function pushPointOutsideSun(point, extraMargin = 0, clearanceMul = 1) {
+  return pushPointOutsideSphere(
+    point,
+    sunOrigin,
+    SUN_COLLISION_RADIUS + extraMargin,
+    CAMERA_BODY_CLEARANCE * clearanceMul
+  );
+}
+
+/** Point le plus proche du Soleil sur le segment P0→P1. */
+function closestPointOnSegmentToSun(p0, p1, out) {
+  tmpSeg.copy(p1).sub(p0);
+  const lenSq = tmpSeg.lengthSq();
+  if (lenSq < 1e-8) {
+    return out.copy(p0);
+  }
+  const t = clamp(tmpMid.copy(sunOrigin).sub(p0).dot(tmpSeg) / lenSq, 0, 1);
+  return out.copy(p0).addScaledVector(tmpSeg, t);
+}
+
+/** Clearance caméra : normale pour ancre (+ planète quittée en glide), renforcée sinon. */
+function getPlanetBodyClearance(planetSectionIndex, displaySection, glideState) {
+  if (planetSectionIndex == null) {
+    return CAMERA_BODY_CLEARANCE * PASSIVE_PLANET_CLEARANCE_MUL;
+  }
+  if (isPlanetAnchorForCollision(planetSectionIndex, displaySection, glideState)) {
+    return CAMERA_BODY_CLEARANCE;
+  }
+  if (
+    glideState?.animating &&
+    glideState.from !== glideState.to &&
+    planetSectionIndex === glideState.from
+  ) {
+    return CAMERA_BODY_CLEARANCE;
+  }
+  return CAMERA_BODY_CLEARANCE * PASSIVE_PLANET_CLEARANCE_MUL;
+}
+
+function getPlanetBodyCollisionRadius(planet, planetSectionIndex, displaySection, glideState) {
+  const base = getPlanetCollisionRadius(planet, planetSectionIndex ?? -1);
+  if (planetSectionIndex == null) {
+    return base * PASSIVE_PLANET_RADIUS_MUL;
+  }
+  if (isPlanetAnchorForCollision(planetSectionIndex, displaySection, glideState)) {
+    return base;
+  }
+  if (
+    glideState?.animating &&
+    glideState.from !== glideState.to &&
+    planetSectionIndex === glideState.from
+  ) {
+    return base;
+  }
+  return base * PASSIVE_PLANET_RADIUS_MUL;
+}
+
+function pushPointOutsideSphere(point, center, radius, clearance = CAMERA_BODY_CLEARANCE) {
+  tmpSeg.copy(point).sub(center);
+  const dist = tmpSeg.length();
+  const minDist = radius + clearance;
+  if (dist >= minDist) {
+    return false;
+  }
+  if (dist < 1e-6) {
+    tmpSeg.set(0, 0, 1);
+  } else {
+    tmpSeg.multiplyScalar(1 / dist);
+  }
+  point.copy(center).addScaledVector(tmpSeg, minDist);
+  return true;
+}
+
+/** Une passe : repousse le point hors Soleil et toutes les planètes. */
+function pushPointOutsideBodiesOnce(
+  point,
+  elapsed,
+  displaySection,
+  glideState,
+  sunExtra = 0
+) {
+  let moved = pushPointOutsideSun(point, sunExtra);
+  forEachCollisionBody((planet) => {
+    const sectionIndex = planet.section;
+    getPlanetPosition(planet, elapsed, displaySection, tmpPlanetPos, glideState);
+    const r = getPlanetBodyCollisionRadius(
+      planet,
+      sectionIndex,
+      displaySection,
+      glideState
+    );
+    const clearance = getPlanetBodyClearance(sectionIndex, displaySection, glideState);
+    if (pushPointOutsideSphere(point, tmpPlanetPos, r, clearance)) {
+      moved = true;
+    }
+  });
+  return moved;
+}
+
+/** Repousse itérativement jusqu'à clearance ou limite d'itérations. */
+function pushPointOutsideBodies(
+  point,
+  elapsed,
+  displaySection,
+  glideState,
+  fromIndex = null,
+  toIndex = null
+) {
+  const sunExtra = getSunPushExtraMargin(fromIndex, toIndex, displaySection);
+  for (let i = 0; i < BODY_PUSH_MAX_ITER; i += 1) {
+    if (!pushPointOutsideBodiesOnce(point, elapsed, displaySection, glideState, sunExtra)) {
+      pushPointOutsideSun(point, sunExtra);
+      return point;
+    }
+  }
+  pushPointOutsideSun(point, sunExtra);
+  return point;
+}
+
+function penetrationDepth(point, center, radius, clearance = CAMERA_BODY_CLEARANCE) {
+  return radius + clearance - point.distanceTo(center);
 }
 
 /** Écart angulaire (rad) entre l'axe caméra→Soleil et le bord du disque planète — positif = Soleil libre. */
@@ -696,11 +882,41 @@ function captureOrbitFromCamera(sectionIndex) {
   orbit.modified = true;
 }
 
+function clearSectionUserOrbit(sectionIndex) {
+  const orbit = sectionUserOrbit[sectionIndex];
+  if (!orbit) return;
+  orbit.radius = 0;
+  orbit.azimuth = 0;
+  orbit.elevation = 0;
+  orbit.modified = false;
+}
+
+/** Réinitialise les offsets d'orbit manuelle (toutes sections ou une seule). */
+export function resetRestOrbitOffsets(sectionIndex) {
+  if (sectionIndex === undefined || sectionIndex === null) {
+    for (let i = 0; i < sectionUserOrbit.length; i += 1) {
+      clearSectionUserOrbit(i);
+    }
+  } else {
+    const idx = Math.floor(sectionIndex);
+    if (idx >= 0 && idx < sectionUserOrbit.length) {
+      clearSectionUserOrbit(idx);
+    }
+  }
+  endOrbitDrag();
+}
+
 function endOrbitDrag() {
-  if (!orbitDrag.active) return;
+  const pointerId = orbitDrag.pointerId;
   orbitDrag.active = false;
   orbitDrag.pointerId = null;
   if (orbitCanvas) {
+    if (
+      pointerId != null &&
+      orbitCanvas.hasPointerCapture(pointerId)
+    ) {
+      orbitCanvas.releasePointerCapture(pointerId);
+    }
     orbitCanvas.classList.remove("orbit-grabbing");
   }
   document.body.style.userSelect = "";
@@ -788,9 +1004,10 @@ function resolveSunOcclusion(
   const occRadius = getPlanetOcclusionRadius(planet, sectionIndex);
   const side = planetSide >= 0 ? 1 : -1;
   const intro = sectionIndex === 0;
-  const tangentStep = size * (intro ? 0.12 : 0.22);
-  const outwardStep = size * (intro ? 0.11 : 0.06);
-  const maxIter = intro ? 8 : 16;
+  const surfaceLand = planet.nearSun && sectionIndex === 5;
+  const tangentStep = size * (intro ? 0.12 : surfaceLand ? 0.16 : 0.22);
+  const outwardStep = size * (intro ? 0.11 : surfaceLand ? 0.025 : 0.06);
+  const maxIter = intro ? 8 : surfaceLand ? 20 : 16;
 
   for (let i = 0; i < maxIter; i += 1) {
     if (sunClearanceAngle(outPosition, planetPos, sunOrigin, occRadius) >= SUN_VISIBLE_MARGIN) {
@@ -853,6 +1070,32 @@ function computeSectionCamera(sectionIndex, planet, planetPos, elapsed, out) {
     out.position
   );
 
+  if (planet.nearSun) {
+    tmpSeg.copy(out.position).sub(planetPos);
+    const dist = tmpSeg.length();
+    const minD = size * CAM_SURFACE_OFFSET * distScale * 0.58;
+    const maxD = size * CAM_SURFACE_OFFSET * distScale * 1.05;
+    if (dist > 1e-6) {
+      tmpSeg.multiplyScalar(1 / dist);
+      const clamped = clamp(dist, minD, maxD);
+      out.position.copy(planetPos).addScaledVector(tmpSeg, clamped);
+    }
+  }
+
+  pushPointOutsideBodies(out.position, elapsed, sectionIndex, null, sectionIndex, sectionIndex);
+
+  if (planet.nearSun) {
+    tmpSeg.copy(out.position).sub(planetPos);
+    const dist = tmpSeg.length();
+    const minD = size * CAM_SURFACE_OFFSET * distScale * 0.58;
+    const maxD = size * CAM_SURFACE_OFFSET * distScale * 1.05;
+    if (dist > 1e-6) {
+      tmpSeg.multiplyScalar(1 / dist);
+      out.position.copy(planetPos).addScaledVector(tmpSeg, clamp(dist, minD, maxD));
+    }
+    pushPointOutsideSun(out.position, getSunPushExtraMargin(sectionIndex, sectionIndex, sectionIndex));
+  }
+
   return out;
 }
 
@@ -882,14 +1125,15 @@ function cubicBezier3(p0, p1, p2, p3, t, out) {
 }
 
 /**
- * Trajectoire rectiligne P0→P1 avec léger décalage vers l'extérieur au milieu (dégagement Soleil).
+ * Point rectiligne P0→P1 + bosse extérieur / hélice toroïdale (sans collision).
  */
-function sampleRectilinearTransfer(p0, p1, pathT, fromIndex, out) {
+function rectilinearPointRaw(p0, p1, pathT, fromIndex, toIndex, out) {
   const t = clamp(pathT, 0, 1);
   if (t >= 1 - 1e-6) {
     return out.copy(p1);
   }
 
+  const effTo = toIndex ?? fromIndex;
   out.copy(p0).lerp(p1, t);
 
   const midFactor = Math.sin(Math.PI * t);
@@ -900,21 +1144,169 @@ function sampleRectilinearTransfer(p0, p1, pathT, fromIndex, out) {
     if (tmpToSun.lengthSq() > 0.001) {
       tmpToSun.normalize();
       const span = p0.distanceTo(p1);
-      const bulge = arc.lift * midFactor * span * 0.1;
+      const innerLeg = effTo >= 4 || fromIndex >= 3;
+      let bulgeMul = innerLeg ? 1.42 : 1;
+      if (effTo === 4) {
+        bulgeMul *= 1.18;
+      }
+      if (effTo >= 5) {
+        bulgeMul *= 1.28;
+      }
+      const bulge = arc.lift * midFactor * span * 0.12 * bulgeMul;
       out.addScaledVector(tmpToSun, bulge);
 
       tmpTangent.crossVectors(tmpUp, tmpToSun);
       if (tmpTangent.lengthSq() > 0.001) {
         tmpTangent.normalize();
-        const torusAmp = span * GLIDE_TORUS_REVOLUTION * midFactor;
+        const torusAmp =
+          span * GLIDE_TORUS_REVOLUTION * midFactor * (innerLeg ? 1.35 : 1);
         const helix = Math.sin(Math.PI * 2 * t);
         out.addScaledVector(tmpTangent, helix * torusAmp);
-        out.y += Math.cos(Math.PI * 2 * t) * torusAmp * 0.22;
+        const yHelix = innerLeg ? 0.34 : 0.22;
+        out.y += Math.cos(Math.PI * 2 * t) * torusAmp * yHelix;
+        if (innerLeg) {
+          out.y += midFactor * span * 0.018;
+        }
       }
     }
   }
 
+  const sunExtra = getSunPushExtraMargin(fromIndex, effTo, fromIndex + (effTo - fromIndex) * t);
+  pushPointOutsideSun(out, sunExtra);
+
   return out;
+}
+
+/** Scan segment 0→pathT : repousse la position finale si traversée d'un corps. */
+function enforcePathBodyClearance(
+  p0,
+  p1,
+  pathT,
+  fromIndex,
+  toIndex,
+  elapsed,
+  displaySection,
+  glideState,
+  out
+) {
+  rectilinearPointRaw(p0, p1, pathT, fromIndex, toIndex, out);
+
+  const sunExtra = getSunPushExtraMargin(fromIndex, toIndex, displaySection);
+  const sunCorridorR = SUN_COLLISION_RADIUS + sunExtra + SUN_CORRIDOR_PAD;
+  const steps = PATH_COLLISION_SAMPLES;
+  let maxPen = 0;
+  tmpBodyPushDir.set(0, 0, 0);
+
+  closestPointOnSegmentToSun(p0, p1, tmpCollideSample);
+  const corridorDist = tmpCollideSample.distanceTo(sunOrigin);
+  if (corridorDist < sunCorridorR) {
+    const pen = sunCorridorR - corridorDist;
+    maxPen = pen;
+    tmpBodyPushDir.copy(tmpCollideSample).sub(sunOrigin);
+    if (tmpBodyPushDir.lengthSq() < 1e-6) {
+      tmpBodyPushDir.set(0, 0, 1);
+    } else {
+      tmpBodyPushDir.normalize();
+    }
+  }
+
+  for (let i = 0; i <= steps; i += 1) {
+    const st = steps === 0 ? pathT : (i / steps) * pathT;
+    rectilinearPointRaw(p0, p1, st, fromIndex, toIndex, tmpCollideSample);
+
+    const sunPen = penetrationDepth(
+      tmpCollideSample,
+      sunOrigin,
+      SUN_COLLISION_RADIUS + sunExtra
+    );
+    if (sunPen > maxPen) {
+      maxPen = sunPen;
+      tmpBodyPushDir.copy(tmpCollideSample).sub(sunOrigin);
+      if (tmpBodyPushDir.lengthSq() < 1e-6) {
+        tmpBodyPushDir.set(0, 0, 1);
+      } else {
+        tmpBodyPushDir.normalize();
+      }
+    }
+
+    forEachCollisionBody((planet) => {
+      const sectionIndex = planet.section;
+      getPlanetPosition(
+        planet,
+        elapsed,
+        displaySection,
+        tmpPlanetPos,
+        glideState
+      );
+      const r = getPlanetBodyCollisionRadius(
+        planet,
+        sectionIndex,
+        displaySection,
+        glideState
+      );
+      const clearance = getPlanetBodyClearance(
+        sectionIndex,
+        displaySection,
+        glideState
+      );
+      const pen = penetrationDepth(tmpCollideSample, tmpPlanetPos, r, clearance);
+      if (pen > maxPen) {
+        maxPen = pen;
+        tmpBodyPushDir.copy(tmpCollideSample).sub(tmpPlanetPos);
+        if (tmpBodyPushDir.lengthSq() < 1e-6) {
+          tmpBodyPushDir.set(0, 0, 1);
+        } else {
+          tmpBodyPushDir.normalize();
+        }
+      }
+    });
+  }
+
+  if (maxPen > 0) {
+    out.addScaledVector(tmpBodyPushDir, maxPen * 1.05);
+  }
+
+  pushPointOutsideBodies(
+    out,
+    elapsed,
+    displaySection,
+    glideState,
+    fromIndex,
+    toIndex
+  );
+  return out;
+}
+
+/**
+ * Trajectoire rectiligne P0→P1 avec dégagement Soleil + collision corps.
+ */
+function sampleRectilinearTransfer(
+  p0,
+  p1,
+  pathT,
+  fromIndex,
+  toIndex,
+  elapsed,
+  displaySection,
+  glideState,
+  out
+) {
+  const t = clamp(pathT, 0, 1);
+  if (t >= 1 - 1e-6) {
+    return out.copy(p1);
+  }
+
+  return enforcePathBodyClearance(
+    p0,
+    p1,
+    t,
+    fromIndex,
+    toIndex,
+    elapsed,
+    displaySection,
+    glideState,
+    out
+  );
 }
 
 function computeArcControls(p0, p3, arcLift, arcSide, pathT, outP1, outP2) {
@@ -964,7 +1356,7 @@ function computeDynamicArcControls(
   const arc = JOURNEY_ARC[fromIndex] ?? { lift: 0.1, side: 0.05 };
   tmpSeg.copy(p3).sub(p0);
   const len = tmpSeg.length() || 1;
-  const distScale = clamp(len / 22, 0.72, 1.55);
+  const distScale = clamp(len / 30, 0.72, 1.55);
   const midArc = Math.sin(Math.PI * pathT);
 
   const fromPlanet = PLANETS[fromIndex];
@@ -1036,9 +1428,12 @@ function computeGlideFocalMm(fromIndex, toIndex, legT) {
 function updateGlideSettle(glideState) {
   const animating =
     glideState?.animating && glideState.from !== glideState.to;
+  if (animating && !wasGlideAnimating) {
+    resetRestOrbitOffsets();
+  }
   if (animating) {
+    activeRestOrbitSince = -1;
     pendingGlideDestIndex = glideState.to;
-    endOrbitDrag();
   }
   if (wasGlideAnimating && !animating) {
     glideSettleStartMs = performance.now();
@@ -1095,6 +1490,10 @@ function sampleCameraState(displaySection, elapsed, glideState) {
       to.position,
       pathT,
       fromIndex,
+      toIndex,
+      elapsed,
+      displaySection,
+      glideState,
       tmpCamPos
     );
     if (legT >= GLIDE_HERO_BLEND_START) {
@@ -1104,6 +1503,14 @@ function sampleCameraState(displaySection, elapsed, glideState) {
       tmpCamPos.lerp(to.position, blendT);
     }
   }
+  pushPointOutsideBodies(
+    tmpCamPos,
+    elapsed,
+    displaySection,
+    glideState,
+    fromIndex,
+    toIndex
+  );
 
   if (fromIndex === toIndex || legT < 1e-5) {
     tmpCamLook.copy(from.lookAt);
@@ -1176,7 +1583,7 @@ function buildSun() {
   sunHaze.position.copy(sunOrigin);
   scene.add(sunHaze);
 
-  sunLight = new THREE.PointLight(0xffdd88, 5.2, 220, 1.35);
+  sunLight = new THREE.PointLight(0xffdd88, 5.2, 340, 1.35);
   sunLight.position.copy(sunOrigin);
   scene.add(sunLight);
 
@@ -1235,30 +1642,33 @@ function buildSaturnRings(parent, size) {
   return { inner, outer };
 }
 
+function addPlanetEntry(data) {
+  buildOrbitRing(data.orbitRadius);
+
+  const mat = createStylizedPlanetMaterial(data);
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.size, 40, 40), mat);
+  scene.add(mesh);
+
+  const atmIntensity = data.section === 5 ? 1.4 : data.section == null ? 0.75 : 1.0;
+  const { mesh: atmMesh, mat: atmMat } = createAtmosphereShell(
+    data.size,
+    data.atmosphereColor,
+    atmIntensity
+  );
+  mesh.add(atmMesh);
+
+  let rings = null;
+  if (data.hasRings) {
+    rings = buildSaturnRings(mesh, data.size);
+  }
+
+  planetEntries.push({ data, mesh, mat, atmMesh, atmMat, rings });
+}
+
 function buildPlanets() {
   planetEntries = [];
-
-  PLANETS.forEach((data) => {
-    buildOrbitRing(data.orbitRadius);
-
-    const mat = createStylizedPlanetMaterial(data);
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.size, 40, 40), mat);
-    scene.add(mesh);
-
-    const { mesh: atmMesh, mat: atmMat } = createAtmosphereShell(
-      data.size,
-      data.atmosphereColor,
-      data.section === 5 ? 1.4 : 1.0
-    );
-    mesh.add(atmMesh);
-
-    let rings = null;
-    if (data.hasRings) {
-      rings = buildSaturnRings(mesh, data.size);
-    }
-
-    planetEntries.push({ data, mesh, mat, atmMesh, atmMat, rings });
-  });
+  PLANETS.forEach((data) => addPlanetEntry(data));
+  DECORATIVE_PLANETS.forEach((data) => addPlanetEntry(data));
 }
 
 function buildStars() {
@@ -1329,7 +1739,7 @@ function updateStars(elapsed, camPos, displaySection, glideState) {
 
 function updateOrbitRings(displaySection, glideState) {
   const activeIndex = getActiveSectionIndex(displaySection, glideState);
-  const activeBlend = getPlanetOrbitBlend(displaySection, activeIndex, glideState);
+  const activeBlend = getPlanetOrbitBlend(displaySection, activeIndex);
   const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
 
   orbitMeshes.forEach((ring, i) => {
@@ -1355,13 +1765,15 @@ function updatePlanets(elapsed, displaySection, glideState) {
 
   planetEntries.forEach((entry) => {
     const { data, mesh, mat, rings } = entry;
-    const isActive = data.section === activeIndex;
-    const proximity = getSectionProximity(data.section, displaySection, glideState);
+    const isDecorative = data.section == null;
+    const isActive = !isDecorative && data.section === activeIndex;
+    const proximity = isDecorative
+      ? 0
+      : getSectionProximity(data.section, displaySection, glideState);
     const pos = getPlanetPosition(data, elapsed, displaySection, tmpPlanetPos, glideState);
     mesh.position.copy(pos);
     const axial = data.axialScale ?? 1;
-    const spinFactor =
-      PLANET_SPIN_SCALE * axial * (isActive ? 0.45 : 1);
+    const spinFactor = PLANET_SPIN_SCALE * axial;
     mesh.rotation.y = elapsed * data.spinSpeed * spinFactor;
 
     if (mat.userData.shaderUniforms) {
@@ -1521,6 +1933,18 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
       smoothedCamPos.copy(tmpCamPos);
     }
 
+    pushPointOutsideBodies(
+      camera.position,
+      elapsed,
+      displaySection,
+      glideState,
+      sectionIndex,
+      sectionIndex
+    );
+    if (userOrbit) {
+      smoothedCamPos.copy(camera.position);
+    }
+
     camera.lookAt(cam.lookAt);
     if (activeBlend > 0.5) {
       camera.rotateZ(framing.dutch * activeBlend);
@@ -1545,7 +1969,7 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 
   if (fog) {
     const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
-    fog.density = 0.006 + effectiveSection * 0.0012;
+    fog.density = 0.005 + effectiveSection * 0.001;
     const warmth = clamp((effectiveSection - 3) / 1, 0, 1);
     fog.color.setRGB(0.02 + warmth * 0.06, 0.03 + warmth * 0.02, 0.04 - warmth * 0.02);
   }
@@ -1575,14 +1999,14 @@ export function initScene(canvas) {
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x020408);
-  fog = new THREE.FogExp2(0x020408, 0.006);
+  fog = new THREE.FogExp2(0x020408, 0.005);
   scene.fog = fog;
 
   camera = new THREE.PerspectiveCamera(
     focalMmToFov(FOCAL_REST_MM[0]),
     window.innerWidth / window.innerHeight,
     0.06,
-    480
+    620
   );
 
   scene.add(new THREE.AmbientLight(0x1a2240, 0.14));
@@ -1613,13 +2037,22 @@ function onResize() {
 
 export function renderScene(displaySection, glideState = null) {
   const elapsed = clock.getElapsedTime();
-  captureGlideStartAngles(elapsed, displaySection, glideState);
   updateGlideSettle(glideState);
   const settleT = getRestSettleT();
+  const prevSettleT = lastSettleT;
   lastSettleT = settleT;
   lastGlideAnimating = Boolean(
     glideState?.animating && glideState.from !== glideState.to
   );
+  if (
+    settleT >= 1 &&
+    prevSettleT < 1 &&
+    !lastGlideAnimating
+  ) {
+    resetRestOrbitOffsets(
+      getActiveSectionIndex(displaySection, glideState)
+    );
+  }
   updatePlanets(elapsed, displaySection, glideState);
   updateOrbitRings(displaySection, glideState);
   updateCamera(displaySection, elapsed, glideState, settleT);

@@ -1,4 +1,9 @@
-import { getSectionFraming, spacecraftEase, isRestOrbitDragging } from "./scene3d.js";
+import {
+  getSectionFraming,
+  spacecraftEase,
+  isRestOrbitDragging,
+  resetRestOrbitOffsets,
+} from "./scene3d.js";
 
 let sectionCount = 6;
 let scaleSectionMax = 5;
@@ -195,6 +200,7 @@ function applyPanelFraming() {
 }
 
 function startGlide(toIndex, fromSection) {
+  resetRestOrbitOffsets();
   animFrom = displaySection;
   animTo = toIndex;
   glideFromIndex = fromSection;

@@ -25,27 +25,29 @@
 
 ## Scène 3D (`scene3d.js`)
 
-- **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement (`sampleCameraState` snap section entière hors glide). Focale repos **42 mm** (~31° FOV). Neptune `size` 1,4, `camDistMul` 2,62, `distScale` 1,68 — limbe droit ~30–40 % cadre, Soleil à l'horizon gauche. `INTRO_SNAP_FRAMES` 5 + re-snap à l'arrivée sur Intro. Pas de dérive caméra au repos Intro ; `resolveSunOcclusion` Intro doux (tangente réduite, recul extérieur).
+- **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement (`sampleCameraState` snap section entière hors glide). Focale repos **42 mm** (~31° FOV). Neptune orbite **58**, `size` 1,4, `camDistMul` 2,75, `distScale` 1,68 — limbe droit ~30–40 % cadre, Soleil à l'horizon gauche. `INTRO_SNAP_FRAMES` 5 + re-snap à l'arrivée sur Intro. Pas de dérive caméra au repos Intro ; `resolveSunOcclusion` Intro doux (tangente réduite, recul extérieur).
 - **Ordre planètes / caméra** : 0 = Neptune → 1 Saturn → 2 Jupiter → **3 Uranus (Visuel)** → 4 Mars (3D) → 5 Mercure (Contact) ; le voyage caméra 0→5 reste « vers le Soleil ».
-- Caméra : **trajectoire rectiligne** (`sampleRectilinearTransfer`) — `lerp` P0→P1, léger décalage vers l'extérieur au milieu (`sin π·pathT`) + **hélice toroïdale** (tangente extérieure + Y) pour dégager le Soleil et suggérer la révolution vers le centre.
+- Caméra : **trajectoire rectiligne** (`sampleRectilinearTransfer` / `rectilinearPointRaw`) — `lerp` P0→P1, léger décalage vers l'extérieur au milieu (`sin π·pathT`) + **hélice toroïdale** (tangente extérieure + Y) pour dégager le Soleil et suggérer la révolution vers le centre.
+- **Échelle orbitale** (`PLANETS` / `DECORATIVE_PLANETS`, juin 2026) : Neptune **58**, Saturne **42**, Jupiter **28**, Uranus **35**, Mars **20** (3D, §4), Mercure **13** (Contact, §5) ; Vénus décorative **9,5**. Sens de grandeur accru — planètes intérieures plus loin du Soleil qu'avant (Mars ~11→20, Mercure ~5,8→13). Caméra far **620**, lumière Soleil portée **340**, brouillard initial **0,005**.
+- **Collision caméra ↔ corps** : sphères Soleil (`SUN_COLLISION_RADIUS` ×2,05, `SUN_INNER_TRANSIT_EXTRA`, corridor `SUN_CORRIDOR_PAD` +2) + planètes section + **Vénus décorative** (`DECORATIVE_PLANETS`, `section: null`, orbite 9,5). `pushPointOutsideSun` / `getSunPushExtraMargin` renforcent les legs vers sections **4–5** (Mars, Mercure). **Ancre** = section repos arrondie ou `glideState.to` en transit ; planète d'ancrage (+ planète `from` quittée en glide) : clearance `CAMERA_BODY_CLEARANCE` (0,8) et rayon `getPlanetCollisionRadius`. **Planètes passives** (dont décoratives) : clearance × `PASSIVE_PLANET_CLEARANCE_MUL` (2,5) + rayon × `PASSIVE_PLANET_RADIUS_MUL` (1,45). `rectilinearPointRaw` : bosse extérieure / Y / hélice amplifiées si `toIndex ≥ 4` ; repousse Soleil sur chaque point. `enforcePathBodyClearance` : test segment `closestPointOnSegmentToSun` + 16 échantillons ; `pushPointOutsideBodies` sur repos, glide, blend héro, dérive / orbit manuelle.
+- **Contact (section 5, Mercure)** : `camDistMul` 1,02, `distScale` 0,88, élévation basse — caméra quasi à la surface, regard `computeSunLookAt` (Soleil à l'horizon). `resolveSunOcclusion` doux (`nearSun`, faible recul extérieur) + clamp distance surface pour ne pas être repoussée à travers la planète. `FOCAL_REST_MM[5]` = 50.
+- **3D (section 4, Mars)** : orbite 20 ; `distScale` 1,1. Trajectoire glide légèrement plus extérieure (`toIndex === 4`, bulge ×1,18) pour éviter de frôler le Soleil.
 - Un seul leg direct `from`→`to` (pas d'étapes intermédiaires UI).
 - `pathT` / focale : **pas de double `spacecraftEase`** (l'easing vient déjà de `navigation.js` via `glideT`).
 - **FOV / focale** : `computeGlideFocalMm` — interpolation linéaire `FOCAL_REST_MM[from]` → `FOCAL_REST_MM[to]` sur tout le leg (`legT=1` = focale repos destination). `FOCAL_REST_MM` : `[42, 22, 32, 36, 40, 50]`. Lissage exponentiel (`FOV_LERP_ALPHA`) **uniquement avant 90 % du leg** ; à partir de `GLIDE_FOV_DIRECT_START` (0,9) et en convergence héro : FOV appliqué **directement** (pas de rattrapage post-arrivée).
 - **Convergence héro** (`GLIDE_HERO_BLEND_START` 0,92) : derniers 8 % du leg — position interpolée de la ligne rectiligne vers le cadrage héro destination (`computeSectionCamera`, incl. `resolveSunOcclusion`). `sampleRectilinearTransfer` force `p1` exact à `t=1`. Position caméra snap (`posAlpha=1`) dès 92 % ; regard héro pur dès `GLIDE_LOOKAT_HERO_START` (0,95).
 - **Trajectoire toroïdale caméra** (`GLIDE_TORUS_REVOLUTION` 0,038) : dans `sampleRectilinearTransfer`, sinus sur la tangente extérieure + léger Y (`sin/cos 2π·pathT`) — sensation de révolution vers le Soleil le long du tore, en plus du bulge extérieur existant.
-- **Orbites planètes sans téléportation** :
-  - Au début de chaque glide : `captureGlideStartAngles` fige l'angle visuel de chaque planète (`getRestOrbitAngle`).
-  - **Destination** (`glide.to`) : `lerpShortestAngle(start, hero+drift, ease(legT))` sur **tout le leg** 0→1 — arrive en douceur au `heroAngle` + dérive repos (pas de snap fin de glide).
-  - **Origine** (`glide.from`) : dérive lente depuis l'angle capturé (`GLIDE_ORIGIN_DRIFT_MUL` × `REST_ORBIT_DRIFT`).
-  - **Planètes de fond** : `startAngle + Δelapsed × orbitSpeed` — orbite continue sans reset au départ du glide.
-  - Repos : `getRestOrbitAngle` — `heroAngle` + `REST_ORBIT_DRIFT` sur la section active uniquement.
-  - `getPlanetOrbitBlend` : rampe easeInOutCubic continue sur from/to pendant tout glide (plus de seuils durs à t=0,12 / t×1,6).
+- **Système solaire (orbites indépendantes)** :
+  - **Toutes les planètes** : angle = `startAngle + elapsed × orbitSpeed` en permanence (glide inclus) — pas de capture d'angle, pas de lerp destination/origine pendant le transit caméra.
+  - **Rotation propre** : `mesh.rotation.y = elapsed × spinSpeed × axialScale × PLANET_SPIN_SCALE` — facteur constant, jamais réinitialisé.
+  - **Repos** (`!animating` et section active) : dérive lente de l'angle orbital courant vers `heroAngle` (chemin court, `REST_ORBIT_DRIFT` rad/s) pour le cadrage héro — pas pendant le glide.
+  - `getPlanetOrbitBlend` : proximité `displaySection` uniquement (plus de gel from/to en saut long).
 - **Repos après glide** (`REST_SETTLE_MS` 280 ms) : **rampe dérive orbitale uniquement** — plus de re-cadrage position / FOV / settle héro séparé (suppression du bloc `settleT` dans `sampleCameraState`).
 - Regard aux extrémités de leg : `lookAt` héro (`from`/`to`) ; milieu de leg : `computeSmoothFocusLookAt`.
 - Arcs Bézier (`computeDynamicArcControls`) conservés en fichier mais non utilisés pour le sampling caméra.
 - Dérive orbitale repos **0.06 rad/s**, lerp position doux.
-- Pendant un saut long : planètes / anneaux / accent light ne s'activent que sur `from` et `to`.
-- **Orbit manuelle au repos** : clic-glisser (ou touch) sur `#three-canvas` quand `!glideState.animating` et `settleT ≥ 1`. Rotation azimut / élévation autour du `lookAt` Soleil à **rayon constant** (position héro capturée au premier drag). Offsets **conservés par section** en mémoire pendant les glides. Désactivé pendant glide / settle / intro snap. `navigation.js` ignore le touch vertical si `isRestOrbitDragging()`. Molette inchangée (navigation). Curseur `grab` / `grabbing` (`styles.css`).
+- Pendant un saut long : orbites planètes continues ; accent / proximité visuelle via `getActiveSectionIndex` / `getSectionProximity` (from/to).
+- **Orbit manuelle au repos** : clic-glisser (ou touch) sur `#three-canvas` quand `!glideState.animating` et `settleT ≥ 1`. Rotation azimut / élévation autour du `lookAt` Soleil à **rayon constant** (position héro capturée au premier drag). Offsets par section (`sectionUserOrbit`) **réinitialisés** au début de chaque glide (`startGlide` → `resetRestOrbitOffsets()`, détection `wasGlideAnimating` dans `updateGlideSettle`) et à la fin du settle sur la section active. Pendant glide / settle : pas d’application des offsets utilisateur (cadrage héro / trajectoire glide uniquement). Drag interrompu : `releasePointerCapture` dans `endOrbitDrag`. Export `resetRestOrbitOffsets(sectionIndex?)` — sans arg : toutes sections ; avec arg : une section. `navigation.js` ignore le touch vertical si `isRestOrbitDragging()`. Molette inchangée (navigation). Curseur `grab` / `grabbing` (`styles.css`).
 
 ## Fichiers clés
 
@@ -54,6 +56,8 @@
 | `main.js` | Boucle RAF, lie navigation + rendu |
 | `navigation.js` | Gating scroll, overlay, glide state, échelle solaire |
 | `scene3d.js` | Three.js, caméra, planètes (6 sections) |
+| `youtube-videos.js` | Zone Video : vignettes YouTube, modal lecture |
+| `instagram-gallery.js` | Zone Visuel : grille Instagram 3×2, modales publication + profil |
 | `styles.css` | Thèmes panels, crossfade, `#solar-scale`, menu latéral (`max-height`, marge droite), cube CSS 3D preview |
 
 ## Vérification
@@ -63,6 +67,7 @@ node --check navigation.js
 node --check scene3d.js
 node --check main.js
 node --check instagram-gallery.js
+node --check youtube-videos.js
 ```
 
 ## Contenu externe intégré (`index.html`)
@@ -72,14 +77,14 @@ Site statique sans backend : les médias sont des iframes / liens embarqués, pa
 | Zone | Source | Détail |
 |------|--------|--------|
 | **Son** (`#son`) | [soundcloud.com/hakou](https://soundcloud.com/hakou) | Lecteur iframe via oEmbed SoundCloud — user API `4170372`, hauteur 450 (mode visuel). |
-| **Video** (`#video`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | 2 derniers uploads via flux RSS (`channel_id=UCmm1lsi4IS7RzwFFhIax3ug`) : `AKtcrYIKgkU` (*Bon repas*), `M836C1DIto4` (*Open Grink*). Mise à jour manuelle ou script si besoin de fraîcheur. |
-| **Visuel** (`#visuel`) | [@kat0gat0](https://www.instagram.com/kat0gat0/) | `instagram-gallery.js` + `#instagram-grid` : profil local (`assets/instagram-profile.jpg`, repli initiales **KG**), tuiles CTA ou embeds officiels selon `content/instagram-posts.json`. Script `//www.instagram.com/embed.js`. |
+| **Video** (`#video`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` + `.video-grid` : emplacements `[data-video-id]` / `[data-video-title]` (RSS `channel_id=UCmm1lsi4IS7RzwFFhIax3ug` : `AKtcrYIKgkU`, `M836C1DIto4`). Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, overlay lecture. Clic → modal `#youtube-video-modal` (embed `?autoplay=1`). Lien ↗ = YouTube nouvel onglet. |
+| **Visuel** (`#visuel`) | [@kat0gat0](https://www.instagram.com/kat0gat0/) | `instagram-gallery.js` + `#instagram-grid` : grille **3×2** pleine largeur (6 vignettes, pas de tuile profil). Miniatures **locales** (`content/instagram-posts.json` → `assets/instagram/thumb-*.jpg`). Clic vignette (photo ou vidéo/reel) → modal `#instagram-post-modal` : corps scrollable (`.instagram-modal__body`, max ~85vh) + iframe `…/p/{code}/embed` ou `…/reel/{code}/embed`. Lien ↗ = Instagram nouvel onglet. `@kat0gat0` et « Voir sur Instagram » → modal `#instagram-profile-modal` (iframe `kat0gat0/embed`, repli lien si blocage). Sans JSON : placeholders + CTA Reels. |
 | **3D** (`#espace-3d`) | Preview locale | Carte `.card-3d` + cube CSS animé (`.mini-scene`, `.cube`, `.face`) — pas d’embed WebGL dans le panel. |
 | **Contact** (`#contact`) | Liens réseaux | Instagram `@kat0gat0`, YouTube `@MrEtibaliomecus`, SoundCloud `hakou`. Pas d’e-mail fourni — à compléter si besoin. |
 
 ### Limitations
 
-- **YouTube** : IDs figés dans le HTML ; le RSS public permet de les rafraîchir hors site (curl sur `feeds/videos.xml?channel_id=…`).
+- **YouTube** : IDs dans `data-video-id` sur `#video` ; RSS public pour les rafraîchir hors site (`feeds/videos.xml?channel_id=…`). Lecture sur site via modal (pas d’iframe dans la grille — évite `pointer-events: none` du scroll gating).
 - **SoundCloud** : embed officiel ; couleur accent `%237f9dff` dans l’URL du player.
-- **Instagram** : Meta ne fournit pas d’API publique sans app + token (Graph / Basic Display). Le scrape du profil (`curl` sur `/kat0gat0/`) ne renvoie plus de shortcodes `/p/` dans le HTML (contenu chargé en JS) — pas d’extraction automatique fiable des posts. La photo de profil via CDN (`og:image`) expire et le hotlink casse l’image ; le site utilise `assets/instagram-profile.jpg` (téléchargée une fois) + repli CSS initiales. **Ajouter des posts** : copier 2–6 permaliens publics dans `content/instagram-posts.json` → `"posts": ["https://www.instagram.com/p/SHORTCODE/", …]` ; `instagram-gallery.js` affiche des `<blockquote class="instagram-media">` traités par `embed.js`. Sans entrées JSON : tuiles « Publications » / « Reels » + texte « Les publications s’ouvrent sur Instagram ».
-- **Interaction iframes vidéo** : `.video-grid iframe { pointer-events: none }` conservé pour le scroll gating — lecture au clic peut nécessiter d’activer la section d’abord.
+- **Instagram** : pas d’API Meta sans token. oEmbed : souvent **CORS** / login. **Miniatures** : `curl -L -o assets/instagram/thumb-N.jpg "https://www.instagram.com/p/{SHORTCODE}/media/?size=l"` (reels : shortcode identique, URL `/p/…/media/`). JSON : `{ url, thumbnail, isVideo }`. **Lecture sur site** : modales scrollables + iframe `/embed` (posts/reels et profil `…/kat0gat0/embed`). Tester via serveur HTTP local (`npx serve .` ou équivalent) — `file://` peut bloquer l’iframe. Fermeture : fond, ×, Échap. Pas d’`embed.js` dans la grille.
+- **Interaction vidéo zone Video** : plus d’iframe embarquée dans la grille ; vignettes cliquables + modal (comme Instagram Visuel).
