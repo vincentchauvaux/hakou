@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hakou — Vitrine Créative</title>
+    <meta
+      name="description"
+      content="Site vitrine immersif pour musique, video et experiences 3D."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <canvas id="three-canvas" aria-hidden="true"></canvas>
+
+    <div
+      id="scroll-gate"
+      class="scroll-gate"
+      aria-hidden="true"
+      data-direction="down"
+    >
+      <div id="scroll-gate-fill" class="scroll-gate-fill"></div>
+    </div>
+
+    <nav class="side-nav" aria-label="Navigation des zones">
+      <a href="#hero" class="nav-link" data-zone-link="0">Intro</a>
+      <a href="#son" class="nav-link" data-zone-link="1">Son</a>
+      <a href="#video" class="nav-link" data-zone-link="2">Video</a>
+      <a href="#espace-3d" class="nav-link" data-zone-link="3">3D</a>
+      <a href="#contact" class="nav-link" data-zone-link="4">Contact</a>
+    </nav>
+
+    <div id="overlay">
+      <header id="hero" class="panel hero theme-dark" data-zone="0">
+        <p class="tag">Hakou — Univers Creatif</p>
+        <h1>Musique, video et espaces 3D<br />dans un voyage vers le Soleil</h1>
+        <p>
+          Fais defiler pour traverser l'espace : Neptune, puis chaque planete
+          jusqu'au coeur du systeme.
+        </p>
+      </header>
+
+      <section id="son" class="panel theme-light" data-zone="1">
+        <div class="panel-copy">
+          <p class="tag">Zone Son</p>
+          <h2>Compositions et design sonore</h2>
+          <p>
+            Creations musicales, textures sonores et essais experimentaux.
+            Integre ici des lecteurs, playlists ou extraits.
+          </p>
+        </div>
+        <div class="panel-card">
+          <p class="card-title">Dernier morceau</p>
+          <audio controls preload="none">
+            <source src="https://cdn.pixabay.com/download/audio/2022/05/23/audio_ebf8ce1fce.mp3?filename=ambient-piano-amp-strings-10711.mp3" type="audio/mpeg" />
+            Ton navigateur ne supporte pas la lecture audio.
+          </audio>
+        </div>
+      </section>
+
+      <section id="video" class="panel theme-mid" data-zone="2">
+        <p class="tag">Zone Video</p>
+        <h2>Films, clips et capsules visuelles</h2>
+        <p>
+          Un espace pour afficher ton travail video avec thumbnails, reels et
+          making-of.
+        </p>
+        <div class="video-grid">
+          <iframe
+            src="https://www.youtube.com/embed/ScMzIvxBSi4"
+            title="Video de presentation 1"
+            loading="lazy"
+            tabindex="-1"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allowfullscreen
+          ></iframe>
+          <iframe
+            src="https://www.youtube.com/embed/LXb3EKWsInQ"
+            title="Video de presentation 2"
+            loading="lazy"
+            tabindex="-1"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allowfullscreen
+          ></iframe>
+        </div>
+      </section>
+
+      <section id="espace-3d" class="panel theme-mid" data-zone="3">
+        <p class="tag">Zone 3D</p>
+        <h2>Installations et mondes interactifs</h2>
+        <p>
+          Presentations d'environnements 3D, prototypes WebGL et experiences
+          immersives.
+        </p>
+        <div class="panel-card card-3d">
+          <p class="card-title">Mini objet 3D (preview)</p>
+          <div class="mini-scene" aria-hidden="true">
+            <div class="cube">
+              <span class="face front"></span>
+              <span class="face back"></span>
+              <span class="face left"></span>
+              <span class="face right"></span>
+              <span class="face top"></span>
+              <span class="face bottom"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="contact" class="panel outro theme-light" data-zone="4">
+        <div class="panel-copy">
+          <p class="tag">Contact</p>
+          <h2>Construisons une experience ensemble</h2>
+          <p>Mail: ton@email.com<br />Instagram: @toncompte</p>
+        </div>
+        <div class="panel-card">
+          <p class="card-title">Disponibilite</p>
+          <p>Projets artistiques, direction sonore, clips et experiences immersives.</p>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
