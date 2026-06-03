@@ -8,15 +8,15 @@ const zoneAccent = [0x6d93ff, 0xc9b896, 0xff9a5c, 0xff6b6b, 0xffce73];
 
 /** Arches caméra entre sections — base lift/side, × distance dynamique (sin π·pathT) */
 const JOURNEY_ARC = [
-  { lift: 0.18, side: 0.12 },
-  { lift: 0.16, side: -0.1 },
-  { lift: 0.14, side: 0.08 },
-  { lift: 0.12, side: -0.07 },
-  { lift: 0.1, side: 0.05 },
+  { lift: 0.13, side: 0.08 },
+  { lift: 0.11, side: -0.07 },
+  { lift: 0.1, side: 0.06 },
+  { lift: 0.09, side: -0.05 },
+  { lift: 0.08, side: 0.04 },
 ];
 
 /** Dérive orbitale lente au repos (rad/s) — Soleil reste à l'horizon */
-const REST_ORBIT_DRIFT = 0.08;
+const REST_ORBIT_DRIFT = 0.06;
 
 /** Rotation propre planète sur son axe (× spinSpeed × axialScale) — distincte de REST_ORBIT_DRIFT */
 const PLANET_SPIN_SCALE = 0.025;
@@ -223,11 +223,12 @@ const PLANETS = [
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
-const easeInOutSine = (t) => -(Math.cos(Math.PI * t) - 1) / 2;
+const easeInOutCubic = (t) =>
+  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-/** Courbe unique UI + caméra — easeInOutSine doux, sans phases saccadées */
+/** Courbe unique UI + caméra — easeInOutCubic, montée/descente douces */
 export function spacecraftEase(t) {
-  return easeInOutSine(clamp(t, 0, 1));
+  return easeInOutCubic(clamp(t, 0, 1));
 }
 
 const tmpCamPos = new THREE.Vector3();
@@ -410,20 +411,63 @@ function getHeroPlanetPosition(planet, out = tmpPlanetPos) {
   return out;
 }
 
-function getPlanetOrbitBlend(displaySection, sectionIndex) {
+function getPlanetOrbitBlend(displaySection, sectionIndex, glideState) {
+  if (
+    glideState?.animating &&
+    Math.abs(glideState.from - glideState.to) > 1
+  ) {
+    if (sectionIndex === glideState.from) {
+      return clamp(1 - glideState.t * 1.6, 0, 1);
+    }
+    if (sectionIndex === glideState.to) {
+      return clamp((glideState.t - 0.12) * 1.4, 0, 1);
+    }
+    return 0;
+  }
   return clamp(1 - Math.abs(displaySection - sectionIndex) * 2.4, 0, 1);
 }
 
+function isLongGlide(glideState) {
+  return glideState?.animating && Math.abs(glideState.from - glideState.to) > 1;
+}
+
+function getActiveSectionIndex(displaySection, glideState) {
+  if (isLongGlide(glideState)) {
+    return glideState.t < 0.5 ? glideState.from : glideState.to;
+  }
+  return clamp(Math.round(displaySection), 0, SECTION_COUNT - 1);
+}
+
+function getSectionProximity(sectionIndex, displaySection, glideState) {
+  if (isLongGlide(glideState)) {
+    if (sectionIndex === glideState.from) {
+      return clamp(1 - glideState.t * 1.2, 0, 1);
+    }
+    if (sectionIndex === glideState.to) {
+      return clamp((glideState.t - 0.08) * 1.25, 0, 1);
+    }
+    return 0;
+  }
+  return 1 - clamp(Math.abs(displaySection - sectionIndex), 0, 1.2) / 1.2;
+}
+
+function getEffectiveDisplaySection(displaySection, glideState) {
+  if (isLongGlide(glideState)) {
+    return THREE.MathUtils.lerp(glideState.from, glideState.to, glideState.t);
+  }
+  return displaySection;
+}
+
 /** Angle sur l'orbite : dérive lente au repos, héro figé en transit (Bézier stable). */
-function getOrbitAngleForSection(planet, sectionIndex, elapsed, displaySection) {
+function getOrbitAngleForSection(planet, sectionIndex, elapsed, displaySection, glideState) {
   const hero = planet.heroAngle ?? planet.startAngle;
-  const restBlend = getPlanetOrbitBlend(displaySection, sectionIndex);
+  const restBlend = getPlanetOrbitBlend(displaySection, sectionIndex, glideState);
   const drift = hero + elapsed * REST_ORBIT_DRIFT;
   return hero + (drift - hero) * restBlend;
 }
 
-function getPlanetPosition(planet, elapsed, displaySection, out = tmpPlanetPos) {
-  const angle = getOrbitAngleForSection(planet, planet.section, elapsed, displaySection);
+function getPlanetPosition(planet, elapsed, displaySection, out = tmpPlanetPos, glideState = null) {
+  const angle = getOrbitAngleForSection(planet, planet.section, elapsed, displaySection, glideState);
   out.set(
     Math.cos(angle) * planet.orbitRadius,
     0,
@@ -550,9 +594,9 @@ function computeSectionCamera(sectionIndex, planet, planetPos, elapsed, out) {
   return out;
 }
 
-function refreshSectionCameras(elapsed, displaySection) {
+function refreshSectionCameras(elapsed, displaySection, glideState = null) {
   PLANETS.forEach((planet, i) => {
-    const angle = getOrbitAngleForSection(planet, i, elapsed, displaySection);
+    const angle = getOrbitAngleForSection(planet, i, elapsed, displaySection, glideState);
     tmpPlanetPos.set(
       Math.cos(angle) * planet.orbitRadius,
       0,
@@ -572,6 +616,63 @@ function cubicBezier3(p0, p1, p2, p3, t, out) {
     .addScaledVector(p1, 3 * uu * t)
     .addScaledVector(p2, 3 * u * tt)
     .addScaledVector(p3, tt * t);
+  return out;
+}
+
+/**
+ * Trajectoire de transfert elliptique (Soleil au foyer) dans le plan orbital P0–P1.
+ * Périapsis côté planète intérieure, apoapsis vers l'extérieur — arc passe hors du centre.
+ */
+function sampleEllipticalTransfer(p0, p1, pathT, fromIndex, out) {
+  const r0 = p0.length();
+  const r1 = p1.length();
+  if (r0 < 1e-4 || r1 < 1e-4) {
+    return out.copy(p0).lerp(p1, pathT);
+  }
+
+  tmpSeg.crossVectors(p0, p1);
+  if (tmpSeg.lengthSq() < 1e-8) {
+    tmpSeg.crossVectors(p0, tmpUp);
+  }
+  if (tmpSeg.lengthSq() < 1e-8) {
+    return out.copy(p0).lerp(p1, pathT);
+  }
+  tmpSeg.normalize();
+
+  tmpTangent.copy(p0).normalize();
+  tmpPlanetPos.crossVectors(tmpSeg, tmpTangent).normalize();
+
+  const x1 = p1.dot(tmpTangent);
+  const y1 = p1.dot(tmpPlanetPos);
+  let phi1 = Math.atan2(y1, x1);
+  if (Math.abs(phi1) < 1e-5) {
+    return out.copy(p0).lerp(p1, pathT);
+  }
+
+  const arc = JOURNEY_ARC[fromIndex] ?? { lift: 0.1, side: 0.05 };
+  const rMin = Math.min(r0, r1);
+  const rMax = Math.max(r0, r1);
+  const rp = rMin * (0.96 - arc.lift * 0.03);
+  const ra = rMax * (1.1 + arc.lift * 0.34 + arc.side * 0.06);
+  const a = (rp + ra) * 0.5;
+  const e = clamp((ra - rp) / (ra + rp), 0.06, 0.88);
+  const semiLatus = a * (1 - e * e);
+
+  const span = Math.abs(phi1);
+  let phiSweep = phi1;
+  if (span < Math.PI * 0.98 && rMax > rMin * 1.08) {
+    phiSweep = phi1 > 0 ? phi1 - 2 * Math.PI : phi1 + 2 * Math.PI;
+  }
+
+  const eased = spacecraftEase(clamp(pathT, 0, 1));
+  const phi = phiSweep * eased;
+  const r = semiLatus / (1 + e * Math.cos(phi));
+
+  out
+    .copy(tmpTangent)
+    .multiplyScalar(Math.cos(phi) * r)
+    .addScaledVector(tmpPlanetPos, Math.sin(phi) * r);
+  out.y = THREE.MathUtils.lerp(p0.y, p1.y, eased);
   return out;
 }
 
@@ -615,6 +716,7 @@ function computeDynamicArcControls(
   pathT,
   elapsed,
   displaySection,
+  glideState,
   outP1,
   outP2
 ) {
@@ -626,8 +728,8 @@ function computeDynamicArcControls(
 
   const fromPlanet = PLANETS[fromIndex];
   const toPlanet = PLANETS[toIndex];
-  getPlanetPosition(fromPlanet, elapsed, displaySection, tmpPlanetPos);
-  getPlanetPosition(toPlanet, elapsed, displaySection, tmpLookDest);
+  getPlanetPosition(fromPlanet, elapsed, displaySection, tmpPlanetPos, glideState);
+  getPlanetPosition(toPlanet, elapsed, displaySection, tmpLookDest, glideState);
   tmpMid.copy(tmpPlanetPos).lerp(tmpLookDest, 0.5);
   tmpToSun.copy(tmpMid).sub(sunOrigin);
   if (tmpToSun.lengthSq() < 0.001) {
@@ -636,18 +738,18 @@ function computeDynamicArcControls(
     tmpToSun.normalize();
   }
 
-  const outwardBulge = arc.lift * distScale * midArc * len * 0.5;
+  const outwardBulge = arc.lift * distScale * midArc * len * 0.38;
   computeArcControls(
     p0,
     p3,
-    arc.lift * distScale * 0.32,
-    arc.side * distScale * 0.85,
+    arc.lift * distScale * 0.24,
+    arc.side * distScale * 0.65,
     pathT,
     outP1,
     outP2
   );
-  outP1.addScaledVector(tmpToSun, outwardBulge * 0.58);
-  outP2.addScaledVector(tmpToSun, outwardBulge * 0.42);
+  outP1.addScaledVector(tmpToSun, outwardBulge * 0.52);
+  outP2.addScaledVector(tmpToSun, outwardBulge * 0.36);
   return { outP1, outP2 };
 }
 
@@ -655,9 +757,9 @@ function computeDynamicArcControls(
 function computePlanetFocusWeight(legT) {
   const t = clamp(legT, 0, 1);
   const envelope = Math.sin(Math.PI * t);
-  const envelopeSmooth = easeInOutSine(easeInOutSine(envelope));
-  const peak = 0.78;
-  const startBias = 0.1 * (1 - t) * (1 - t);
+  const envelopeSmooth = easeInOutCubic(envelope);
+  const peak = 0.52;
+  const startBias = 0.06 * (1 - t) * (1 - t);
   return peak * envelopeSmooth + startBias;
 }
 
@@ -665,7 +767,7 @@ function computePlanetFocusWeight(legT) {
  * Regard en transit : blend continu Soleil ↔ planète destination (pas de phases dures).
  * legT déjà eased via navigation + spacecraftEase.
  */
-function computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySection, out) {
+function computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySection, out, glideState) {
   computeSunLookAt(fromIndex, sunLookTarget);
   if (fromIndex === toIndex) {
     out.copy(sunLookTarget);
@@ -677,7 +779,7 @@ function computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySect
   out.copy(sunLookTarget).lerp(tmpMid, t);
 
   const toPlanet = PLANETS[toIndex];
-  getPlanetPosition(toPlanet, elapsed, displaySection, tmpLookDest);
+  getPlanetPosition(toPlanet, elapsed, displaySection, tmpLookDest, glideState);
   const planetFocus = computePlanetFocusWeight(legT);
   out.lerp(tmpLookDest, planetFocus);
   return out;
@@ -691,11 +793,11 @@ function computeTransitFocalMm(fromIndex, toIndex, legT) {
   const along = THREE.MathUtils.lerp(f0, f1, t);
   const wide = Math.min(f0, f1, FOCAL_TRANSIT_WIDE_MM);
   const envelope = Math.sin(Math.PI * t);
-  return THREE.MathUtils.lerp(along, wide, envelope * 0.72);
+  return THREE.MathUtils.lerp(along, wide, envelope * 0.42);
 }
 
 function sampleCameraState(displaySection, elapsed, glideState) {
-  refreshSectionCameras(elapsed, displaySection);
+  refreshSectionCameras(elapsed, displaySection, glideState);
   let fromIndex;
   let toIndex;
   let legT;
@@ -715,19 +817,18 @@ function sampleCameraState(displaySection, elapsed, glideState) {
   const pathT = legT;
   const from = sectionCameras[fromIndex];
   const to = sectionCameras[toIndex];
-  computeDynamicArcControls(
-    from.position,
-    to.position,
-    fromIndex,
-    toIndex,
-    pathT,
-    elapsed,
-    displaySection,
-    tmpCamP1,
-    tmpCamP2
-  );
-  cubicBezier3(from.position, tmpCamP1, tmpCamP2, to.position, pathT, tmpCamPos);
-  computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySection, tmpCamLook);
+  if (fromIndex === toIndex) {
+    tmpCamPos.copy(from.position);
+  } else {
+    sampleEllipticalTransfer(
+      from.position,
+      to.position,
+      pathT,
+      fromIndex,
+      tmpCamPos
+    );
+  }
+  computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySection, tmpCamLook, glideState);
 
   return {
     position: tmpCamPos,
@@ -911,9 +1012,10 @@ function buildStars() {
   scene.add(stars);
 }
 
-function updateStars(elapsed, camPos, displaySection) {
+function updateStars(elapsed, camPos, displaySection, glideState) {
   const attr = stars.geometry.attributes.position;
-  const depthFactor = 0.12 + displaySection * 0.04;
+  const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
+  const depthFactor = 0.12 + effectiveSection * 0.04;
   const px = camPos.x * depthFactor;
   const py = camPos.y * depthFactor * 0.5;
   const pz = camPos.z * depthFactor;
@@ -929,16 +1031,17 @@ function updateStars(elapsed, camPos, displaySection) {
   }
   attr.needsUpdate = true;
 
-  const starOpacity = 0.75 + displaySection * 0.04;
+  const starOpacity = 0.75 + effectiveSection * 0.04;
   stars.material.opacity = clamp(starOpacity, 0.7, 0.95);
 }
 
-function updateOrbitRings(displaySection) {
-  const activeIndex = clamp(Math.round(displaySection), 0, SECTION_COUNT - 1);
-  const activeBlend = getPlanetOrbitBlend(displaySection, activeIndex);
+function updateOrbitRings(displaySection, glideState) {
+  const activeIndex = getActiveSectionIndex(displaySection, glideState);
+  const activeBlend = getPlanetOrbitBlend(displaySection, activeIndex, glideState);
+  const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
 
   orbitMeshes.forEach((ring, i) => {
-    const sectionDist = Math.abs(displaySection - i);
+    const sectionDist = Math.abs(effectiveSection - i);
     const isInner = i < activeIndex;
     let opacity = 0.22;
 
@@ -954,14 +1057,15 @@ function updateOrbitRings(displaySection) {
   });
 }
 
-function updatePlanets(elapsed, displaySection) {
-  const activeIndex = clamp(Math.round(displaySection), 0, SECTION_COUNT - 1);
+function updatePlanets(elapsed, displaySection, glideState) {
+  const activeIndex = getActiveSectionIndex(displaySection, glideState);
+  const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
 
   planetEntries.forEach((entry) => {
     const { data, mesh, mat, rings } = entry;
     const isActive = data.section === activeIndex;
-    const proximity = 1 - clamp(Math.abs(displaySection - data.section), 0, 1.2) / 1.2;
-    const pos = getPlanetPosition(data, elapsed, displaySection);
+    const proximity = getSectionProximity(data.section, displaySection, glideState);
+    const pos = getPlanetPosition(data, elapsed, displaySection, tmpPlanetPos, glideState);
     mesh.position.copy(pos);
     const axial = data.axialScale ?? 1;
     const spinFactor =
@@ -989,7 +1093,7 @@ function updatePlanets(elapsed, displaySection) {
     }
   });
 
-  const sunProximity = clamp((displaySection - 2.2) / 1.8, 0, 1);
+  const sunProximity = clamp((effectiveSection - 2.2) / 1.8, 0, 1);
   const sunScale = 1 + sunProximity * 2.8;
   const pulse = 1 + Math.sin(elapsed * 1.1) * 0.035;
 
@@ -1006,10 +1110,15 @@ function updatePlanets(elapsed, displaySection) {
   sun.material.emissiveIntensity = 2 + sunProximity * 1.5;
 }
 
-function updateAccentLight(displaySection, elapsed) {
-  const sectionIndex = clamp(Math.round(displaySection), 0, SECTION_COUNT - 1);
-  const nextIndex = clamp(sectionIndex + 1, 0, SECTION_COUNT - 1);
-  const frac = displaySection - sectionIndex;
+function updateAccentLight(displaySection, elapsed, glideState) {
+  const inLongGlide = isLongGlide(glideState);
+  const sectionIndex = getActiveSectionIndex(displaySection, glideState);
+  const nextIndex = inLongGlide
+    ? glideState.to
+    : clamp(sectionIndex + 1, 0, SECTION_COUNT - 1);
+  const frac = inLongGlide
+    ? glideState.t
+    : displaySection - sectionIndex;
 
   tmpAccent.setHex(zoneAccent[sectionIndex]);
   tmpAccentNext.setHex(zoneAccent[nextIndex]);
@@ -1017,7 +1126,7 @@ function updateAccentLight(displaySection, elapsed) {
 
   const planet = planetEntries[sectionIndex]?.data;
   if (planet) {
-    const pos = getPlanetPosition(planet, elapsed, displaySection);
+    const pos = getPlanetPosition(planet, elapsed, displaySection, tmpPlanetPos, glideState);
     accentLight.position.set(pos.x + 2, 3.5 + frac, pos.z + 2);
   }
   accentLight.color.copy(tmpAccent);
@@ -1026,11 +1135,14 @@ function updateAccentLight(displaySection, elapsed) {
 
 function updateCamera(displaySection, elapsed, glideState) {
   const cam = sampleCameraState(displaySection, elapsed, glideState);
-  const sectionIndex = clamp(Math.round(displaySection), 0, SECTION_COUNT - 1);
+  const inLongGlide = isLongGlide(glideState);
+  const sectionIndex = getActiveSectionIndex(displaySection, glideState);
   const framing = SECTION_FRAMING[sectionIndex] ?? SECTION_FRAMING[0];
-  const activeBlend = clamp(1 - Math.abs(displaySection - sectionIndex) * 2.2, 0, 1);
+  const activeBlend = inLongGlide
+    ? clamp(1 - Math.sin(Math.PI * glideState.t) * 0.94, 0.06, 1)
+    : clamp(1 - Math.abs(displaySection - sectionIndex) * 2.2, 0, 1);
   const activePlanet = PLANETS[sectionIndex];
-  const activePos = getPlanetPosition(activePlanet, elapsed, displaySection);
+  const activePos = getPlanetPosition(activePlanet, elapsed, displaySection, tmpPlanetPos, glideState);
   tmpToSun.copy(activePos).sub(sunOrigin).normalize();
   tmpTangent.crossVectors(tmpUp, tmpToSun);
   if (tmpTangent.lengthSq() < 0.001) {
@@ -1053,17 +1165,18 @@ function updateCamera(displaySection, elapsed, glideState) {
       camSmoothReady = true;
     }
 
-    const inTransit = activeBlend < 0.96;
-    const posAlpha = inTransit ? 0.16 : 0.24 + activeBlend * 0.56;
+    const inTransit = activeBlend < 0.96 || inLongGlide;
+    const posAlpha = inTransit ? 0.1 : 0.16 + activeBlend * 0.48;
 
     smoothedCamPos.lerp(cam.position, posAlpha);
     camera.position.copy(smoothedCamPos);
 
-    const driftScale = 0.04 * activeBlend;
-    const driftPhase = elapsed * 0.16 + sectionIndex * 1.7;
-    const driftAmp = activePlanet.size * 0.08;
-    camera.position.x += Math.sin(elapsed * 0.28) * 0.035 * (1 - activeBlend * 0.65);
-    camera.position.y += Math.sin(elapsed * 0.62) * 0.022 * (1 - activeBlend * 0.65);
+    const driftScale = 0.03 * activeBlend * (inLongGlide ? 0.35 : 1);
+    const driftPhase = elapsed * 0.14 + sectionIndex * 1.7;
+    const driftAmp = activePlanet.size * 0.06;
+    const driftAttenuation = inLongGlide ? 0.2 : 1 - activeBlend * 0.65;
+    camera.position.x += Math.sin(elapsed * 0.28) * 0.024 * driftAttenuation;
+    camera.position.y += Math.sin(elapsed * 0.62) * 0.016 * driftAttenuation;
     camera.position.addScaledVector(tmpTangent, Math.sin(driftPhase) * driftAmp * driftScale);
 
     camera.lookAt(cam.lookAt);
@@ -1082,12 +1195,13 @@ function updateCamera(displaySection, elapsed, glideState) {
     focalMm = THREE.MathUtils.lerp(focalMm, restFocal, activeBlend * activeBlend);
   }
   const fovTarget = focalMmToFov(focalMm);
-  camera.fov += (fovTarget - camera.fov) * (inTransit ? 0.14 : 0.22);
+  camera.fov += (fovTarget - camera.fov) * (inTransit ? 0.09 : 0.16);
   camera.updateProjectionMatrix();
 
   if (fog) {
-    fog.density = 0.006 + displaySection * 0.0012;
-    const warmth = clamp((displaySection - 3) / 1, 0, 1);
+    const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
+    fog.density = 0.006 + effectiveSection * 0.0012;
+    const warmth = clamp((effectiveSection - 3) / 1, 0, 1);
     fog.color.setRGB(0.02 + warmth * 0.06, 0.03 + warmth * 0.02, 0.04 - warmth * 0.02);
   }
 }
@@ -1153,11 +1267,11 @@ function onResize() {
 
 export function renderScene(displaySection, glideState = null) {
   const elapsed = clock.getElapsedTime();
-  updatePlanets(elapsed, displaySection);
-  updateOrbitRings(displaySection);
+  updatePlanets(elapsed, displaySection, glideState);
+  updateOrbitRings(displaySection, glideState);
   updateCamera(displaySection, elapsed, glideState);
-  updateStars(elapsed, camera.position, displaySection);
-  updateAccentLight(displaySection, elapsed);
+  updateStars(elapsed, camera.position, displaySection, glideState);
+  updateAccentLight(displaySection, elapsed, glideState);
   renderer.render(scene, camera);
 }
 

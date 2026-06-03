@@ -1,7 +1,8 @@
 import { getSectionFraming, spacecraftEase } from "./scene3d.js";
 
 const SECTION_COUNT = 5;
-const TRANSITION_MS = 2500;
+const TRANSITION_MS = 3200;
+const LONG_JUMP_MS_PER_STEP = 900;
 const GATE_WHEEL_TOTAL = 140;
 const GATE_TOUCH_TOTAL = 72;
 const SECTION_THEMES = ["dark", "light", "mid", "mid", "light"];
@@ -19,6 +20,7 @@ let glideFromIndex = 0;
 let glideToIndex = 0;
 let glideDurationMs = TRANSITION_MS;
 let glideT = 1;
+let longJump = false;
 
 let gateProgress = 0;
 let gateDirection = 0;
@@ -55,29 +57,129 @@ function updateGateUI() {
   }
 }
 
+function getUiSectionIndex() {
+  if (isAnimating && longJump) {
+    return glideT < 0.5 ? glideFromIndex : glideToIndex;
+  }
+  return Math.round(displaySection);
+}
+
 function syncTheme() {
-  const activeIndex = Math.round(displaySection);
+  const activeIndex = getUiSectionIndex();
   document.body.dataset.theme = SECTION_THEMES[activeIndex] ?? "dark";
 }
 
 function syncFraming() {
-  const activeIndex = Math.round(displaySection);
+  const activeIndex = getUiSectionIndex();
   const framing = getSectionFraming(activeIndex);
   document.body.dataset.framing = framing.panelOffset;
 }
 
-function syncUI() {
-  const activeIndex = Math.round(displaySection);
-  panels.forEach((panel, i) => panel.classList.toggle("is-active", i === activeIndex));
-  navLinks.forEach((link, i) => {
-    const active = i === activeIndex;
-    link.classList.toggle("is-active", active);
-    if (active) {
-      link.setAttribute("aria-current", "page");
+function clearLongJumpPanels() {
+  panels.forEach((panel) => {
+    panel.classList.remove("is-long-jump-from", "is-long-jump-to", "is-long-jump-hidden");
+    panel.style.removeProperty("--long-jump-offset");
+    panel.style.removeProperty("opacity");
+  });
+  if (overlay) {
+    delete overlay.dataset.longJump;
+    delete overlay.dataset.adjacentGlide;
+  }
+}
+
+/** Crossfade séquentiel : départ 1→0 première moitié, arrivée 0→1 seconde moitié. */
+function longJumpFadeWeights(t) {
+  const fadeOut = clamp(1 - t * 2, 0, 1);
+  const fadeIn = clamp((t - 0.5) * 2, 0, 1);
+  return { fadeOut, fadeIn };
+}
+
+function syncLongJumpPanels(t) {
+  const { fadeOut, fadeIn } = longJumpFadeWeights(t);
+  const offsetFromVH = (glideFromIndex - glideToIndex) * 100;
+  panels.forEach((panel, i) => {
+    panel.classList.remove("is-long-jump-from", "is-long-jump-to", "is-long-jump-hidden");
+    panel.style.removeProperty("--long-jump-offset");
+    panel.style.removeProperty("opacity");
+
+    if (i === glideFromIndex) {
+      panel.classList.add("is-long-jump-from");
+      panel.style.setProperty("--long-jump-offset", `${offsetFromVH}vh`);
+      panel.style.opacity = String(fadeOut);
+      panel.classList.toggle("is-active", t < 0.5);
+    } else if (i === glideToIndex) {
+      panel.classList.add("is-long-jump-to");
+      panel.style.opacity = String(fadeIn);
+      panel.classList.toggle("is-active", t >= 0.5);
     } else {
-      link.removeAttribute("aria-current");
+      panel.classList.add("is-long-jump-hidden");
+      panel.style.opacity = "0";
     }
   });
+  if (overlay) {
+    overlay.dataset.longJump = "true";
+  }
+}
+
+function syncAdjacentGlidePanels(t) {
+  if (overlay) {
+    overlay.dataset.adjacentGlide = "true";
+  }
+  const { fadeOut, fadeIn } = longJumpFadeWeights(t);
+  panels.forEach((panel, i) => {
+    panel.style.removeProperty("opacity");
+    if (i === glideFromIndex) {
+      panel.style.opacity = String(fadeOut);
+      panel.classList.toggle("is-active", t < 0.5);
+    } else if (i === glideToIndex) {
+      panel.style.opacity = String(fadeIn);
+      panel.classList.toggle("is-active", t >= 0.5);
+    } else {
+      panel.classList.remove("is-active");
+    }
+  });
+}
+
+function syncUI() {
+  if (isAnimating && longJump) {
+    syncLongJumpPanels(glideT);
+    navLinks.forEach((link, i) => {
+      const active = i === glideFromIndex || i === glideToIndex;
+      link.classList.toggle("is-active", active);
+      if (i === glideToIndex && glideT >= 0.5) {
+        link.setAttribute("aria-current", "page");
+      } else if (i === glideFromIndex && glideT < 0.5) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
+  } else if (isAnimating) {
+    syncAdjacentGlidePanels(glideT);
+    const activeIndex = glideT < 0.5 ? glideFromIndex : glideToIndex;
+    navLinks.forEach((link, i) => {
+      const active = i === glideFromIndex || i === glideToIndex;
+      link.classList.toggle("is-active", active);
+      if (i === activeIndex) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
+  } else {
+    clearLongJumpPanels();
+    const activeIndex = Math.round(displaySection);
+    panels.forEach((panel, i) => panel.classList.toggle("is-active", i === activeIndex));
+    navLinks.forEach((link, i) => {
+      const active = i === activeIndex;
+      link.classList.toggle("is-active", active);
+      if (active) {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
+  }
   syncTheme();
   syncFraming();
 }
@@ -97,8 +199,9 @@ function startGlide(toIndex, fromSection) {
   glideFromIndex = fromSection;
   glideToIndex = toIndex;
   const span = Math.abs(glideToIndex - glideFromIndex);
+  longJump = span > 1;
   glideDurationMs =
-    span <= 1 ? TRANSITION_MS : TRANSITION_MS * (1 + 0.22 * (span - 1));
+    span <= 1 ? TRANSITION_MS : TRANSITION_MS + (span - 1) * LONG_JUMP_MS_PER_STEP;
   animStartMs = performance.now();
   isAnimating = true;
 }
@@ -236,19 +339,29 @@ export function tickNavigation(now) {
   if (isAnimating) {
     const t = clamp((now - animStartMs) / glideDurationMs, 0, 1);
     glideT = spacecraftEase(t);
-    displaySection = lerp(animFrom, animTo, glideT);
+    if (longJump) {
+      displaySection = lerp(glideFromIndex, glideToIndex, glideT);
+    } else {
+      displaySection = lerp(animFrom, animTo, glideT);
+    }
     if (t >= 1) {
       displaySection = animTo;
       isAnimating = false;
+      longJump = false;
       glideT = 1;
     }
   } else {
     displaySection = currentSection;
+    longJump = false;
   }
 
   if (overlay) {
-    const scrollSection = isAnimating ? lerp(animFrom, animTo, glideT) : displaySection;
-    overlay.style.transform = `translate3d(0, ${-scrollSection * 100}vh, 0)`;
+    if (isAnimating && longJump) {
+      overlay.style.transform = `translate3d(0, ${-glideToIndex * 100}vh, 0)`;
+    } else {
+      const scrollSection = isAnimating ? lerp(animFrom, animTo, glideT) : displaySection;
+      overlay.style.transform = `translate3d(0, ${-scrollSection * 100}vh, 0)`;
+    }
   }
   syncUI();
 }

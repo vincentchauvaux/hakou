@@ -142,6 +142,32 @@ body {
   pointer-events: none;
 }
 
+#overlay[data-long-jump="true"] {
+  transition: none;
+}
+
+#overlay[data-long-jump="true"] .panel {
+  transition: none;
+  transform: translateY(0) translateX(0);
+}
+
+#overlay[data-long-jump="true"] .panel.is-long-jump-from {
+  transform: translateY(var(--long-jump-offset, 0)) translateX(0);
+}
+
+#overlay[data-long-jump="true"] .panel.is-long-jump-to {
+  transform: translateY(0) translateX(0);
+}
+
+#overlay[data-long-jump="true"] .panel.is-long-jump-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#overlay[data-adjacent-glide="true"] .panel {
+  transition: none;
+}
+
 #overlay .panel {
   pointer-events: auto;
 }
