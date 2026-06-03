@@ -28,6 +28,8 @@
 
 ## Scène 3D (`scene3d.js`)
 
+- **Revert (juin 2026)** : annulation des modifs 3D de session post-clarification surface (offset 1,09, framing Visuel, refactor collision héro HERO_SURFACE_*, pompage zoom). scene3d.js restauré depuis le commit **e6f9350** (équivalent HEAD branche) — CAM_SURFACE_OFFSET **1,52**, camDistMul d'origine. L'état partiel souhaité (correctif vibration Mercure, offset **1,24**, hystérésis) n'était pas commité dans git ; à réappliquer manuellement si besoin.
+
 - **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement (`sampleCameraState` snap section entière hors glide). Focale repos **42 mm** (~31° FOV). Neptune orbite **58**, `size` 1,4, `camDistMul` 2,75, `distScale` 1,68 — limbe droit ~30–40 % cadre, Soleil à l'horizon gauche. `INTRO_SNAP_FRAMES` 5 + re-snap à l'arrivée sur Intro. Pas de dérive caméra au repos Intro ; `resolveSunOcclusion` Intro doux (tangente réduite, recul extérieur).
 - **Ordre planètes / caméra** : 0 = Neptune → 1 Saturn → 2 Jupiter → **3 Uranus (Visuel)** → 4 Mars (3D) → 5 Mercure (Contact) ; le voyage caméra 0→5 reste « vers le Soleil ».
 - Caméra : **trajectoire rectiligne** (`sampleRectilinearTransfer` / `rectilinearPointRaw`) — `lerp` P0→P1, léger décalage vers l'extérieur au milieu (`sin π·pathT`) + **hélice toroïdale** (tangente extérieure + Y) pour dégager le Soleil et suggérer la révolution vers le centre.
