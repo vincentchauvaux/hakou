@@ -52,16 +52,243 @@ let mobileEdgeCharge = 0;
 let mobileEdgeChargeDir = 0;
 
 let overlay = null;
+let solarScaleEl = null;
 let solarScaleMarker = null;
+let solarScaleGauge = null;
+
+/** Couleurs marqueur échelle = planète d’ancre (alignées scene3d.js / --scale-marker-N). */
+const SCALE_MARKER_COLORS = [
+  "#3060b0", /* 0 Neptune */
+  "#d4b878", /* 1 Saturne */
+  "#c87848", /* 2 Jupiter */
+  "#60c8b8", /* 3 Uranus */
+  "#c86048", /* 4 Mars */
+  "#e8d8a8", /* 5 Vénus */
+  "#48a878", /* 6 Terre */
+  "#a0a098", /* 7 Mercure */
+];
 let panels = [];
 let navLinks = [];
 
+const SOLAR_SCALE_HORIZONTAL_MQ = "(max-width: 680px)";
+
+let solarScaleTrack = null;
+let solarScaleDragActive = false;
+let solarScaleDragPointerId = null;
+let solarScaleDragCaptureEl = null;
+
+/** Progression 0 = Contact (haut / droite), 1 = Intro (bas / gauche) — alignée sur `--scale-progress`. */
+const SOLAR_SCALE_MAGNET_THRESHOLD = 0.38;
+
+function isSolarScaleHorizontal() {
+  return window.matchMedia(SOLAR_SCALE_HORIZONTAL_MQ).matches;
+}
+
+function scaleProgressFromSection(section) {
+  const t = clamp(section / scaleSectionMax, 0, 1);
+  return 1 - t;
+}
+
+function sectionIndexFromScaleProgress(progress) {
+  const t = clamp(1 - progress, 0, 1);
+  return clamp(Math.round(t * scaleSectionMax), 0, scaleSectionMax);
+}
+
+function snapSolarScaleProgressMagnetic(progress) {
+  const step = 1 / scaleSectionMax;
+  const threshold = step * SOLAR_SCALE_MAGNET_THRESHOLD;
+  let nearestStop = progress;
+  let nearestDist = Infinity;
+  for (let i = 0; i <= scaleSectionMax; i += 1) {
+    const stop = scaleProgressFromSection(i);
+    const dist = Math.abs(progress - stop);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearestStop = stop;
+    }
+  }
+  return nearestDist <= threshold ? nearestStop : progress;
+}
+
+function progressFromPointer(clientX, clientY) {
+  if (!solarScaleTrack) return null;
+  const rect = solarScaleTrack.getBoundingClientRect();
+  if (isSolarScaleHorizontal()) {
+    if (rect.width < 1) return null;
+    return 1 - clamp((clientX - rect.left) / rect.width, 0, 1);
+  }
+  if (rect.height < 1) return null;
+  return clamp((clientY - rect.top) / rect.height, 0, 1);
+}
+
+function applySolarScaleProgress(progress, previewSection) {
+  if (!solarScaleMarker) return;
+  const idx = clamp(
+    previewSection ?? sectionIndexFromScaleProgress(progress),
+    0,
+    scaleSectionMax
+  );
+  const markerColor = SCALE_MARKER_COLORS[idx] ?? SCALE_MARKER_COLORS[0];
+  solarScaleMarker.style.setProperty("--scale-progress", String(clamp(progress, 0, 1)));
+  solarScaleMarker.style.setProperty("--scale-marker-color", markerColor);
+  if (solarScaleEl) {
+    solarScaleEl.dataset.section = String(idx);
+  }
+}
+
+function clearSolarScaleGauge() {
+  if (!solarScaleGauge) return;
+  solarScaleGauge.hidden = true;
+  solarScaleGauge.style.removeProperty("--scale-gauge-start");
+  solarScaleGauge.style.removeProperty("--scale-gauge-size");
+  solarScaleGauge.style.removeProperty("--scale-gauge-color");
+}
+
+/** Jauge vidée vers la boule (fixe à toP) : à t=0 couvre [fromP,toP], à t=1 taille ~0. */
+function updateSolarScaleGauge(anchorProgress, travelProgress, targetSection) {
+  if (!solarScaleGauge) return;
+  const lo = Math.min(anchorProgress, travelProgress);
+  const size = Math.abs(travelProgress - anchorProgress);
+  if (size < 0.0001) {
+    solarScaleGauge.hidden = true;
+    return;
+  }
+  const color = SCALE_MARKER_COLORS[targetSection] ?? SCALE_MARKER_COLORS[0];
+  solarScaleGauge.hidden = false;
+  solarScaleGauge.style.setProperty("--scale-gauge-start", String(lo));
+  solarScaleGauge.style.setProperty("--scale-gauge-size", String(size));
+  solarScaleGauge.style.setProperty("--scale-gauge-color", color);
+}
+
 /** Intro (0) en bas de l’échelle, Contact (N) vers Soleil en haut — scroll ↑ = marqueur monte. */
 function updateSolarScale(section) {
+  if (solarScaleDragActive) return;
   if (!solarScaleMarker) return;
-  const t = clamp(section / scaleSectionMax, 0, 1);
-  const progress = 1 - t;
-  solarScaleMarker.style.setProperty("--scale-progress", String(progress));
+
+  if (isAnimating) {
+    const fromP = scaleProgressFromSection(glideFromIndex);
+    const toP = scaleProgressFromSection(glideToIndex);
+    const travelP = fromP + (toP - fromP) * glideT;
+    applySolarScaleProgress(toP, glideToIndex);
+    updateSolarScaleGauge(toP, travelP, glideToIndex);
+    solarScaleEl?.classList.add("is-scale-gliding");
+    return;
+  }
+
+  solarScaleEl?.classList.remove("is-scale-gliding");
+  clearSolarScaleGauge();
+  const idx = clamp(Math.round(section), 0, scaleSectionMax);
+  applySolarScaleProgress(scaleProgressFromSection(idx), idx);
+}
+
+function releaseSolarScalePointerCapture(pointerId) {
+  const captureEl = solarScaleDragCaptureEl;
+  solarScaleDragCaptureEl = null;
+  if (!captureEl?.releasePointerCapture) return;
+  try {
+    if (captureEl.hasPointerCapture?.(pointerId)) {
+      captureEl.releasePointerCapture(pointerId);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function beginSolarScaleDrag(event) {
+  if (isAnimating || solarScaleDragActive) return;
+  const raw = progressFromPointer(event.clientX, event.clientY);
+  if (raw == null) return;
+
+  solarScaleDragActive = true;
+  solarScaleDragPointerId = event.pointerId;
+  solarScaleDragCaptureEl = event.currentTarget;
+  solarScaleEl?.classList.add("is-scale-dragging");
+  solarScaleMarker?.classList.add("is-dragging");
+  const visual = snapSolarScaleProgressMagnetic(raw);
+  applySolarScaleProgress(visual, sectionIndexFromScaleProgress(raw));
+
+  if (solarScaleDragCaptureEl?.setPointerCapture) {
+    try {
+      solarScaleDragCaptureEl.setPointerCapture(event.pointerId);
+    } catch {
+      /* ignore */
+    }
+  }
+  event.preventDefault();
+}
+
+function moveSolarScaleDrag(event) {
+  if (!solarScaleDragActive || event.pointerId !== solarScaleDragPointerId) return;
+  const raw = progressFromPointer(event.clientX, event.clientY);
+  if (raw == null) return;
+  const visual = snapSolarScaleProgressMagnetic(raw);
+  applySolarScaleProgress(visual, sectionIndexFromScaleProgress(raw));
+  event.preventDefault();
+}
+
+function endSolarScaleDrag(event) {
+  if (!solarScaleDragActive || event.pointerId !== solarScaleDragPointerId) return;
+
+  const raw = progressFromPointer(event.clientX, event.clientY);
+  const pointerId = event.pointerId;
+  solarScaleDragActive = false;
+  solarScaleDragPointerId = null;
+  solarScaleEl?.classList.remove("is-scale-dragging");
+  solarScaleMarker?.classList.remove("is-dragging");
+  releaseSolarScalePointerCapture(pointerId);
+
+  if (raw == null || isAnimating) {
+    updateSolarScale(displaySection);
+    event.preventDefault();
+    return;
+  }
+
+  const targetSection = sectionIndexFromScaleProgress(raw);
+  const snappedProgress = scaleProgressFromSection(targetSection);
+  applySolarScaleProgress(snappedProgress, targetSection);
+
+  if (targetSection !== currentSection) {
+    goToSection(targetSection);
+  } else {
+    updateSolarScale(currentSection);
+  }
+  event.preventDefault();
+}
+
+function onSolarScaleTickPointer(event) {
+  if (isAnimating) return;
+  const idx = Number(event.currentTarget?.dataset?.stop);
+  if (Number.isNaN(idx)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  goToSection(idx);
+}
+
+function initSolarScaleInteraction() {
+  if (!solarScaleEl || !solarScaleMarker) return;
+
+  solarScaleTrack = solarScaleEl.querySelector(".solar-scale-track");
+  solarScaleGauge = solarScaleEl.querySelector(".solar-scale-gauge");
+  if (!solarScaleTrack) return;
+
+  solarScaleMarker.addEventListener("pointerdown", beginSolarScaleDrag);
+  solarScaleMarker.addEventListener("pointermove", moveSolarScaleDrag);
+  solarScaleMarker.addEventListener("pointerup", endSolarScaleDrag);
+  solarScaleMarker.addEventListener("pointercancel", endSolarScaleDrag);
+
+  solarScaleTrack.addEventListener("pointerdown", (event) => {
+    if (event.target === solarScaleMarker || event.target?.closest?.(".solar-scale-tick")) {
+      return;
+    }
+    beginSolarScaleDrag(event);
+  });
+  solarScaleTrack.addEventListener("pointermove", moveSolarScaleDrag);
+  solarScaleTrack.addEventListener("pointerup", endSolarScaleDrag);
+  solarScaleTrack.addEventListener("pointercancel", endSolarScaleDrag);
+
+  solarScaleEl.querySelectorAll(".solar-scale-tick").forEach((tick) => {
+    tick.addEventListener("pointerdown", onSolarScaleTickPointer);
+  });
 }
 
 function canMove(dir) {
@@ -533,6 +760,7 @@ function onTouchMove(event) {
 
 export function initNavigation(root) {
   overlay = root.querySelector("#overlay");
+  solarScaleEl = root.querySelector("#solar-scale");
   solarScaleMarker = root.querySelector("#solar-scale-marker");
   panels = [...root.querySelectorAll(".panel")];
   sectionCount = panels.length;
@@ -548,6 +776,8 @@ export function initNavigation(root) {
       }
     });
   });
+
+  initSolarScaleInteraction();
 
   document.addEventListener("wheel", onWheel, { passive: false, capture: true });
   document.addEventListener("keydown", onKeyDown);

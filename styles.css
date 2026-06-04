@@ -12,6 +12,15 @@
   --side-nav-gutter: clamp(100px, 12vw, 160px);
   /* Échelle solaire fixe à gauche (labels + rail) */
   --solar-scale-gutter: clamp(72px, 11vw, 108px);
+  /* Marqueur échelle : une teinte par section (planète d’ancre) */
+  --scale-marker-0: #3060b0;
+  --scale-marker-1: #d4b878;
+  --scale-marker-2: #c87848;
+  --scale-marker-3: #60c8b8;
+  --scale-marker-4: #c86048;
+  --scale-marker-5: #e8d8a8;
+  --scale-marker-6: #48a878;
+  --scale-marker-7: #a0a098;
   /* Menu latéral : verre + ombres texte (lisibilité sur fond 3D variable) */
   --nav-glass-bg: rgba(5, 8, 18, 0.75);
   --nav-glass-border: rgba(255, 255, 255, 0.12);
@@ -277,7 +286,7 @@ body {
   transform: translateY(-50%);
   z-index: 3;
   height: min(48vh, 360px);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .solar-scale-track {
@@ -285,6 +294,8 @@ body {
   height: 100%;
   width: 6px;
   min-height: 120px;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .solar-scale-rail {
@@ -293,6 +304,31 @@ body {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.055);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.solar-scale-gauge {
+  --scale-gauge-start: 0;
+  --scale-gauge-size: 0;
+  --scale-gauge-color: rgba(255, 255, 255, 0.15);
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--scale-gauge-start) * 100%);
+  height: calc(var(--scale-gauge-size) * 100%);
+  border-radius: 999px;
+  z-index: 0;
+  pointer-events: none;
+  background: color-mix(
+    in srgb,
+    var(--scale-gauge-color) 18%,
+    rgba(255, 255, 255, 0.15)
+  );
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+}
+
+.solar-scale.is-scale-gliding .solar-scale-gauge {
+  opacity: 0.7;
 }
 
 .solar-scale-tick {
@@ -306,7 +342,8 @@ body {
   border-radius: 1px;
   background: rgba(232, 237, 247, 0.38);
   box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .solar-scale-tick[data-stop="0"] {
@@ -343,6 +380,7 @@ body {
 
 .solar-scale-marker {
   --scale-progress: 0;
+  --scale-marker-color: var(--scale-marker-0);
   position: absolute;
   left: 50%;
   top: calc(var(--scale-progress) * 100%);
@@ -352,13 +390,42 @@ body {
   margin-left: -4px;
   margin-top: -4px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #fff6e8, #ffb347 45%, #e86b2a 100%);
+  touch-action: none;
+  cursor: grab;
+  pointer-events: auto;
+  background: radial-gradient(
+    circle at 35% 35%,
+    color-mix(in srgb, var(--scale-marker-color) 22%, white),
+    var(--scale-marker-color) 52%,
+    color-mix(in srgb, var(--scale-marker-color) 72%, black) 100%
+  );
   box-shadow:
-    0 0 6px rgba(255, 180, 80, 0.5),
+    0 0 6px color-mix(in srgb, var(--scale-marker-color) 55%, transparent),
     0 0 2px rgba(255, 255, 255, 0.75),
     inset 0 0 0 1px rgba(255, 255, 255, 0.3);
-  transition: top 0.12s linear;
+  transition:
+    top 0.12s linear,
+    background 0.35s ease,
+    box-shadow 0.35s ease;
   will-change: top;
+}
+
+.solar-scale-marker::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+}
+
+.solar-scale-marker.is-dragging,
+.solar-scale.is-scale-dragging .solar-scale-marker {
+  cursor: grabbing;
+}
+
+.solar-scale.is-scale-dragging .solar-scale-marker,
+.solar-scale.is-scale-gliding .solar-scale-marker {
+  transition:
+    background 0.35s ease,
+    box-shadow 0.35s ease;
 }
 
 #overlay {
@@ -453,6 +520,7 @@ body {
 .panel.panel--frame-right .video-grid,
 .panel.panel--frame-right .instagram-grid {
   align-self: flex-end;
+  width: 100%;
 }
 
 .panel.panel--frame-right h1,
@@ -519,10 +587,16 @@ p {
   z-index: 4;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
-  padding: 14px 12px 14px 16px;
+  width: fit-content;
+  max-width: min(42vw, 220px);
+  box-sizing: border-box;
+  padding-block: 12px;
+  padding-inline: 10px;
   max-height: min(88vh, 420px);
-  overflow-y: auto;
+  overflow-x: hidden;
+  overflow-y: hidden;
   overscroll-behavior: contain;
   border-radius: 14px 0 0 14px;
   background: var(--nav-glass-bg);
@@ -540,6 +614,9 @@ p {
 }
 
 .nav-link {
+  display: block;
+  width: auto;
+  max-width: 100%;
   color: rgba(232, 237, 247, 0.78);
   opacity: 1;
   text-decoration: none;
@@ -547,7 +624,8 @@ p {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 6px 10px;
+  padding: 6px 8px;
+  white-space: nowrap;
   border-radius: 8px;
   text-shadow: var(--nav-link-shadow);
   -webkit-text-stroke: var(--nav-link-stroke);
@@ -574,6 +652,14 @@ p {
   text-shadow:
     var(--nav-link-shadow),
     0 0 12px rgba(127, 157, 255, 0.55);
+}
+
+/* Desktop hauteur confortable : nav sans scroll ni réserve scrollbar */
+@media (min-width: 681px) and (min-height: 821px) {
+  .side-nav {
+    overflow-y: hidden;
+    scrollbar-gutter: auto;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -644,17 +730,28 @@ audio {
 .video-grid {
   width: 100%;
   max-width: min(900px, 100%);
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(10px, 1.6vw, 16px);
+  column-gap: max(16px, clamp(12px, 1.8vw, 20px));
+  row-gap: max(16px, clamp(12px, 1.8vw, 20px));
   margin-top: 0;
+}
+
+.video-grid > .youtube-thumb,
+.video-grid > [data-video-id] {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .youtube-thumb {
   position: relative;
   display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   aspect-ratio: 16 / 9;
-  min-height: 158px;
+  min-height: 0;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--panel-card-border, var(--card-border));
@@ -685,7 +782,7 @@ audio {
 .instagram-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(8px, 1.2vw, 12px);
+  gap: clamp(12px, 1.8vw, 20px);
   margin-top: 0;
 }
 
@@ -896,11 +993,11 @@ audio {
 
 .instagram-thumb-external,
 .youtube-thumb-external {
+  display: none;
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 3;
-  display: flex;
   align-items: center;
   justify-content: center;
   width: 28px;
@@ -1218,7 +1315,8 @@ body.youtube-video-modal-open {
   .side-nav {
     right: 0;
     gap: 3px;
-    padding: 10px 10px 10px 12px;
+    padding-block: 10px;
+    padding-inline: 8px;
   }
 
   .nav-link {
@@ -1271,7 +1369,10 @@ body.youtube-video-modal-open {
 
   .side-nav {
     max-height: min(72vh, 340px);
-    padding: 10px 10px 10px 12px;
+    padding-block: 10px;
+    padding-inline: 8px;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   .panel {
@@ -1336,16 +1437,13 @@ body.youtube-video-modal-open {
 
   .video-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .youtube-thumb {
-    min-height: 0;
+    column-gap: max(16px, clamp(10px, 2vw, 14px));
+    row-gap: max(16px, clamp(10px, 2vw, 14px));
   }
 
   .instagram-grid,
   .instagram-grid--has-posts {
-    gap: 8px;
+    gap: clamp(10px, 2vw, 14px);
   }
 
   .instagram-thumb,
@@ -1514,8 +1612,26 @@ body.youtube-video-modal-open {
     left: calc((1 - var(--scale-progress)) * 100%);
     margin-left: -4px;
     margin-top: -4px;
-    transition: left 0.12s linear;
+    transition:
+      left 0.12s linear,
+      background 0.35s ease,
+      box-shadow 0.35s ease;
     will-change: left;
+  }
+
+  .solar-scale-gauge {
+    top: 0;
+    bottom: 0;
+    height: auto;
+    width: calc(var(--scale-gauge-size) * 100%);
+    left: calc((1 - var(--scale-gauge-start) - var(--scale-gauge-size)) * 100%);
+  }
+
+  .solar-scale.is-scale-dragging .solar-scale-marker,
+  .solar-scale.is-scale-gliding .solar-scale-marker {
+    transition:
+      background 0.35s ease,
+      box-shadow 0.35s ease;
   }
 
   .side-nav {
@@ -1653,11 +1769,17 @@ body.youtube-video-modal-open {
     margin-left: 0;
   }
 
+  .video-grid {
+    grid-template-columns: 1fr;
+    column-gap: max(16px, clamp(10px, 2.5vw, 14px));
+    row-gap: max(16px, clamp(10px, 2.5vw, 14px));
+  }
+
   .instagram-grid,
   .instagram-grid--has-posts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: auto;
-    gap: 8px;
+    gap: clamp(10px, 2.5vw, 14px);
   }
 
   .soundcloud-embed iframe {
