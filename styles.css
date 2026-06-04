@@ -1923,10 +1923,16 @@ body.youtube-video-modal-open {
     height: min(420px, 65vh);
   }
 
+  .soundcloud-embed {
+    /* Scroll panel sur les marges / texte ; iframe interactive ci-dessous. */
+    touch-action: pan-y;
+  }
+
   .soundcloud-embed iframe {
     height: 300px;
-    /* Laisse le scroll du panel absorber le touch (comme les vignettes Video). */
-    pointer-events: none;
+    pointer-events: auto;
+    /* Taps play/pause ; le panel garde pan-y hors iframe (stall bord si besoin). */
+    touch-action: manipulation;
   }
 
   #son.panel.is-active,
