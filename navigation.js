@@ -5,13 +5,26 @@ import {
   resetRestOrbitOffsets,
 } from "./scene3d.js";
 
-let sectionCount = 6;
+let sectionCount = 8;
 let scaleSectionMax = 5;
 const TRANSITION_MS = 3200;
 const LONG_JUMP_MS_PER_STEP = 900;
 const GATE_WHEEL_TOTAL = 140;
 const GATE_TOUCH_TOTAL = 72;
-const SECTION_THEMES = ["dark", "light", "mid", "mid", "mid", "light"];
+/** Mobile ≤680px ou laptop desktop à hauteur limitée (scroll panel + gating bord). */
+const PANEL_INTERNAL_SCROLL_MQ =
+  "(max-width: 680px), (min-width: 681px) and (max-height: 820px)";
+const MOBILE_PANEL_SCROLL_MQ = PANEL_INTERNAL_SCROLL_MQ;
+const PANEL_SCROLL_OVERFLOW_EPS = 2;
+const MOBILE_PANEL_EDGE_BUFFER_PX = 80;
+const MOBILE_PANEL_EDGE_BUFFER_VH = 0.12;
+const MOBILE_TOUCH_SCROLL_STALL_MAX = 4;
+/** Mobile au bord du panel : charge à remplir avant d’alimenter feedGate (évite le zap au premier scroll résiduel). */
+const MOBILE_EDGE_CHARGE_WHEEL_TOTAL = 220;
+const MOBILE_EDGE_CHARGE_TOUCH_TOTAL = 108;
+/** Pulse feedGate après une charge bord complète (~2,4 pulses pour gateProgress ≥ 1). */
+const MOBILE_EDGE_GATE_PULSE = GATE_WHEEL_TOTAL * 0.42;
+const SECTION_THEMES = ["dark", "light", "mid", "mid", "mid", "mid", "mid", "mercury"];
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -33,6 +46,10 @@ let lastGateDir = 0;
 let gateResetTimer = 0;
 let touchStartY = 0;
 let touchGateAcc = 0;
+let touchPanelScrollTop = 0;
+let touchScrollStallSteps = 0;
+let mobileEdgeCharge = 0;
+let mobileEdgeChargeDir = 0;
 
 let overlay = null;
 let solarScaleMarker = null;
@@ -51,10 +68,168 @@ function canMove(dir) {
   return dir > 0 ? currentSection < sectionCount - 1 : currentSection > 0;
 }
 
+function resetMobileEdgeCharge() {
+  mobileEdgeCharge = 0;
+  mobileEdgeChargeDir = 0;
+}
+
 function resetGate() {
   gateProgress = 0;
   lastGateDir = 0;
   touchGateAcc = 0;
+  resetTouchScrollStall();
+  resetMobileEdgeCharge();
+}
+
+function isMobilePanelScroll() {
+  return window.matchMedia(MOBILE_PANEL_SCROLL_MQ).matches;
+}
+
+function getActivePanel() {
+  return panels.find((panel) => panel.classList.contains("is-active")) ?? null;
+}
+
+function getPanelByZone(zone) {
+  return panels.find((panel) => getPanelZone(panel) === zone) ?? null;
+}
+
+function resetPanelScrollTop(panel) {
+  if (panel) panel.scrollTop = 0;
+}
+
+function getPanelScrollEdgeBuffer() {
+  if (!isMobilePanelScroll()) return PANEL_SCROLL_OVERFLOW_EPS;
+  return Math.min(
+    MOBILE_PANEL_EDGE_BUFFER_PX,
+    window.innerHeight * MOBILE_PANEL_EDGE_BUFFER_VH
+  );
+}
+
+function getPanelMaxScroll(panel) {
+  return Math.max(0, panel.scrollHeight - panel.clientHeight);
+}
+
+/** Tampon réduit si la zone scrollable est petite (évite un « bas » inaccessible). */
+function getEffectivePanelScrollEdgeBuffer(panel) {
+  const base = getPanelScrollEdgeBuffer();
+  if (!panel || !isMobilePanelScroll()) return base;
+  const maxScroll = getPanelMaxScroll(panel);
+  if (maxScroll <= PANEL_SCROLL_OVERFLOW_EPS) return base;
+  return Math.min(base, Math.floor(maxScroll / 2));
+}
+
+function panelHasVerticalOverflow(panel) {
+  return panel.scrollHeight > panel.clientHeight + PANEL_SCROLL_OVERFLOW_EPS;
+}
+
+function panelScrollAtTop(panel) {
+  return panel.scrollTop <= getEffectivePanelScrollEdgeBuffer(panel);
+}
+
+function panelScrollAtBottom(panel) {
+  const edge = getEffectivePanelScrollEdgeBuffer(panel);
+  return panel.scrollTop + panel.clientHeight >= panel.scrollHeight - edge;
+}
+
+function panelAtScrollEnd(panel) {
+  const maxScroll = getPanelMaxScroll(panel);
+  return (
+    maxScroll <= PANEL_SCROLL_OVERFLOW_EPS ||
+    panel.scrollTop >= maxScroll - PANEL_SCROLL_OVERFLOW_EPS
+  );
+}
+
+function panelNearScrollEnd(panel) {
+  const edge = getEffectivePanelScrollEdgeBuffer(panel);
+  return (
+    panel.scrollTop + panel.clientHeight >=
+    panel.scrollHeight - edge * 2
+  );
+}
+
+function resetTouchScrollStall() {
+  touchScrollStallSteps = 0;
+  touchPanelScrollTop = 0;
+}
+
+function updateTouchScrollStall(panel, dir) {
+  if (!panel || dir <= 0) {
+    resetTouchScrollStall();
+    return;
+  }
+  const top = panel.scrollTop;
+  if (Math.abs(top - touchPanelScrollTop) < 1) {
+    if (panelNearScrollEnd(panel) || panelAtScrollEnd(panel)) {
+      touchScrollStallSteps += 1;
+    } else {
+      touchScrollStallSteps = 0;
+    }
+  } else {
+    touchScrollStallSteps = 0;
+  }
+  touchPanelScrollTop = top;
+}
+
+/** Mobile : gating section seulement si le scroll interne est au bord (ou pas de débordement). */
+function canFeedSectionGate(dir) {
+  if (!isMobilePanelScroll()) return true;
+  const panel = getActivePanel();
+  if (!panel || !panelHasVerticalOverflow(panel)) return true;
+  if (dir > 0) {
+    return (
+      panelScrollAtBottom(panel) ||
+      panelAtScrollEnd(panel) ||
+      (touchScrollStallSteps >= MOBILE_TOUCH_SCROLL_STALL_MAX &&
+        panelNearScrollEnd(panel))
+    );
+  }
+  if (dir < 0) return panelScrollAtTop(panel);
+  return true;
+}
+
+/** Mobile + débordement vertical : charge au bord avant feedGate ; desktop / milieu de panel : passage direct. */
+function needsMobileEdgeCharge(dir) {
+  if (!isMobilePanelScroll() || !dir) return false;
+  const panel = getActivePanel();
+  if (!panel || !panelHasVerticalOverflow(panel)) return false;
+  return canFeedSectionGate(dir);
+}
+
+/**
+ * Accumule l’effort au bord (mobile). Retourne true si feedGate peut recevoir un pulse.
+ * Reset si direction change ou si l’utilisateur quitte le bord.
+ */
+function accumulateMobileEdgeCharge(dir, amount, { touch = false } = {}) {
+  if (!needsMobileEdgeCharge(dir)) {
+    if (mobileEdgeChargeDir !== 0) resetMobileEdgeCharge();
+    return true;
+  }
+
+  if (mobileEdgeChargeDir !== dir) {
+    mobileEdgeChargeDir = dir;
+    mobileEdgeCharge = 0;
+  }
+
+  mobileEdgeCharge += amount;
+  const threshold = touch
+    ? MOBILE_EDGE_CHARGE_TOUCH_TOTAL
+    : MOBILE_EDGE_CHARGE_WHEEL_TOTAL;
+
+  if (mobileEdgeCharge < threshold) return false;
+
+  mobileEdgeCharge -= threshold;
+  return true;
+}
+
+function resetActivePanelScroll() {
+  if (!isMobilePanelScroll()) return;
+  resetPanelScrollTop(getActivePanel());
+}
+
+/** Mobile : ne pas remettre le panel sortant à 0 pendant le crossfade (évite le saut vers le haut). */
+function resetGlideDepartingPanelScroll() {
+  if (!isMobilePanelScroll()) return;
+  resetPanelScrollTop(getPanelByZone(glideFromIndex));
 }
 
 function getUiSectionIndex() {
@@ -67,6 +242,13 @@ function getUiSectionIndex() {
 function syncTheme() {
   const activeIndex = getUiSectionIndex();
   document.body.dataset.theme = SECTION_THEMES[activeIndex] ?? "dark";
+  const warm = clamp((displaySection - 5) / 2, 0, 1);
+  const r = Math.round(lerp(5, 16, warm));
+  const g = Math.round(lerp(7, 12, warm));
+  const b = Math.round(lerp(13, 8, warm));
+  const hex = `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+  document.documentElement.style.setProperty("--bg", hex);
+  document.documentElement.style.setProperty("--bg-warmth", String(warm));
 }
 
 function syncFraming() {
@@ -163,16 +345,17 @@ function syncAdjacentGlidePanels(t) {
 function syncUI() {
   if (isAnimating && longJump) {
     syncLongJumpPanels(glideT);
+    const ariaIndex = glideT >= 0.5 ? glideToIndex : glideFromIndex;
     syncNavLinks({
-      ariaIndex: glideT >= 0.5 ? glideToIndex : glideFromIndex,
-      highlightZones: [glideFromIndex, glideToIndex],
+      ariaIndex,
+      highlightZones: [ariaIndex],
     });
   } else if (isAnimating) {
     syncAdjacentGlidePanels(glideT);
     const ariaIndex = glideT < 0.5 ? glideFromIndex : glideToIndex;
     syncNavLinks({
       ariaIndex,
-      highlightZones: [glideFromIndex, glideToIndex],
+      highlightZones: [ariaIndex],
     });
   } else {
     clearLongJumpPanels();
@@ -227,6 +410,11 @@ function goToSection(index) {
   currentSection = target;
   startGlide(target, fromSection);
   resetGate();
+  if (isMobilePanelScroll()) {
+    resetPanelScrollTop(getPanelByZone(target));
+  } else {
+    panels.forEach((panel) => resetPanelScrollTop(panel));
+  }
 }
 
 function feedGate(dir, amount) {
@@ -252,17 +440,27 @@ function feedGate(dir, amount) {
 }
 
 function onWheel(event) {
-  event.preventDefault();
-  if (isAnimating) return;
+  if (isAnimating) {
+    event.preventDefault();
+    return;
+  }
 
   const delta = event.deltaY;
   if (Math.abs(delta) < 0.5) return;
 
   // Scroll vers le haut (deltaY < 0) = avancer vers le Soleil (index++).
   const dir = delta < 0 ? 1 : delta > 0 ? -1 : 0;
-  if (!dir || !canMove(dir)) return;
+  if (!dir || !canMove(dir)) {
+    if (!isMobilePanelScroll()) event.preventDefault();
+    return;
+  }
 
-  feedGate(dir, Math.abs(delta));
+  if (!canFeedSectionGate(dir)) return;
+
+  event.preventDefault();
+  const amount = Math.abs(delta);
+  if (!accumulateMobileEdgeCharge(dir, amount, { touch: false })) return;
+  feedGate(dir, isMobilePanelScroll() ? MOBILE_EDGE_GATE_PULSE : amount);
 }
 
 function onKeyDown(event) {
@@ -276,16 +474,22 @@ function onKeyDown(event) {
   }
 
   if (!dir) return;
+  if (!canMove(dir)) return;
+  if (!canFeedSectionGate(dir)) return;
 
   event.preventDefault();
-  if (!canMove(dir)) return;
-
-  feedGate(dir, GATE_WHEEL_TOTAL);
+  const amount = GATE_WHEEL_TOTAL;
+  if (!accumulateMobileEdgeCharge(dir, amount, { touch: false })) return;
+  feedGate(dir, isMobilePanelScroll() ? MOBILE_EDGE_GATE_PULSE : amount);
 }
 
 function onTouchStart(event) {
   touchStartY = event.touches[0]?.clientY ?? 0;
   touchGateAcc = 0;
+  resetMobileEdgeCharge();
+  const panel = getActivePanel();
+  touchPanelScrollTop = panel?.scrollTop ?? 0;
+  touchScrollStallSteps = 0;
 }
 
 function onTouchMove(event) {
@@ -306,10 +510,21 @@ function onTouchMove(event) {
   const dir = Math.sign(delta);
   if (!canMove(dir)) return;
 
+  const panel = getActivePanel();
+  if (panel) updateTouchScrollStall(panel, dir);
+
+  if (!canFeedSectionGate(dir)) {
+    touchStartY = y;
+    return;
+  }
+
   event.preventDefault();
+  const amount = Math.abs(delta) * 1.4;
   touchGateAcc += Math.abs(delta);
   touchStartY = y;
-  feedGate(dir, Math.abs(delta) * 1.4);
+  if (!accumulateMobileEdgeCharge(dir, amount, { touch: true })) return;
+
+  feedGate(dir, isMobilePanelScroll() ? MOBILE_EDGE_GATE_PULSE : amount);
 
   if (touchGateAcc >= GATE_TOUCH_TOTAL) {
     touchGateAcc = 0;
@@ -363,6 +578,8 @@ export function tickNavigation(now) {
       isAnimating = false;
       longJump = false;
       glideT = 1;
+      resetActivePanelScroll();
+      resetGlideDepartingPanelScroll();
     }
   } else {
     displaySection = currentSection;

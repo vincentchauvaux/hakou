@@ -29,12 +29,16 @@
         <div class="solar-scale-tick" data-stop="3"></div>
         <div class="solar-scale-tick" data-stop="4"></div>
         <div class="solar-scale-tick" data-stop="5"></div>
+        <div class="solar-scale-tick" data-stop="6"></div>
+        <div class="solar-scale-tick" data-stop="7"></div>
         <div id="solar-scale-marker" class="solar-scale-marker"></div>
       </div>
     </div>
 
     <nav class="side-nav" aria-label="Navigation des zones">
-      <a href="#contact" class="nav-link" data-zone-link="5">Contact</a>
+      <a href="#contact" class="nav-link" data-zone-link="7">Contact</a>
+      <a href="#terre" class="nav-link" data-zone-link="6">Terre</a>
+      <a href="#venus" class="nav-link" data-zone-link="5">RPG CR</a>
       <a href="#espace-3d" class="nav-link" data-zone-link="4">3D</a>
       <a href="#visuel" class="nav-link" data-zone-link="3">Visuel</a>
       <a href="#video" class="nav-link" data-zone-link="2">Video</a>
@@ -44,12 +48,14 @@
 
     <div id="overlay">
       <header id="hero" class="panel hero theme-dark" data-zone="0">
-        <p class="tag">Hakou — Univers Creatif</p>
-        <h1>Musique, video et espaces 3D<br />dans un voyage vers le Soleil</h1>
-        <p>
-          Defile vers le haut pour avancer vers le Soleil : Neptune au loin,
-          puis chaque planete jusqu'au coeur du systeme.
-        </p>
+        <div class="panel-lead">
+          <p class="tag">Hakou — Univers Creatif</p>
+          <h1>Musique, video et espaces 3D<br />dans un voyage vers le Soleil</h1>
+          <p>
+            Defile vers le haut pour avancer vers le Soleil : Neptune au loin,
+            puis chaque planete jusqu'au coeur du systeme.
+          </p>
+        </div>
       </header>
 
       <section id="son" class="panel theme-light" data-zone="1">
@@ -81,19 +87,21 @@
       </section>
 
       <section id="video" class="panel theme-mid" data-zone="2">
-        <p class="tag">Zone Video</p>
-        <h2>Films, clips et capsules visuelles</h2>
-        <p>
-          Dernieres videos de la chaine
-          <a
-            class="inline-link"
-            href="https://www.youtube.com/@MrEtibaliomecus"
-            target="_blank"
-            rel="noopener noreferrer"
-            >Vincent Chauvaux</a
-          >
-          sur YouTube.
-        </p>
+        <div class="panel-lead">
+          <p class="tag">Zone Video</p>
+          <h2>Films, clips et capsules visuelles</h2>
+          <p>
+            Dernieres videos de la chaine
+            <a
+              class="inline-link"
+              href="https://www.youtube.com/@MrEtibaliomecus"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Vincent Chauvaux</a
+            >
+            sur YouTube.
+          </p>
+        </div>
         <div class="video-grid">
           <div
             data-video-id="AKtcrYIKgkU"
@@ -107,17 +115,19 @@
       </section>
 
       <section id="visuel" class="panel theme-mid" data-zone="3">
-        <p class="tag">Zone Visuel</p>
-        <h2>Rendus et identite visuelle</h2>
-        <p>
-          Galerie
-          <a
-            class="inline-link instagram-profile-trigger"
-            href="https://www.instagram.com/kat0gat0/"
-            >@kat0gat0</a
-          >
-          — publications et reels lisibles ici ; ↗ ouvre Instagram.
-        </p>
+        <div class="panel-lead">
+          <p class="tag">Zone Visuel</p>
+          <h2>Rendus et identite visuelle</h2>
+          <p>
+            Galerie
+            <a
+              class="inline-link instagram-profile-trigger"
+              href="https://www.instagram.com/kat0gat0/"
+              >@kat0gat0</a
+            >
+            — publications et reels lisibles ici ; ↗ ouvre Instagram.
+          </p>
+        </div>
         <div class="panel-card">
           <p class="card-title">Galerie @kat0gat0</p>
           <p class="instagram-gallery-note" hidden></p>
@@ -133,12 +143,14 @@
       </section>
 
       <section id="espace-3d" class="panel theme-mid" data-zone="4">
-        <p class="tag">Zone 3D</p>
-        <h2>Installations et mondes interactifs</h2>
-        <p>
-          Presentations d'environnements 3D, prototypes WebGL et experiences
-          immersives.
-        </p>
+        <div class="panel-lead">
+          <p class="tag">Zone 3D</p>
+          <h2>Installations et mondes interactifs</h2>
+          <p>
+            Presentations d'environnements 3D, prototypes WebGL et experiences
+            immersives.
+          </p>
+        </div>
         <div class="panel-card card-3d">
           <p class="card-title">Mini objet 3D (preview)</p>
           <div class="mini-scene" aria-hidden="true">
@@ -154,7 +166,65 @@
         </div>
       </section>
 
-      <section id="contact" class="panel outro theme-light" data-zone="5">
+      <section id="venus" class="panel theme-mid" data-zone="5">
+        <div class="panel-lead">
+          <p class="tag">RPG CR</p>
+          <h2>Jeu de rôle assisté par LLM</h2>
+          <p>
+            RPG CR explore un jeu de rôle narratif dans l'univers Hakou, guidé
+            par un modèle de langage tournant en local via LM Studio — pas de
+            cloud obligatoire, une table et une machine suffisent pour lancer
+            une session.
+          </p>
+          <div class="panel-cta-row">
+            <a
+              href="https://lmstudio.ai/download"
+              class="panel-btn panel-btn--primary"
+              target="_blank"
+              rel="noopener"
+            >
+              <svg
+                class="panel-btn__icon"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Télécharger LM Studio
+            </a>
+            <a
+              href="https://hakou.be/rpg-cr"
+              class="panel-btn panel-btn--secondary"
+              target="_blank"
+              rel="noopener"
+            >
+              Découvrir RPG CR
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section id="terre" class="panel theme-mid" data-zone="6">
+        <div class="panel-lead">
+          <p class="tag">Terre</p>
+          <h2>Ancrage et territoires</h2>
+          <p>
+            Le travail naît de lieux, de rencontres et de contextes — musique,
+            image et 3D au service d'une présence concrète.
+          </p>
+        </div>
+      </section>
+
+      <section id="contact" class="panel outro theme-mercury" data-zone="7">
         <div class="panel-copy">
           <p class="tag">Contact</p>
           <h2>Construisons une experience ensemble</h2>
