@@ -27,6 +27,9 @@
   --nav-glass-shadow: -6px 0 28px rgba(0, 0, 0, 0.38);
   --nav-link-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
   --nav-link-stroke: 0;
+  /* Chrome UI (nav + échelle) au-dessus overlay / masques body */
+  --chrome-z: 20;
+  --chrome-mask-z: 2;
   /* Composition panels (desktop / laptop) */
   --panel-content-max: min(520px, 100%);
   --panel-section-gap: clamp(0.75rem, 2vh, 1.25rem);
@@ -269,6 +272,8 @@ body {
   height: 100%;
   display: block;
   z-index: 0;
+  /* Ne pas intercepter nav / panels ; drag orbite via .orbit-grabbing */
+  pointer-events: none;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -276,6 +281,7 @@ body {
 }
 
 #three-canvas.orbit-grabbing {
+  pointer-events: auto;
   cursor: grabbing;
 }
 
@@ -284,7 +290,7 @@ body {
   left: 18px;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 3;
+  z-index: var(--chrome-z);
   height: min(48vh, 360px);
   pointer-events: auto;
 }
@@ -584,8 +590,11 @@ p {
   top: 50%;
   right: clamp(8px, 1.2vw, 16px);
   transform: translateY(-50%);
-  z-index: 4;
+  z-index: var(--chrome-z);
+  isolation: isolate;
   display: flex;
+  visibility: visible;
+  opacity: 1;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
@@ -740,10 +749,69 @@ audio {
   opacity: 0.97;
 }
 
+.instagram-gallery {
+  width: 100%;
+  max-width: min(900px, 100%);
+}
+
+.instagram-gallery--embed-primary .instagram-grid {
+  display: none;
+}
+
+.instagram-gallery--thumbs .instagram-embed-panel {
+  display: none;
+}
+
+.instagram-gallery--link-fallback .instagram-embed-panel {
+  display: none;
+}
+
+.instagram-gallery--link-fallback .instagram-grid--empty {
+  min-height: min(36vw, 220px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.instagram-embed-panel {
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0a0e18;
+  background: var(--bg, #0a0e18);
+  color-scheme: dark;
+  margin-bottom: 0;
+  box-shadow: none;
+}
+
+.instagram-embed-panel__scroll {
+  overflow: hidden;
+  background: #0a0e18;
+  background: var(--bg, #0a0e18);
+}
+
+.instagram-embed-panel iframe {
+  display: block;
+  width: 100%;
+  height: 500px;
+  border: 0;
+  margin: 0;
+  vertical-align: top;
+  color-scheme: dark;
+  pointer-events: auto;
+}
+
 .instagram-grid--loading {
   min-height: min(36vw, 220px);
-  opacity: 0.92;
-  transition: opacity 0.2s ease;
+}
+
+.instagram-grid--empty {
+  min-height: 0;
+}
+
+.instagram-gallery--embed-primary .instagram-grid--empty {
+  display: none;
+  min-height: 0;
 }
 
 .video-grid {
@@ -805,16 +873,24 @@ audio {
   margin-top: 0;
 }
 
+/* Grille native 3×2 — vignettes carrées uniformes */
 .instagram-grid--has-posts {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: clamp(12px, 1.8vw, 20px);
+  min-height: auto;
+}
+
+.instagram-grid--has-posts .instagram-thumb {
+  aspect-ratio: 1;
+  min-height: 0;
+  height: auto;
 }
 
 .instagram-thumb {
   position: relative;
   display: block;
   aspect-ratio: 1;
-  min-height: 108px;
+  min-height: 130px;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--panel-card-border, var(--card-border));
@@ -837,7 +913,7 @@ audio {
   inset: 0;
   width: 100%;
   height: 100%;
-  min-height: 108px;
+  min-height: 130px;
   object-fit: cover;
   object-position: center;
   display: block;
@@ -1369,7 +1445,7 @@ body.youtube-video-modal-open {
     top: 0;
     left: 0;
     right: 0;
-    z-index: 2;
+    z-index: var(--chrome-mask-z);
     height: var(--compact-chrome-top);
     pointer-events: none;
     background: linear-gradient(
@@ -1463,9 +1539,12 @@ body.youtube-video-modal-open {
     gap: clamp(10px, 2vw, 14px);
   }
 
-  .instagram-thumb,
   .instagram-slot {
     min-height: 0;
+  }
+
+  .instagram-embed-panel iframe {
+    height: 480px;
   }
 
   .mini-scene {
@@ -1509,15 +1588,6 @@ body.youtube-video-modal-open {
 }
 
 @media (max-width: 680px) {
-  /* Le canvas plein écran (touch-action: none) ne doit pas bloquer scroll / nav. */
-  #three-canvas {
-    pointer-events: none;
-  }
-
-  #three-canvas.orbit-grabbing {
-    pointer-events: auto;
-  }
-
   :root {
     --mobile-solar-top: max(12px, env(safe-area-inset-top));
     /* Rail 6px + marqueur 8px + marge contenu (pas de pilule verre) */
@@ -1534,7 +1604,7 @@ body.youtube-video-modal-open {
     position: fixed;
     left: 0;
     right: 0;
-    z-index: 2;
+    z-index: var(--chrome-mask-z);
     pointer-events: none;
     background: var(--nav-glass-bg);
   }
@@ -1661,6 +1731,7 @@ body.youtube-video-modal-open {
   }
 
   .side-nav {
+    z-index: var(--chrome-z);
     top: auto;
     left: 0;
     right: 0;
@@ -1831,9 +1902,13 @@ body.youtube-video-modal-open {
 
   .instagram-grid,
   .instagram-grid--has-posts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: auto;
-    gap: clamp(10px, 2.5vw, 14px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(8px, 2.5vw, 12px);
+    min-height: auto;
+  }
+
+  .instagram-embed-panel iframe {
+    height: min(420px, 65vh);
   }
 
   .soundcloud-embed iframe {

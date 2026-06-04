@@ -1,31 +1,5 @@
 {
-  "_comment": "Permaliens publics @kat0gat0. Miniatures locales assets/instagram/ (curl media/?size=l). Mettre à jour updatedAt + urls lors d'un rafraîchissement.",
-  "updatedAt": "2026-06-04T12:10:46.650Z",
-  "posts": [
-    {
-      "url": "https://www.instagram.com/p/C1-6KdrIu3L/",
-      "thumbnail": "./assets/instagram/thumb-0.jpg",
-      "isVideo": false
-    },
-    {
-      "url": "https://www.instagram.com/p/Cy4UwrXN_Oi/",
-      "thumbnail": "./assets/instagram/thumb-1.jpg",
-      "isVideo": false
-    },
-    {
-      "url": "https://www.instagram.com/p/CjBKbY9oc3H/",
-      "thumbnail": "./assets/instagram/thumb-2.jpg",
-      "isVideo": false
-    },
-    {
-      "url": "https://www.instagram.com/reel/CfuOyJeoYqG/",
-      "thumbnail": "./assets/instagram/thumb-3.jpg",
-      "isVideo": true
-    },
-    {
-      "url": "https://www.instagram.com/p/CeEwxsHoa2N/",
-      "thumbnail": "./assets/instagram/thumb-4.jpg",
-      "isVideo": false
-    }
-  ]
+  "_comment": "Permaliens publics @hakoulik. Miniatures locales assets/instagram/ (node scripts/refresh-instagram-posts.mjs --refresh).",
+  "updatedAt": null,
+  "posts": []
 }

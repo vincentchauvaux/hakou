@@ -2,7 +2,8 @@
   const YOUTUBE_CHANNEL_ID = "UCmm1lsi4IS7RzwFFhIax3ug";
   const RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
   const YT_NS = "http://www.youtube.com/xml/schemas/2015";
-  const MAX_VIDEOS = 2;
+  const RSS_POOL_SIZE = 12;
+  const DISPLAY_COUNT = 2;
   const CORS_PROXY = "https://api.allorigins.win/raw?url=";
   const LOG_PREFIX = "[Hakou YouTube]";
 
@@ -86,6 +87,21 @@
     return videos.map((v) => v.id).join(",");
   }
 
+  function shuffleInPlace(list) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    return list;
+  }
+
+  function pickRandomVideos(pool, count) {
+    if (!pool.length) return [];
+    const copy = pool.slice();
+    shuffleInPlace(copy);
+    return copy.slice(0, Math.min(count, copy.length));
+  }
+
   async function fetchRssXml() {
     try {
       const res = await fetch(RSS_URL, { cache: "no-store" });
@@ -103,7 +119,7 @@
     return null;
   }
 
-  function parseRssVideos(xmlText) {
+  function parseRssPool(xmlText) {
     const doc = new DOMParser().parseFromString(xmlText, "application/xml");
     if (doc.querySelector("parsererror")) return [];
 
@@ -120,7 +136,7 @@
       const title =
         entry.querySelector("title")?.textContent?.trim() || "Vidéo YouTube";
       videos.push({ id, title });
-      if (videos.length >= MAX_VIDEOS) break;
+      if (videos.length >= RSS_POOL_SIZE) break;
     }
 
     return videos;
@@ -167,39 +183,43 @@
 
   async function syncFromRss(grid, fallbackVideos) {
     grid.classList.add("video-grid--syncing");
-    const xml = await fetchRssXml();
-    grid.classList.remove("video-grid--syncing");
+    let pool = [];
+    try {
+      const xml = await fetchRssXml();
+      if (!xml) {
+        console.warn(
+          `${LOG_PREFIX} Flux RSS indisponible (CORS/réseau) — repli HTML (${fallbackVideos.length} vidéo(s)).`
+        );
+        return "fallback";
+      }
 
-    if (!xml) {
-      console.warn(
-        `${LOG_PREFIX} Flux RSS indisponible (CORS/réseau) — repli HTML (${fallbackVideos.length} vidéo(s)).`
-      );
-      return "fallback";
-    }
+      pool = parseRssPool(xml);
+      if (!pool.length) {
+        console.warn(
+          `${LOG_PREFIX} Flux RSS vide ou illisible — repli HTML (${fallbackVideos.length} vidéo(s)).`
+        );
+        return "fallback";
+      }
 
-    const rssVideos = parseRssVideos(xml);
-    if (!rssVideos.length) {
-      console.warn(
-        `${LOG_PREFIX} Flux RSS vide ou illisible — repli HTML (${fallbackVideos.length} vidéo(s)).`
-      );
-      return "fallback";
-    }
+      const picked = pickRandomVideos(pool, DISPLAY_COUNT);
+      const fallbackKey = videoIdsKey(fallbackVideos);
+      const pickedKey = videoIdsKey(picked);
 
-    const fallbackKey = videoIdsKey(fallbackVideos);
-    const rssKey = videoIdsKey(rssVideos);
-
-    if (rssKey !== fallbackKey) {
-      applyVideosToGrid(grid, rssVideos);
+      applyVideosToGrid(grid, picked);
       console.info(
-        `${LOG_PREFIX} Grille mise à jour depuis le flux RSS (${rssVideos.length} vidéo(s)).`
+        `${LOG_PREFIX} ${picked.length} vidéo(s) tirées au hasard parmi ${pool.length} récente(s) du flux RSS : ${picked.map((v) => v.id).join(", ")}.`
       );
-    } else {
-      console.info(
-        `${LOG_PREFIX} Flux RSS OK — mêmes vidéos que le repli HTML (${rssVideos.length}).`
-      );
-    }
 
-    return "rss";
+      if (pickedKey === fallbackKey) {
+        console.info(
+          `${LOG_PREFIX} Même paire que le repli HTML cette fois — prochain chargement peut varier.`
+        );
+      }
+
+      return "rss";
+    } finally {
+      grid.classList.remove("video-grid--syncing");
+    }
   }
 
   function initVideoModal() {

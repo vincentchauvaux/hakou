@@ -22,7 +22,7 @@
 
 - **Menu latéral** (`index.html`) : ordre DOM **Contact → … → Intro** (desktop : colonne droite, proche Soleil en haut). Les `data-zone-link` restent 0–7 alignés sur les sections. **Desktop** : `.side-nav` en `width: fit-content`, `align-items: flex-start`, `padding` uniforme (10px ; 8px si `≤920px` ou laptop compact), `overflow-y: hidden` (pas de réserve scrollbar) ; `.nav-link` padding carré (8px desktop, 6px resserré) ; liens `width: auto` (évite le vide à droite des libellés courts). Scroll nav seulement en **laptop compact** (`overflow-y: auto`, `scrollbar-gutter: stable`). Grand desktop (`min-height: 821px`) : nav sans scroll. **`syncUI` / `syncNavLinks`** : état actif via `Number(link.dataset.zoneLink)`, **pas** l’index DOM ; **un seul** lien actif à la fois (y compris en transit). Panels : `getPanelZone(panel)` via `data-zone`. Entrée **Visuel** (`data-zone-link="3"`) entre Video et 3D ; **RPG CR** (5) et **Terre** (6) entre 3D et Contact.
 
-- **Mobile (`≤680px`)** : échelle solaire **horizontale en haut** (Neptune à gauche, Soleil implicite au-delà de Mercure à droite ; marqueur `left: calc((1 - var(--scale-progress)) * 100%)`, **8×8 px**, ticks **1×6 px**, jauge `.solar-scale-gauge` en `width`/`left` pendant le glide uniquement). Menu **barre pleine largeur en bas** : pills égaux (`flex: 1`), ordre visuel **Intro → … → Contact** via `order` CSS sur `data-zone-link`. **Nav icônes** (`index.html`) : chaque `.nav-link` contient `.nav-icon` (SVG stroke `currentColor`, **22 px**, `aria-hidden`) + `.nav-label` (texte masqué visuellement en mobile via clip sr-only, lu par lecteurs d’écran) ; desktop garde le libellé texte, `.nav-icon` en `display: none`. Pictos : Intro maison + planète, Son casque, Video cadre + play, Visuel grille 2×2, 3D cube, RPG CR dé, Terre globe, Contact enveloppe. Gutter panels : `--mobile-solar-top` / `--mobile-chrome-top` (rail + safe-area) / `--mobile-chrome-bottom`. **Chrome viewport** : `body::before` (fixe, `z-index: 2`, dégradé opaque `--bg` **sans** `backdrop-filter` — évite le voile clair sous l’échelle au glide) et `body::after` (verre + blur pour la nav bas) masquent le `#overlay` qui translate ; `#solar-scale` (`z-index: 3`, **fond transparent**, pas de pilule verre) et `.side-nav` (`z-index: 4`) au-dessus. `--mobile-chrome-top` = `calc(var(--mobile-solar-top) + 22px)`. **`#three-canvas`** : `pointer-events: none` (le `touch-action: none` plein écran ne bloque plus scroll panel / nav) ; `pointer-events: auto` seulement en `.orbit-grabbing`. **`main.js`** : si WebGL échoue (`initScene` → `false`), `body[data-webgl="unavailable"]` et boucle RAF sans `renderScene`. Scripts defer : `youtube-videos.js` / `instagram-gallery.js` en try/catch (RSS / galerie ne bloquent pas la page).
+- **Mobile (`≤680px`)** : échelle solaire **horizontale en haut** (Neptune à gauche, Soleil implicite au-delà de Mercure à droite ; marqueur `left: calc((1 - var(--scale-progress)) * 100%)`, **8×8 px**, ticks **1×6 px**, jauge `.solar-scale-gauge` en `width`/`left` pendant le glide uniquement). Menu **barre pleine largeur en bas** : pills égaux (`flex: 1`), ordre visuel **Intro → … → Contact** via `order` CSS sur `data-zone-link`. **Nav icônes** (`index.html`) : chaque `.nav-link` contient `.nav-icon` (SVG stroke `currentColor`, **22 px**, `aria-hidden`) + `.nav-label` (texte masqué visuellement en mobile via clip sr-only, lu par lecteurs d’écran) ; desktop garde le libellé texte, `.nav-icon` en `display: none`. Pictos : Intro maison + planète, Son casque, Video cadre + play, Visuel grille 2×2, 3D cube, RPG CR dé, Terre globe, Contact enveloppe. Gutter panels : `--mobile-solar-top` / `--mobile-chrome-top` (rail + safe-area) / `--mobile-chrome-bottom`. **Chrome viewport** : `body::before` (fixe, `z-index: var(--chrome-mask-z)` = 2, dégradé opaque `--bg` **sans** `backdrop-filter` — évite le voile clair sous l’échelle au glide) et `body::after` (verre + blur pour la nav bas) masquent le `#overlay` qui translate ; `#solar-scale` et `.side-nav` en `z-index: var(--chrome-z)` = **20** (`isolation: isolate` sur la nav) — **au-dessus** des masques et du canvas/overlay. `--mobile-chrome-top` = `calc(var(--mobile-solar-top) + 22px)`. **`#three-canvas`** (tous viewports) : `pointer-events: none` par défaut ; `pointer-events: auto` seulement en `.orbit-grabbing` (évite que le canvas plein écran masque ou bloque la nav). **`main.js`** : si WebGL échoue (`initScene` → `false`), `body[data-webgl="unavailable"]` et boucle RAF sans `renderScene`. Scripts defer : `youtube-videos.js` / `instagram-gallery.js` en try/catch (RSS / galerie ne bloquent pas la page).
 
 - **Laptop compact (`min-width: 681px` et `max-height: 820px`)** : layout desktop conservé (échelle gauche, menu droite). **Chrome haut** : `body::before` fixe (`--compact-chrome-top`, dégradé opaque `--bg`) masque le débordement du `#overlay` en glide (évite l’aperçu d’une autre section / scène 3D en haut de l’écran). Panels : `justify-content: flex-start`, padding top/bottom resserrés, **scroll interne** sur `.panel.is-active` (comme mobile, désactivé pendant glide adjacent / long jump). Typo / embeds / cube 3D / grilles réduits ; SoundCloud `min(320px, 42vh)`. Variables composition : `--panel-content-max`, `--panel-section-gap`, `--panel-lead-gap`, `--panel-block-gap`. Bloc `.panel-lead` (titre + chapô) sur Intro, Video, Visuel, 3D, RPG CR, Terre ; Son / Contact gardent `.panel-copy`.
 
@@ -139,14 +139,15 @@
 
 | `scene3d.js` | Three.js, caméra, planètes (8 sections) |
 
-| `youtube-videos.js` | Zone Video : RSS chaîne au load + repli HTML, vignettes, modal lecture |
+| `youtube-videos.js` | Zone Video : RSS (pool ~12) → **2 aléatoires** / visite + repli HTML, modal |
 
-| `instagram-gallery.js` | Zone Visuel : JSON local + détection périmètre, grille 3×2, modales |
+| `instagram-gallery.js` | Zone Visuel : au load, **JSON &lt; 7 j + 6 posts** → grille native immédiate ; sinon découverte client **3 s** (`web_profile_info`, `_sharedData` via allorigins, embed/profil HTML) ; **≥ 1 shortcode** → grille native **3×2 simple** (`…/p/{code}/media/?size=l`, modales post) ; **`.instagram-embed-panel` masqué** dès qu’une grille native s’affiche ; échec → iframe embed **standard** `hakoulik/embed` (~**480–520px**, sans recadrage agressif) ; modale profil via chapô **@hakoulik** ; sync live arrière-plan si grille partielle |
 
-| `scripts/refresh-instagram-posts.mjs` | Aide rafraîchissement manuel `instagram-posts.json` |
+| `scripts/refresh-instagram-posts.mjs` | Pipeline `--refresh` (Graph API / scrape / sources → JSON + thumbs) ; `--playwright` (dev local, Chromium) ; `--touch-updated`, `--download-thumbs` |
+| `content/instagram-sources.txt` | Permaliens manuels (1/ligne) si Meta bloque le scrape |
 | `scripts/verify-instagram-shortcodes.mjs` | Vérifie les shortcodes listés (endpoint `…/media/?size=l` → 404 = post retiré) |
 
-| `styles.css` | Thèmes panels (dont `theme-mercury` Contact), crossfade, `#solar-scale` 8 ticks, menu latéral (desktop **fit-content** + liens non étirés ; mobile barre bas + échelle haut + masques chrome ; **laptop compact** masque haut + scroll panel / nav si besoin), composition `.panel-lead` / grilles, **`.video-grid`** : desktop / laptop **2 col.** `minmax(0,1fr)` ; **mobile `≤680px`** **1 col.** (`grid-template-columns: 1fr`) ; `column-gap` / `row-gap` **≥16px**, enfants `.youtube-thumb` / `[data-video-id]` en `min-width: 0` + `width: 100%` ; **↗ vignettes** (`.youtube-thumb-external`, `.instagram-thumb-external`) **`display: none`** — ouverture via clic vignette → modal (handlers JS inchangés) ; **`.instagram-grid`** : gaps alignés, **liens contenu** (`--panel-link` : `#fff` dark/mid/mercury ; texte panel sur `theme-light` Son — pas les `.panel-btn`), **CTA RPG CR** (`.panel-btn--primary` accent fond/bordure ; `--secondary` texte panel), cube CSS 3D preview |
+| `styles.css` | Thèmes panels (dont `theme-mercury` Contact), crossfade, `#solar-scale` 8 ticks, menu latéral (desktop **fit-content** + liens non étirés ; mobile barre bas + échelle haut + masques chrome ; **laptop compact** masque haut + scroll panel / nav si besoin) ; chrome UI `--chrome-z` 20 / masques `--chrome-mask-z` 2 ; `#three-canvas` `pointer-events: none` global, composition `.panel-lead` / grilles, **`.video-grid`** : desktop / laptop **2 col.** `minmax(0,1fr)` ; **mobile `≤680px`** **1 col.** ; **↗ vignettes** masquées — clic → modal ; **`.instagram-grid--has-posts`** : grille **3×2** carrée uniforme (`aspect-ratio: 1`, gap uniforme, `min-height: auto`) ; embed repli iframe **~480–520px** desktop (**400–480** laptop, **360–420** mobile), sans offset négatif ni scale ; liens contenu `--panel-link`, CTA RPG CR, cube 3D preview |
 
 
 
@@ -214,9 +215,9 @@ Site statique sans backend dédié : SoundCloud / modales Instagram en iframes ;
 
 | **Son** (`#son`) | [soundcloud.com/hakou](https://soundcloud.com/hakou) | Lecteur iframe via oEmbed SoundCloud — user API `4170372`, hauteur 450 (mode visuel). |
 
-| **Video** (`#video`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : au load, **repli immédiat** des `[data-video-id]` / `[data-video-title]` dans `index.html`, puis sync **flux RSS** `https://www.youtube.com/feeds/videos.xml?channel_id=UCmm1lsi4IS7RzwFFhIax3ug` (2 dernières vidéos, ordre flux = récent d’abord, dédupliqué par ID). Si CORS bloque le RSS direct, proxy public `api.allorigins.win` ; si échec → HTML inchangé (pas de flash). Logs console `[Hakou YouTube]`. Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, modal `#youtube-video-modal`. |
+| **Video** (`#video`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : au load, **repli immédiat** des `[data-video-id]` dans `index.html`, puis sync **flux RSS** `…/feeds/videos.xml?channel_id=UCmm1lsi4IS7RzwFFhIax3ug` — parse **12** entrées récentes, **shuffle → 2** affichées (chaque visite peut différer). CORS : proxy `api.allorigins.win` ; échec → HTML inchangé (`.video-grid--syncing`, opacité ~0,97, pas de flash). Logs `[Hakou YouTube]`. Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, modal `#youtube-video-modal`. |
 
-| **Visuel** (`#visuel`) | [@kat0gat0](https://www.instagram.com/kat0gat0/) | `instagram-gallery.js` : `fetch` **`content/instagram-posts.json`** (`cache: no-store`, max **6** posts, dédupliqué par shortcode). Miniatures **locales** `assets/instagram/thumb-*.jpg` ; oEmbed navigateur en secours (souvent CORS). **Pas de flux IG automatique** au load — détection périmètre : champ `updatedAt`, comparaison `sessionStorage`, logs `[Hakou Instagram]`. Rafraîchissement manuel : `node scripts/refresh-instagram-posts.mjs` (aide + `--touch-updated`). Grille **3×2**, modales post/profil inchangées. |
+| **Visuel** (`#visuel`) | [@hakoulik](https://www.instagram.com/hakoulik/) | **Build / MAJ** : `node scripts/refresh-instagram-posts.mjs` — Graph API (`.env`), scrape Node, `content/instagram-sources.txt`, thumbs `assets/instagram/thumb-*.jpg` → `content/instagram-posts.json`. **UI** : grille native **3×2 simple** (carrés uniformes, 3 colonnes) — miniatures `media/?size=l` ou `assets/instagram/` ; iframe **masquée** si grille native. **Navigateur** : JSON frais → grille immédiate ; sinon **3 s** découverte ; **≥ 1 shortcode** ; sinon repli iframe embed standard (~**480–520px** desktop, **400–480** laptop, **360–420** mobile). Modales post inchangées. Logs `[Hakou Instagram]`. Voir **Pourquoi pas 6 images auto**. |
 
 | **3D** (`#espace-3d`) | Preview locale | Carte `.card-3d` + cube CSS animé (`.mini-scene`, `.cube`, `.face`) — pas d’embed WebGL dans le panel. |
 
@@ -224,19 +225,54 @@ Site statique sans backend dédié : SoundCloud / modales Instagram en iframes ;
 
 | **Terre** (`#terre`) | Texte éditorial | Ancrage et territoires — placeholder sobre. |
 
-| **Contact** (`#contact`) | Liens réseaux | Instagram `@kat0gat0`, YouTube `@MrEtibaliomecus`, SoundCloud `hakou`. Thème `theme-mercury` (surface rocheuse, Soleil visible en 3D à l'horizon uniquement). |
+| **Contact** (`#contact`) | Liens réseaux | Instagram `@hakoulik`, YouTube `@MrEtibaliomecus`, SoundCloud `hakou`. Thème `theme-mercury` (surface rocheuse, Soleil visible en 3D à l'horizon uniquement). |
 
 
+
+### Pourquoi pas 6 images auto depuis la galerie Instagram
+
+
+
+Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la grille et copier les 6 premières images dans la zone Visuel — pour des raisons techniques et légales, pas par choix produit arbitraire.
+
+| Obstacle | Effet |
+|----------|--------|
+| **CORS / same-origin** | Depuis `hakou.be` (ou `localhost`), `fetch("https://www.instagram.com/…")` est bloqué ou renvoie du HTML inutilisable (mur login), pas un JSON liste de posts. |
+| **Iframe embed profil** | `instagram.com/hakoulik/embed` affiche le fil **dans** Instagram ; le parent Hakou **n’a pas accès** au DOM interne (`contentDocument` interdit — origine croisée). Impossible de « prendre les 6 premières images » depuis l’iframe. |
+| **Mur login / scrape** | Node (`fetch` profil/embed) et proxy navigateur (allorigins) obtiennent souvent ~700 ko HTML **sans** shortcodes — Meta exige une session. |
+| **Pas d’API publique grille** | Pas d’endpoint documenté « 6 derniers posts @user » sans **Instagram Graph API** (token + compte Business/Creator) ou **permaliens manuels** (`instagram-sources.txt`). |
+| **Hotlink / ToS** | Même avec shortcodes, les JPG servis par Meta ne sont pas une CDN libre ; le pipeline légitime = permaliens + miniatures **téléchargées au build** (`refresh-instagram-posts.mjs`) ou embed officiel. |
+
+**Alternative UX (implémentée, juin 2026)** :
+
+1. **Grille native Hakou** dès qu’au moins **1 shortcode** est connu : vignettes via `https://www.instagram.com/p/{code}/media/?size=l` (cross-origin affichage OK, pas besoin de lire le DOM Instagram).
+2. **JSON + thumbs locales** (`content/instagram-posts.json` &lt; **7 j**, 6 posts) → grille **immédiate** au load ; pipeline Node `refresh-instagram-posts.mjs` pour remplir JSON + `assets/instagram/thumb-*.jpg`.
+3. **Découverte client (3 s)** : `web_profile_info` (souvent bloqué CORS/429), `_sharedData` / regex sur HTML profil via **allorigins**, embed/profil — rarement des shortcodes sans session Meta.
+4. **Iframe embed** uniquement si **0 shortcode** après 3 s — panel masqué dès qu’une grille native s’affiche (`.instagram-gallery--thumbs`).
+5. **Lien chapô `@hakoulik`** → modale `#instagram-profile-modal` ; fonction `renderLinkFallbackGallery` (note + lien) disponible mais **non utilisée** par défaut (repli = iframe).
+6. **Sync live** en arrière-plan si grille partielle (&lt; 6 posts).
+
+**Présentation grille native (juin 2026, revert simple)** : retour à une grille **3×2** classique — `.instagram-grid--has-posts` = **3 colonnes**, vignettes **carrées** (`aspect-ratio: 1`), gap uniforme, **`min-height: auto`** (plus de bento `dense` / spans `instagram-grid--count-*`). Mobile **≤680px** : **3 colonnes** conservées. Embed repli : iframe **standard** `hakoulik/embed`, hauteur modérée **~480–520px** (desktop), sans `margin-top` négatif ni `--grid-only`. Clic vignette → modales post inchangées.
+
+**Dev local (optionnel)** : `node scripts/refresh-instagram-posts.mjs --playwright` tente Chromium headless ; souvent bloqué sans login — ne remplace pas Graph API / `instagram-sources.txt`.
 
 ### Limitations
 
 
 
-- **YouTube (dynamique)** : au chargement, RSS chaîne `UCmm1lsi4IS7RzwFFhIax3ug` ; repli HTML si fetch/proxy échoue. **CORS** : le flux direct peut être refusé par le navigateur → proxy `allorigins` (tiers, sans clé). Pas de quota API. Mettre à jour les `data-video-id` dans `index.html` si la chaîne change de handle mais garde la même chaîne — optionnel, le RSS prime quand il répond.
+- **YouTube (dynamique)** : RSS chaîne `UCmm1lsi4IS7RzwFFhIax3ug`, pool **12** récentes, **2 aléatoires** par chargement (Fisher-Yates). Repli HTML si fetch/proxy échoue. **CORS** : flux direct souvent OK ; sinon proxy `api.allorigins.win` (tiers, sans clé, timeouts possibles). Pas de quota API YouTube Data. `data-video-id` dans `index.html` = filet de sécurité hors-ligne.
 
 - **SoundCloud** : embed officiel ; couleur accent `%237f9dff` dans l’URL du player. Mobile : iframe non interactive (`pointer-events: none`) pour ne pas bloquer le scroll du panel — ouvrir le profil via le lien sous le lecteur.
 
-- **Instagram (statique + détection)** : pas d’API Meta gratuite côté navigateur. **Liste** : éditer `content/instagram-posts.json` (`updatedAt` ISO + `posts[]`, max **6** vignettes). **Miniatures** : `curl -L -o assets/instagram/thumb-N.jpg "https://www.instagram.com/p/{SHORTCODE}/media/?size=l"` (reels : même shortcode, URL `/p/…/media/`). Après suppression d’un post sur IG : retirer l’entrée du JSON, supprimer le `thumb-N.jpg` orphelin, `node scripts/refresh-instagram-posts.mjs --touch-updated`. **Vérif shortcodes** : `node scripts/verify-instagram-shortcodes.mjs` — `media` en **404** (`text/html`) = publication indisponible (ex. juin 2026 : retrait de `CdodCb2oF46` / `thumb-5.jpg`). oEmbed live : **CORS** / login. Token optionnel : `.env.example` → scripts/cron **serveur** uniquement, jamais dans le repo. **Lecture sur site** : modales + iframe `/embed`. Tester avec `npx serve .` — `file://` bloque JSON/iframes. Script aide : `node scripts/refresh-instagram-posts.mjs`.
+- **Instagram (client poussé + JSON + iframe)** : **Faisable en prod** pour la **grille native** si des **shortcodes** sont connus (JSON, `instagram-sources.txt`, refresh Node) — miniatures `media/?size=l` et modales embed. **Liste auto des 6 derniers posts** : **non fiable** (Meta 429, mur login, CORS sur `web_profile_info` ; allorigins renvoie du HTML sans shortcodes). Navigateur tente quand même 3 s (`web_profile_info`, `_sharedData`, embed/profil). **Source de vérité** liste : `content/instagram-posts.json` + script Node ; iframe `#instagram-embed-panel` si échec total.
+- **Instagram — procédure rafraîchissement (juin 2026)** :
+  1. `node scripts/refresh-instagram-posts.mjs` — pipeline complet (défaut `--refresh`).
+  2. Si **0 shortcode** scrapé : coller jusqu’à **6** permaliens dans `content/instagram-sources.txt`, relancer.
+  3. **Token Meta** (optionnel) : `INSTAGRAM_ACCESS_TOKEN` dans `.env` → `graph.instagram.com/me/media`.
+  4. **Dev** : `--playwright` si `playwright` installé (souvent mur login sans session).
+  5. **Vérif** : `node scripts/verify-instagram-shortcodes.mjs`.
+  6. Servir : `npx serve .` (pas `file://`).
+- **Instagram — état actuel (juin 2026)** : profil **@hakoulik**. `instagram-posts.json` souvent **vide** (scrape Node : 0 shortcode, `web_profile_info` HTTP 429). **Navigateur** : priorité grille native **3×2 simple** (carrés uniformes, 3 col.) ; iframe masquée si shortcodes ; sinon repli iframe embed standard (~**480–520px** desktop / **400–480** laptop / **360–420** mobile). **Pour remplir la grille** : **6 permaliens** dans `content/instagram-sources.txt` + `node scripts/refresh-instagram-posts.mjs` — ou token `INSTAGRAM_ACCESS_TOKEN`. **Prod** : thumbs `media/?size=l` + modales si shortcodes connus ; auto-liste @hakoulik non fiable.
 
 - **Clés secrètes** : `.env` gitignoré ; `.env.example` documente `INSTAGRAM_ACCESS_TOKEN`, `YOUTUBE_API_KEY`, `HAKOU_CORS_PROXY_PREFIX` (non lus par les JS du site aujourd’hui).
 

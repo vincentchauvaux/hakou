@@ -1,0 +1,6 @@
+# Permaliens Instagram @hakoulik (un par ligne, optionnel)
+# Utilisé par : node scripts/refresh-instagram-posts.mjs --refresh
+# Profil : https://www.instagram.com/hakoulik/
+# Exemples :
+# https://www.instagram.com/p/SHORTCODE/
+# https://www.instagram.com/reel/SHORTCODE/
