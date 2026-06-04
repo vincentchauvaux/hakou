@@ -150,6 +150,18 @@
   margin-top: var(--panel-block-gap);
 }
 
+.panel-hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--panel-muted, rgba(200, 210, 235, 0.62));
+}
+
+.panel-hint code {
+  font-size: 0.72rem;
+  word-break: break-all;
+}
+
 .panel-btn {
   display: inline-flex;
   align-items: center;

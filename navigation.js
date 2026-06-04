@@ -64,7 +64,7 @@ const SCALE_MARKER_COLORS = [
   "#60c8b8", /* 3 Uranus */
   "#c86048", /* 4 Mars */
   "#e8d8a8", /* 5 Vénus */
-  "#48a878", /* 6 Terre */
+  "#48a878", /* 6 Plugin (orbite Terre décorative) */
   "#a0a098", /* 7 Mercure */
 ];
 let panels = [];

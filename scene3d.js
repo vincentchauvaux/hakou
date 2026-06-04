@@ -451,7 +451,7 @@ const PLANETS = [
     camTangent: 0.38,
   },
   {
-    name: "Earth",
+    name: "Earth", // panel UI §6 : Plugin (planète Terre décorative 3D inchangée)
     orbitRadius: scaledOrbit(7.6),
     size: 0.46,
     color: 0x286858,
