@@ -253,20 +253,26 @@
   }
 
   function init() {
-    initVideoModal();
+    try {
+      initVideoModal();
 
-    const grid = document.querySelector("#video .video-grid");
-    if (!grid) return;
+      const grid = document.querySelector("#video .video-grid");
+      if (!grid) return;
 
-    bindGridInteraction(grid);
+      bindGridInteraction(grid);
 
-    const fallbackVideos = readFallbackVideos(grid);
-    fallbackVideos.forEach((_, i) => {
-      const slot = grid.querySelectorAll("[data-video-id]")[i];
-      if (slot) enhanceSlot(slot);
-    });
+      const fallbackVideos = readFallbackVideos(grid);
+      fallbackVideos.forEach((_, i) => {
+        const slot = grid.querySelectorAll("[data-video-id]")[i];
+        if (slot) enhanceSlot(slot);
+      });
 
-    void syncFromRss(grid, fallbackVideos);
+      void syncFromRss(grid, fallbackVideos).catch((err) => {
+        console.warn(`${LOG_PREFIX} Sync RSS interrompue — repli HTML.`, err);
+      });
+    } catch (err) {
+      console.error(`${LOG_PREFIX} Échec init zone Video.`, err);
+    }
   }
 
   if (document.readyState === "loading") {

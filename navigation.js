@@ -76,6 +76,8 @@ let solarScaleTrack = null;
 let solarScaleDragActive = false;
 let solarScaleDragPointerId = null;
 let solarScaleDragCaptureEl = null;
+/** Dernier stop visé pendant le drag (saut long au release). */
+let solarScaleDragTargetSection = null;
 
 /** Progression 0 = Contact (haut / droite), 1 = Intro (bas / gauche) — alignée sur `--scale-progress`. */
 const SOLAR_SCALE_MAGNET_THRESHOLD = 0.38;
@@ -108,6 +110,21 @@ function snapSolarScaleProgressMagnetic(progress) {
     }
   }
   return nearestDist <= threshold ? nearestStop : progress;
+}
+
+/** Stop planète le plus proche (release drag → saut direct comme menu / tick). */
+function nearestScaleSectionFromProgress(progress) {
+  let bestSection = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i <= scaleSectionMax; i += 1) {
+    const stop = scaleProgressFromSection(i);
+    const dist = Math.abs(progress - stop);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestSection = i;
+    }
+  }
+  return bestSection;
 }
 
 function progressFromPointer(clientX, clientY) {
@@ -202,10 +219,13 @@ function beginSolarScaleDrag(event) {
   solarScaleDragActive = true;
   solarScaleDragPointerId = event.pointerId;
   solarScaleDragCaptureEl = event.currentTarget;
+  solarScaleDragTargetSection = currentSection;
   solarScaleEl?.classList.add("is-scale-dragging");
   solarScaleMarker?.classList.add("is-dragging");
   const visual = snapSolarScaleProgressMagnetic(raw);
-  applySolarScaleProgress(visual, sectionIndexFromScaleProgress(raw));
+  const section = nearestScaleSectionFromProgress(visual);
+  solarScaleDragTargetSection = section;
+  applySolarScaleProgress(visual, section);
 
   if (solarScaleDragCaptureEl?.setPointerCapture) {
     try {
@@ -222,7 +242,9 @@ function moveSolarScaleDrag(event) {
   const raw = progressFromPointer(event.clientX, event.clientY);
   if (raw == null) return;
   const visual = snapSolarScaleProgressMagnetic(raw);
-  applySolarScaleProgress(visual, sectionIndexFromScaleProgress(raw));
+  const section = nearestScaleSectionFromProgress(visual);
+  solarScaleDragTargetSection = section;
+  applySolarScaleProgress(visual, section);
   event.preventDefault();
 }
 
@@ -233,6 +255,8 @@ function endSolarScaleDrag(event) {
   const pointerId = event.pointerId;
   solarScaleDragActive = false;
   solarScaleDragPointerId = null;
+  const releaseSection = solarScaleDragTargetSection;
+  solarScaleDragTargetSection = null;
   solarScaleEl?.classList.remove("is-scale-dragging");
   solarScaleMarker?.classList.remove("is-dragging");
   releaseSolarScalePointerCapture(pointerId);
@@ -243,7 +267,8 @@ function endSolarScaleDrag(event) {
     return;
   }
 
-  const targetSection = sectionIndexFromScaleProgress(raw);
+  const targetSection =
+    releaseSection ?? nearestScaleSectionFromProgress(raw);
   const snappedProgress = scaleProgressFromSection(targetSection);
   applySolarScaleProgress(snappedProgress, targetSection);
 
@@ -667,6 +692,8 @@ function feedGate(dir, amount) {
 }
 
 function onWheel(event) {
+  if (solarScaleDragActive) return;
+
   if (isAnimating) {
     event.preventDefault();
     return;
@@ -691,7 +718,7 @@ function onWheel(event) {
 }
 
 function onKeyDown(event) {
-  if (isAnimating) return;
+  if (solarScaleDragActive || isAnimating) return;
 
   let dir = 0;
   if (["ArrowUp", "PageUp"].includes(event.key)) {
@@ -711,6 +738,8 @@ function onKeyDown(event) {
 }
 
 function onTouchStart(event) {
+  if (event.target?.closest?.("#solar-scale")) return;
+
   touchStartY = event.touches[0]?.clientY ?? 0;
   touchGateAcc = 0;
   resetMobileEdgeCharge();
@@ -720,6 +749,11 @@ function onTouchStart(event) {
 }
 
 function onTouchMove(event) {
+  if (solarScaleDragActive) {
+    event.preventDefault();
+    return;
+  }
+
   if (isRestOrbitDragging()) {
     event.preventDefault();
     return;

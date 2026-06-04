@@ -9,7 +9,10 @@ import { initScene, renderScene } from "./scene3d.js";
 const canvas = document.querySelector("#three-canvas");
 
 initNavigation(document);
-initScene(canvas);
+const sceneReady = initScene(canvas);
+if (!sceneReady) {
+  document.body.dataset.webgl = "unavailable";
+}
 
 let lastFrame = performance.now();
 
@@ -23,7 +26,9 @@ function tick(now) {
   }
 
   tickNavigation(now);
-  renderScene(getDisplaySection(), getGlideState());
+  if (sceneReady) {
+    renderScene(getDisplaySection(), getGlideState());
+  }
 }
 
 requestAnimationFrame(tick);

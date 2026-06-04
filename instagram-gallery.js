@@ -474,40 +474,56 @@
   }
 
   async function init() {
-    initPostModal();
-    initProfileModal();
-
     const grid = document.querySelector("#instagram-grid");
-    if (!grid) return;
+    try {
+      initPostModal();
+      initProfileModal();
+      if (!grid) return;
 
-    grid.classList.add("instagram-grid--loading");
-    const { data, posts } = await loadPostsPayload();
+      grid.classList.add("instagram-grid--loading");
+      const { data, posts } = await loadPostsPayload();
 
-    if (posts.length) {
-      reportStaleness(data, posts);
-      grid.classList.add("instagram-grid--has-posts");
-      grid.classList.remove("instagram-grid--empty");
-      setGalleryNote(grid, "posts");
+      if (posts.length) {
+        reportStaleness(data, posts);
+        grid.classList.add("instagram-grid--has-posts");
+        grid.classList.remove("instagram-grid--empty");
+        setGalleryNote(grid, "posts");
 
-      const thumbs = await Promise.all(posts.map((post) => createPostThumb(post)));
-      grid.replaceChildren(...thumbs);
-    } else {
-      console.warn(
-        `${LOG_PREFIX} Aucun post dans instagram-posts.json — placeholders affichés.`
-      );
-      grid.classList.add("instagram-grid--empty");
-      grid.classList.remove("instagram-grid--has-posts");
+        const thumbs = await Promise.all(
+          posts.map((post) => createPostThumb(post))
+        );
+        grid.replaceChildren(...thumbs);
+      } else {
+        console.warn(
+          `${LOG_PREFIX} Aucun post dans instagram-posts.json — placeholders affichés.`
+        );
+        grid.classList.add("instagram-grid--empty");
+        grid.classList.remove("instagram-grid--has-posts");
 
-      const slots = [];
-      for (let i = 0; i < EMPTY_SLOTS - 1; i++) {
-        slots.push(createEmptySlot(i));
+        const slots = [];
+        for (let i = 0; i < EMPTY_SLOTS - 1; i++) {
+          slots.push(createEmptySlot(i));
+        }
+        slots.push(createCtaSlot("reels"));
+        grid.replaceChildren(...slots);
+        setGalleryNote(grid, "empty");
       }
-      slots.push(createCtaSlot("reels"));
-      grid.replaceChildren(...slots);
-      setGalleryNote(grid, "empty");
+    } catch (err) {
+      console.error(`${LOG_PREFIX} Échec init galerie — repli placeholders.`, err);
+      if (grid) {
+        grid.classList.add("instagram-grid--empty");
+        grid.classList.remove("instagram-grid--has-posts");
+        const slots = [];
+        for (let i = 0; i < EMPTY_SLOTS - 1; i++) {
+          slots.push(createEmptySlot(i));
+        }
+        slots.push(createCtaSlot("reels"));
+        grid.replaceChildren(...slots);
+        setGalleryNote(grid, "empty");
+      }
+    } finally {
+      grid?.classList.remove("instagram-grid--loading");
     }
-
-    grid.classList.remove("instagram-grid--loading");
   }
 
   if (document.readyState === "loading") {

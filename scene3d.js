@@ -2388,12 +2388,21 @@ export function getSectionFraming(sectionIndex) {
 }
 
 export function initScene(canvas) {
-  renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: false,
-    powerPreference: "high-performance",
-  });
+  try {
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: "high-performance",
+    });
+  } catch (err) {
+    console.error("[Hakou 3D] WebGL indisponible — navigation seule.", err);
+    return false;
+  }
+  if (!renderer.getContext()) {
+    console.error("[Hakou 3D] Contexte WebGL absent — navigation seule.");
+    return false;
+  }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -2429,6 +2438,7 @@ export function initScene(canvas) {
   introSnapFrames = 0;
   window.addEventListener("resize", onResize);
   initRestOrbitInteraction(canvas);
+  return true;
 }
 
 function onResize() {

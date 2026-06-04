@@ -635,6 +635,16 @@ p {
     box-shadow 0.3s ease;
 }
 
+.nav-icon {
+  display: none;
+}
+
+.nav-icon svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
 .nav-link:hover {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.08);
@@ -1499,6 +1509,15 @@ body.youtube-video-modal-open {
 }
 
 @media (max-width: 680px) {
+  /* Le canvas plein écran (touch-action: none) ne doit pas bloquer scroll / nav. */
+  #three-canvas {
+    pointer-events: none;
+  }
+
+  #three-canvas.orbit-grabbing {
+    pointer-events: auto;
+  }
+
   :root {
     --mobile-solar-top: max(12px, env(safe-area-inset-top));
     /* Rail 6px + marqueur 8px + marge contenu (pas de pilule verre) */
@@ -1676,15 +1695,43 @@ body.youtube-video-modal-open {
   }
 
   .nav-link {
+    display: flex;
     flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
     min-width: 0;
-    font-size: clamp(0.58rem, 2.6vw, 0.72rem);
-    padding: 8px 4px;
-    text-align: center;
+    padding: 10px 4px;
     border-radius: 999px;
-    white-space: nowrap;
+    text-shadow: none;
+    -webkit-text-stroke: 0;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    line-height: 0;
+  }
+
+  .nav-icon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
     overflow: hidden;
-    text-overflow: ellipsis;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
   }
 
   .nav-link[data-zone-link="0"] {
