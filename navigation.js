@@ -5,13 +5,16 @@ import {
   resetRestOrbitOffsets,
 } from "./scene3d.js";
 
-let sectionCount = 6;
+let sectionCount = 8;
 let scaleSectionMax = 5;
 const TRANSITION_MS = 3200;
 const LONG_JUMP_MS_PER_STEP = 900;
 const GATE_WHEEL_TOTAL = 140;
 const GATE_TOUCH_TOTAL = 72;
-const MOBILE_PANEL_SCROLL_MQ = "(max-width: 680px)";
+/** Mobile ≤680px ou laptop desktop à hauteur limitée (scroll panel + gating bord). */
+const PANEL_INTERNAL_SCROLL_MQ =
+  "(max-width: 680px), (min-width: 681px) and (max-height: 820px)";
+const MOBILE_PANEL_SCROLL_MQ = PANEL_INTERNAL_SCROLL_MQ;
 const PANEL_SCROLL_OVERFLOW_EPS = 2;
 const MOBILE_PANEL_EDGE_BUFFER_PX = 80;
 const MOBILE_PANEL_EDGE_BUFFER_VH = 0.12;
@@ -21,7 +24,7 @@ const MOBILE_EDGE_CHARGE_WHEEL_TOTAL = 220;
 const MOBILE_EDGE_CHARGE_TOUCH_TOTAL = 108;
 /** Pulse feedGate après une charge bord complète (~2,4 pulses pour gateProgress ≥ 1). */
 const MOBILE_EDGE_GATE_PULSE = GATE_WHEEL_TOTAL * 0.42;
-const SECTION_THEMES = ["dark", "light", "mid", "mid", "mid", "light"];
+const SECTION_THEMES = ["dark", "light", "mid", "mid", "mid", "mid", "mid", "mercury"];
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -239,6 +242,13 @@ function getUiSectionIndex() {
 function syncTheme() {
   const activeIndex = getUiSectionIndex();
   document.body.dataset.theme = SECTION_THEMES[activeIndex] ?? "dark";
+  const warm = clamp((displaySection - 5) / 2, 0, 1);
+  const r = Math.round(lerp(5, 16, warm));
+  const g = Math.round(lerp(7, 12, warm));
+  const b = Math.round(lerp(13, 8, warm));
+  const hex = `#${[r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+  document.documentElement.style.setProperty("--bg", hex);
+  document.documentElement.style.setProperty("--bg-warmth", String(warm));
 }
 
 function syncFraming() {

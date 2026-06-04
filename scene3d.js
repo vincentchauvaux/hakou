@@ -1,10 +1,24 @@
 import * as THREE from "three";
 
-const SECTION_COUNT = 6;
+const SECTION_COUNT = 8;
 const STAR_COUNT = 2800;
 const SUN_BASE_RADIUS = 2.2;
+/** Chaleur Soleil 3D / UI : 0 avant §5, 1 à Contact (§7). */
+const SUN_HEAT_START = 4.85;
+const SUN_HEAT_SPAN = 2.15;
+/** Échelle orbitale globale (~+20 %). */
+const ORBIT_SCALE = 1.2;
 
-const zoneAccent = [0x6d93ff, 0xc9b896, 0xff9a5c, 0x66d8e8, 0xff6b6b, 0xffce73];
+const zoneAccent = [
+  0x6d93ff,
+  0xc9b896,
+  0xff9a5c,
+  0x66d8e8,
+  0xff6b6b,
+  0xf0c878,
+  0x5cb870,
+  0xc4b8a8,
+];
 
 /** Arches caméra entre sections — base lift/side, × distance dynamique (sin π·pathT) */
 const JOURNEY_ARC = [
@@ -13,11 +27,20 @@ const JOURNEY_ARC = [
   { lift: 0.1, side: 0.06 },
   { lift: 0.09, side: -0.05 },
   { lift: 0.085, side: 0.045 },
-  { lift: 0.08, side: 0.04 },
+  { lift: 0.082, side: -0.042 },
+  { lift: 0.078, side: 0.038 },
+  { lift: 0.075, side: 0.035 },
 ];
 
+/** Ambiance calme — orbites + dérive repos (ratios planètes inchangés). */
+const PLANET_ORBIT_SPEED_MUL = 0.08;
+/** Rotation propre sur axe + anneaux Saturne. */
+const PLANET_SPIN_MUL = 0.03;
+/** Pulse Soleil, étoiles, wobble cadrage, dérive caméra repos. */
+const SCENE_AMBIENT_MOTION_MUL = 0.08;
+
 /** Dérive orbitale lente au repos (rad/s) — Soleil reste à l'horizon */
-const REST_ORBIT_DRIFT = 0.06;
+const REST_ORBIT_DRIFT = 0.06 * PLANET_ORBIT_SPEED_MUL;
 
 /** Après fin de glide : rampe dérive orbitale uniquement (pas position / FOV). */
 const REST_SETTLE_MS = 280;
@@ -31,13 +54,25 @@ const REST_ORBIT_ELEV_MAX = 0.45;
 const GLIDE_HERO_BLEND_START = 0.92;
 const GLIDE_LOOKAT_HERO_START = 0.95;
 const GLIDE_FOV_DIRECT_START = 0.9;
-/** Amplitude trajectoire toroïdale caméra (× distance leg) — révolution vers le Soleil. */
-const GLIDE_TORUS_REVOLUTION = 0.038;
+/** Trajectoire glide : radiale uniquement (pas de tore / hélice). */
+const GLIDE_TORUS_REVOLUTION = 0;
+/** Légère respiration verticale sur un leg radial (× distance leg, 0 = up stable). */
+const GLIDE_RADIAL_Y_BREATHE = 0.004;
+/** Demi-angle max du disque Soleil (rad) — évite le Soleil plein écran hors Contact. */
+/** Plafond angulaire Soleil (rad) — plus élevé en orbites intérieures pour ne pas repousser la caméra hors limite. */
+const SUN_MAX_ANGULAR_BY_SECTION = [
+  0.042, 0.042, 0.044, 0.046, 0.072, 0.14, 0.18, 0.22,
+];
 /** Rotation propre planète sur son axe (× spinSpeed × axialScale) — distincte de REST_ORBIT_DRIFT */
 const PLANET_SPIN_SCALE = 0.025;
 
-/** Recul caméra vs surface — espace vide + arc d'horizon visible (× rayon planète) */
-const CAM_SURFACE_OFFSET = 1.52;
+/** Recul caméra vs surface — orbite basse LEO : courbure + bande ciel (× rayon planète) */
+const CAM_SURFACE_OFFSET = 1.48;
+
+/** Biais monde +X pour garder le Soleil dans le même demi-cadre (type ISS). */
+const SUN_FRAME_WORLD_BIAS = 0.48;
+/** Émissivité minimale du disque Soleil (sections froides — point visible à l'horizon). */
+const SUN_REST_CORE_EMISSIVE = 0.55;
 
 /** Glissement latéral caméra le long de la tangente orbitale (× taille planète) */
 const COMPOSITION_SLIDE = 2.6;
@@ -47,7 +82,7 @@ const SUN_VISIBLE_MARGIN = 0.14;
 
 /** Sphère de collision Soleil (mesh + halo proche) + marge caméra. */
 const SUN_COLLISION_RADIUS = SUN_BASE_RADIUS * 2.05;
-/** Marge supplémentaire quand la trajectoire frôle le Soleil (sections 4–5). */
+/** Marge supplémentaire quand la trajectoire frôle le Soleil (sections intérieures ≥ Mars). */
 const SUN_INNER_TRANSIT_EXTRA = SUN_BASE_RADIUS * 0.55;
 /** Seuil segment : repousse si le chemin passe à moins de (rayon Soleil + ceci). */
 const SUN_CORRIDOR_PAD = 2;
@@ -65,21 +100,28 @@ const PATH_COLLISION_SAMPLES = 16;
 const BODY_PUSH_MAX_ITER = 8;
 
 /**
- * Cadrage héro par section — planète sur un tiers via position caméra ; Soleil fixe au centre.
- * planetSide : signe de l'offset tangent (+1 = planète à droite, texte à gauche).
- * compositionSlide : multiplicateur sur COMPOSITION_SLIDE.
- * lookSunLift : léger décalage Y fixe du lookAt au-dessus du centre Soleil (lueur au limbe).
- * limbElevation : surélévation caméra au-dessus du plan orbital pour frôler le limbe.
+ * Cadrage héro ISS / orbite basse — planète ~40–55 % bas du cadre, Soleil au tiers opposé.
+ * planetSide : +1 = masse planétaire à droite (panneau à gauche), −1 = inverse.
+ * horizonLimbOut : point regard sur le limbe face caméra (× rayon, le long outward).
+ * horizonSkyLift : décalage Y au-dessus du limbe (tangente locale / bande ciel).
+ * horizonSunBias : tire le regard vers le Soleil sans viser son centre.
+ * sunFrameBias : glissement tangent caméra pour exposer le Soleil (+ demi-espace +X).
+ * orbitSunLift : décalage caméra hors l'axe Soleil–planète (ciel + disque à l'horizon).
+ * lookSunLift : Contact uniquement — renfort lueur Soleil à l'horizon.
  */
 const SECTION_FRAMING = [
   {
     planetSide: 1,
-    distScale: 1.68,
+    distScale: 1.53,
     tangentMul: 1.02,
-    compositionSlide: 1.02,
-    elevation: 0.28,
-    limbElevation: 0.1,
-    lookSunLift: 0.05,
+    compositionSlide: 1.04,
+    elevation: 0.3,
+    limbElevation: 0.11,
+    horizonLimbOut: 0.97,
+    horizonSkyLift: 0.17,
+    horizonSunBias: 0.36,
+    sunFrameBias: 0.48,
+    orbitSunLift: 0.08,
     dutch: -0.014,
     textAlign: "left",
     panelOffset: "left",
@@ -87,12 +129,16 @@ const SECTION_FRAMING = [
   },
   {
     planetSide: -1,
-    distScale: 1.26,
-    tangentMul: 1.2,
-    compositionSlide: 1.5,
-    elevation: 0.18,
-    limbElevation: 0.12,
-    lookSunLift: 0.06,
+    distScale: 1.16,
+    tangentMul: 1.18,
+    compositionSlide: 1.42,
+    elevation: 0.2,
+    limbElevation: 0.13,
+    horizonLimbOut: 0.96,
+    horizonSkyLift: 0.15,
+    horizonSunBias: 0.34,
+    sunFrameBias: 0.44,
+    orbitSunLift: 0.08,
     dutch: 0.018,
     textAlign: "right",
     panelOffset: "right",
@@ -100,12 +146,16 @@ const SECTION_FRAMING = [
   },
   {
     planetSide: 1,
-    distScale: 1.06,
+    distScale: 0.97,
     tangentMul: 1.0,
-    compositionSlide: 1.22,
-    elevation: 0.2,
-    limbElevation: 0.09,
-    lookSunLift: 0.05,
+    compositionSlide: 1.18,
+    elevation: 0.22,
+    limbElevation: 0.1,
+    horizonLimbOut: 0.96,
+    horizonSkyLift: 0.14,
+    horizonSunBias: 0.32,
+    sunFrameBias: 0.4,
+    orbitSunLift: 0.07,
     dutch: -0.01,
     textAlign: "left",
     panelOffset: "left",
@@ -113,12 +163,16 @@ const SECTION_FRAMING = [
   },
   {
     planetSide: -1,
-    distScale: 1.1,
+    distScale: 1.0,
     tangentMul: 0.96,
-    compositionSlide: 1.15,
-    elevation: 0.18,
-    limbElevation: 0.085,
-    lookSunLift: 0.046,
+    compositionSlide: 1.12,
+    elevation: 0.19,
+    limbElevation: 0.09,
+    horizonLimbOut: 0.95,
+    horizonSkyLift: 0.13,
+    horizonSunBias: 0.38,
+    sunFrameBias: 0.56,
+    orbitSunLift: 0.1,
     dutch: 0.011,
     textAlign: "right",
     panelOffset: "right",
@@ -126,12 +180,16 @@ const SECTION_FRAMING = [
   },
   {
     planetSide: -1,
-    distScale: 1.06,
+    distScale: 1.07,
     tangentMul: 0.94,
-    compositionSlide: 1.12,
+    compositionSlide: 1.08,
     elevation: 0.17,
-    limbElevation: 0.08,
-    lookSunLift: 0.045,
+    limbElevation: 0.09,
+    horizonLimbOut: 0.98,
+    horizonSkyLift: 0.15,
+    horizonSunBias: 0.3,
+    sunFrameBias: 0.62,
+    orbitSunLift: 0.12,
     dutch: 0.012,
     textAlign: "right",
     panelOffset: "right",
@@ -139,12 +197,51 @@ const SECTION_FRAMING = [
   },
   {
     planetSide: 1,
-    distScale: 0.88,
+    distScale: 0.9,
+    tangentMul: 0.92,
+    compositionSlide: 1.06,
+    elevation: 0.16,
+    limbElevation: 0.08,
+    horizonLimbOut: 0.94,
+    horizonSkyLift: 0.11,
+    horizonSunBias: 0.32,
+    sunFrameBias: 0.54,
+    orbitSunLift: 0.11,
+    dutch: -0.01,
+    textAlign: "left",
+    panelOffset: "left",
+    safeSide: "west",
+  },
+  {
+    planetSide: -1,
+    distScale: 0.86,
+    tangentMul: 0.88,
+    compositionSlide: 1.02,
+    elevation: 0.13,
+    limbElevation: 0.07,
+    horizonLimbOut: 0.94,
+    horizonSkyLift: 0.1,
+    horizonSunBias: 0.3,
+    sunFrameBias: 0.5,
+    orbitSunLift: 0.1,
+    dutch: 0.009,
+    textAlign: "right",
+    panelOffset: "right",
+    safeSide: "east",
+  },
+  {
+    planetSide: 1,
+    distScale: 0.81,
     tangentMul: 0.72,
-    compositionSlide: 0.92,
-    elevation: 0.04,
-    limbElevation: 0.03,
-    lookSunLift: 0.04,
+    compositionSlide: 0.88,
+    elevation: 0.05,
+    limbElevation: 0.035,
+    horizonLimbOut: 0.93,
+    horizonSkyLift: 0.08,
+    horizonSunBias: 0.42,
+    lookSunLift: 0.05,
+    sunFrameBias: 0.46,
+    orbitSunLift: 0.09,
     dutch: -0.008,
     textAlign: "left",
     panelOffset: "left",
@@ -152,8 +249,8 @@ const SECTION_FRAMING = [
   },
 ];
 
-/** Focale repos (mm plein format 24×36, hauteur capteur 24 mm) — Intro télé modérée, Contact normale */
-const FOCAL_REST_MM = [42, 22, 32, 36, 40, 50];
+/** Focale repos (mm) — télé modérée loin ; plus longue près du Soleil = disque contenu. */
+const FOCAL_REST_MM = [42, 22, 32, 36, 42, 46, 50, 52];
 const SENSOR_HEIGHT_MM = 24;
 /** Lissage exponentiel FOV — constant pour éviter un saut quand le glide s'arrête. */
 const FOV_LERP_ALPHA = 0.12;
@@ -163,10 +260,77 @@ function focalMmToFov(mm, sensorHeight = SENSOR_HEIGHT_MM) {
   return (2 * Math.atan(sensorHeight / (2 * safeMm)) * 180) / Math.PI;
 }
 
+function scaledOrbit(r) {
+  return r * ORBIT_SCALE;
+}
+
+function getSunHeat(displaySection, glideState = null) {
+  const effective = getEffectiveDisplaySection(displaySection, glideState);
+  return clamp((effective - SUN_HEAT_START) / SUN_HEAT_SPAN, 0, 1);
+}
+
+function getSunMaxAngularRadius(sectionIndex) {
+  const i = clamp(Math.round(sectionIndex), 0, SECTION_COUNT - 1);
+  return SUN_MAX_ANGULAR_BY_SECTION[i] ?? SUN_MAX_ANGULAR_BY_SECTION[0];
+}
+
+/** Facteur visuel disque Soleil (aligné updatePlanets au repos). */
+function getSunVisualRadius(sectionIndex) {
+  const heat = clamp((sectionIndex - SUN_HEAT_START) / SUN_HEAT_SPAN, 0, 1);
+  const sunScale = 0.58 + heat * 0.42 + heat * 0.35;
+  return SUN_BASE_RADIUS * sunScale;
+}
+
+/** Biais regard vers le Soleil — renforcé §0–6 pour disque à l'horizon (ISS). */
+function getHeroSunBiasScale(sectionIndex) {
+  if (sectionIndex >= 7) return 1;
+  if (sectionIndex >= 5) return 0.72 + (sectionIndex - 5) * 0.14;
+  if (sectionIndex === 4) return 0.52;
+  return 0.58;
+}
+
+/** Lerp lookAt → Soleil pour garder le disque dans le FOV (sans viser le centre). */
+function getHeroLookSunLerp(sectionIndex) {
+  if (sectionIndex >= 7) return 0.14;
+  if (sectionIndex >= 5) return 0.11 + (sectionIndex - 5) * 0.025;
+  if (sectionIndex === 4) return 0.13;
+  return 0.09 + sectionIndex * 0.012;
+}
+
+/** Distance minimale caméra ↔ centre Soleil (plafond angulaire + cap orbite d'ancre). */
+function enforceMinSunViewDistance(sectionIndex, point) {
+  const maxRad = getSunMaxAngularRadius(sectionIndex);
+  const sunR = getSunVisualRadius(sectionIndex);
+  let minDist = sunR / Math.sin(Math.max(maxRad, 0.025));
+
+  const planet = PLANETS[sectionIndex];
+  if (planet) {
+    const framing = SECTION_FRAMING[sectionIndex] ?? SECTION_FRAMING[0];
+    const distScale = framing.distScale ?? 1;
+    const surfaceDist =
+      planet.size * planet.camDistMul * CAM_SURFACE_OFFSET * distScale;
+    const orbitCap = planet.orbitRadius + surfaceDist * 1.12 + planet.size * 0.35;
+    minDist = Math.min(minDist, orbitCap);
+  }
+
+  tmpSeg.copy(point).sub(sunOrigin);
+  const dist = tmpSeg.length();
+  if (dist >= minDist) {
+    return point;
+  }
+  if (dist < 1e-6) {
+    tmpSeg.set(1, 0, 0);
+  } else {
+    tmpSeg.multiplyScalar(1 / dist);
+  }
+  point.copy(sunOrigin).addScaledVector(tmpSeg, minDist);
+  return point;
+}
+
 const PLANETS = [
   {
     name: "Neptune",
-    orbitRadius: 58,
+    orbitRadius: scaledOrbit(58),
     size: 1.4,
     color: 0x2848c8,
     emissive: 0x0a1848,
@@ -180,13 +344,13 @@ const PLANETS = [
     heroAngle: 0.78,
     startAngle: 0.78,
     section: 0,
-    camDistMul: 2.75,
+    camDistMul: 2.4,
     camLift: 0.1,
     camTangent: 0.34,
   },
   {
     name: "Saturn",
-    orbitRadius: 42,
+    orbitRadius: scaledOrbit(42),
     size: 1.28,
     color: 0xe8c878,
     emissive: 0x3a2810,
@@ -201,14 +365,14 @@ const PLANETS = [
     startAngle: 2.14,
     hasRings: true,
     section: 1,
-    camDistMul: 1.45,
+    camDistMul: 1.29,
     camLift: 0.06,
     camTangent: 0.6,
     ringView: true,
   },
   {
     name: "Jupiter",
-    orbitRadius: 28,
+    orbitRadius: scaledOrbit(28),
     size: 1.18,
     color: 0xd87840,
     emissive: 0x5a2810,
@@ -222,13 +386,13 @@ const PLANETS = [
     heroAngle: 3.42,
     startAngle: 3.42,
     section: 2,
-    camDistMul: 1.38,
+    camDistMul: 1.22,
     camLift: 0.1,
     camTangent: 0.5,
   },
   {
     name: "Uranus",
-    orbitRadius: 35,
+    orbitRadius: scaledOrbit(35),
     size: 0.72,
     color: 0x7ec8e8,
     emissive: 0x1a3048,
@@ -242,13 +406,13 @@ const PLANETS = [
     heroAngle: 4.1,
     startAngle: 4.1,
     section: 3,
-    camDistMul: 1.2,
+    camDistMul: 1.09,
     camLift: 0.09,
     camTangent: 0.45,
   },
   {
     name: "Mars",
-    orbitRadius: 20,
+    orbitRadius: scaledOrbit(20),
     size: 0.36,
     color: 0xc84838,
     emissive: 0x4a1008,
@@ -262,13 +426,53 @@ const PLANETS = [
     heroAngle: 4.8,
     startAngle: 4.8,
     section: 4,
-    camDistMul: 1.26,
+    camDistMul: 1.21,
     camLift: 0.08,
     camTangent: 0.4,
   },
   {
+    name: "Venus", // panel UI §5 : RPG CR (corps 3D inchangé)
+    orbitRadius: scaledOrbit(10.2),
+    size: 0.54,
+    color: 0xf0d090,
+    emissive: 0x5a4028,
+    accentColor: 0xffecc0,
+    atmosphereColor: 0xffe0a8,
+    roughness: 0.76,
+    noiseScale: 4.2,
+    orbitSpeed: 0.58,
+    spinSpeed: 0.32,
+    axialScale: 0.9,
+    heroAngle: 5.42,
+    startAngle: 1.85,
+    section: 5,
+    camDistMul: 1.05,
+    camLift: 0.06,
+    camTangent: 0.38,
+  },
+  {
+    name: "Earth",
+    orbitRadius: scaledOrbit(7.6),
+    size: 0.46,
+    color: 0x2a5a9a,
+    emissive: 0x0c1830,
+    accentColor: 0x5cb870,
+    atmosphereColor: 0x6ab0ff,
+    roughness: 0.72,
+    noiseScale: 5.0,
+    orbitSpeed: 0.68,
+    spinSpeed: 0.42,
+    axialScale: 0.92,
+    heroAngle: 5.78,
+    startAngle: 4.65,
+    section: 6,
+    camDistMul: 1.0,
+    camLift: 0.05,
+    camTangent: 0.35,
+  },
+  {
     name: "Mercury",
-    orbitRadius: 13,
+    orbitRadius: scaledOrbit(13),
     size: 0.24,
     color: 0xb0a898,
     emissive: 0x302820,
@@ -281,30 +485,48 @@ const PLANETS = [
     axialScale: 0.95,
     heroAngle: 6.02,
     startAngle: 6.02,
-    section: 5,
-    camDistMul: 1.02,
+    section: 7,
+    camDistMul: 0.87,
     camLift: 0.04,
     camTangent: 0.3,
     nearSun: true,
   },
 ];
 
-/** Corps décoratifs (orbite + collision passive, pas de section UI). */
+/** Corps décoratifs entre Mars et orbites intérieures — étale l'approche visuelle. */
 const DECORATIVE_PLANETS = [
   {
-    name: "Venus",
-    orbitRadius: 9.5,
-    size: 0.5,
-    color: 0xe8c878,
-    emissive: 0x4a3820,
-    accentColor: 0xffe8b0,
-    atmosphereColor: 0xffd890,
-    roughness: 0.78,
-    noiseScale: 4.5,
-    orbitSpeed: 0.62,
-    spinSpeed: 0.35,
-    axialScale: 0.88,
-    startAngle: 1.2,
+    name: "Ceres",
+    orbitRadius: scaledOrbit(17),
+    size: 0.16,
+    color: 0x8a8078,
+    emissive: 0x201810,
+    accentColor: 0xb8a898,
+    atmosphereColor: 0xa89888,
+    roughness: 0.88,
+    noiseScale: 7.0,
+    orbitSpeed: 0.38,
+    spinSpeed: 0.55,
+    axialScale: 0.85,
+    heroAngle: 5.1,
+    startAngle: 5.1,
+    section: null,
+  },
+  {
+    name: "Moon",
+    orbitRadius: scaledOrbit(14),
+    size: 0.11,
+    color: 0x9898a0,
+    emissive: 0x181820,
+    accentColor: 0xc8c8d0,
+    atmosphereColor: 0x888890,
+    roughness: 0.92,
+    noiseScale: 9.0,
+    orbitSpeed: 0.48,
+    spinSpeed: 0.18,
+    axialScale: 0.95,
+    heroAngle: 5.55,
+    startAngle: 2.4,
     section: null,
   },
 ];
@@ -332,9 +554,28 @@ const tmpTangent = new THREE.Vector3();
 const tmpUp = new THREE.Vector3(0, 1, 0);
 const tmpAccent = new THREE.Color();
 const tmpAccentNext = new THREE.Color();
+const tmpSunColor = new THREE.Color();
+const tmpSunEmissive = new THREE.Color();
+const tmpSunGlow = new THREE.Color();
+const tmpSunCorona = new THREE.Color();
+const tmpSunHaze = new THREE.Color();
+const SUN_PALETTE_OUTER = {
+  surface: 0xffee88,
+  emissive: 0xffaa33,
+  glow: 0xffcc55,
+  corona: 0xff9933,
+  haze: 0xff6622,
+  light: 0xffdd88,
+};
+const SUN_PALETTE_INNER = {
+  surface: 0xd87848,
+  emissive: 0xb84028,
+  glow: 0xc86030,
+  corona: 0x983820,
+  haze: 0x702818,
+  light: 0xe89058,
+};
 const sunOrigin = new THREE.Vector3(0, 0.15, 0);
-const sunLookTarget = new THREE.Vector3();
-const tmpOrbitLook = new THREE.Vector3();
 const tmpCollideSample = new THREE.Vector3();
 const tmpBodyPushDir = new THREE.Vector3();
 
@@ -581,7 +822,7 @@ function getTargetHeroAngle(planet, sectionIndex) {
 
 /** Orbite keplérienne continue — toutes planètes, tout le temps. */
 function getContinuousOrbitAngle(planet, elapsed) {
-  return planet.startAngle + elapsed * planet.orbitSpeed;
+  return planet.startAngle + elapsed * planet.orbitSpeed * PLANET_ORBIT_SPEED_MUL;
 }
 
 /**
@@ -683,11 +924,20 @@ function getSunPushExtraMargin(fromIndex, toIndex, displaySection) {
   if (effTo >= 4 || effFrom >= 4) {
     extra += SUN_INNER_TRANSIT_EXTRA;
   }
-  if (effTo >= 5) {
+  if (effTo >= 6) {
     extra += SUN_BASE_RADIUS * 0.38;
   }
-  if (displaySection >= 3.4) {
-    extra += SUN_BASE_RADIUS * 0.22 * clamp((displaySection - 3.4) / 1.6, 0, 1);
+  if (effTo >= 7) {
+    extra += SUN_BASE_RADIUS * 0.22;
+  }
+  if (effFrom <= 2 && effTo >= 4) {
+    extra += SUN_INNER_TRANSIT_EXTRA * 0.45;
+  }
+  if (Math.abs(effTo - effFrom) >= 4) {
+    extra += SUN_BASE_RADIUS * 0.28;
+  }
+  if (displaySection >= 5.2) {
+    extra += SUN_BASE_RADIUS * 0.22 * clamp((displaySection - 5.2) / 2.4, 0, 1);
   }
   return extra;
 }
@@ -835,13 +1085,73 @@ function sunClearanceAngle(cameraPos, planetPos, sunPos, planetRadius) {
   return Math.acos(alignment) - planetAngular;
 }
 
-/** Cible de regard fixe : centre Soleil + léger offset Y monde (lueur au limbe). */
-function computeSunLookAt(sectionIndex, out) {
+/**
+ * Regard héro : au-dessus de l'horizon local (limbe + ciel), biais vers le Soleil — pas le centre planète.
+ */
+function computeHeroLookAt(
+  sectionIndex,
+  planet,
+  planetPos,
+  outwardDir,
+  out
+) {
   const framing = SECTION_FRAMING[sectionIndex] ?? SECTION_FRAMING[0];
-  const lift = framing.lookSunLift ?? 0.04;
-  out.copy(sunOrigin);
-  out.y += lift;
+  const size = planet.size;
+  const limbOut = framing.horizonLimbOut ?? 0.95;
+  const skyLift = framing.horizonSkyLift ?? 0.12;
+  const sunBias = framing.horizonSunBias ?? 0.24;
+
+  out.copy(planetPos).addScaledVector(outwardDir, size * limbOut);
+  out.y += size * skyLift;
+
+  tmpToSun.copy(sunOrigin).sub(planetPos);
+  if (tmpToSun.lengthSq() > 0.001) {
+    tmpToSun.normalize();
+    const biasScale = getHeroSunBiasScale(sectionIndex);
+    out.addScaledVector(tmpToSun, size * sunBias * biasScale);
+    tmpTangent.crossVectors(tmpUp, tmpToSun);
+    if (tmpTangent.lengthSq() > 0.001) {
+      tmpTangent.normalize();
+      out.addScaledVector(
+        tmpTangent,
+        size * sunBias * biasScale * 0.42 * framing.planetSide
+      );
+    }
+  }
+
+  out.x += SUN_FRAME_WORLD_BIAS * size * (sectionIndex <= 4 ? 0.14 : 0.18);
+
+  if (sectionIndex === 7) {
+    const lift = framing.lookSunLift ?? 0.04;
+    tmpMid.copy(sunOrigin);
+    tmpMid.y += lift;
+    out.lerp(tmpMid, 0.42);
+  }
+
   return out;
+}
+
+/** Alias transit / compat — délègue au cadrage héro si planète connue. */
+function computeSunLookAt(sectionIndex, out) {
+  const planet = PLANETS[sectionIndex];
+  if (!planet) {
+    out.copy(sunOrigin);
+    return out;
+  }
+  getHeroPlanetPosition(planet, tmpPlanetPos);
+  tmpToSun.copy(tmpPlanetPos).sub(sunOrigin);
+  if (tmpToSun.lengthSq() < 0.001) {
+    tmpToSun.set(1, 0, 0);
+  } else {
+    tmpToSun.normalize();
+  }
+  return computeHeroLookAt(
+    sectionIndex,
+    planet,
+    tmpPlanetPos,
+    tmpToSun,
+    out
+  );
 }
 
 function posToOrbit(pos, lookAt, out) {
@@ -877,8 +1187,7 @@ function canOrbitDrag() {
 
 function captureOrbitFromCamera(sectionIndex) {
   const orbit = sectionUserOrbit[sectionIndex];
-  computeSunLookAt(sectionIndex, tmpOrbitLook);
-  posToOrbit(camera.position, tmpOrbitLook, orbit);
+  posToOrbit(camera.position, sectionCameras[sectionIndex].lookAt, orbit);
   orbit.modified = true;
 }
 
@@ -1004,7 +1313,7 @@ function resolveSunOcclusion(
   const occRadius = getPlanetOcclusionRadius(planet, sectionIndex);
   const side = planetSide >= 0 ? 1 : -1;
   const intro = sectionIndex === 0;
-  const surfaceLand = planet.nearSun && sectionIndex === 5;
+  const surfaceLand = planet.nearSun && sectionIndex === 7;
   const tangentStep = size * (intro ? 0.12 : surfaceLand ? 0.16 : 0.22);
   const outwardStep = size * (intro ? 0.11 : surfaceLand ? 0.025 : 0.06);
   const maxIter = intro ? 8 : surfaceLand ? 20 : 16;
@@ -1040,7 +1349,9 @@ function computeSectionCamera(sectionIndex, planet, planetPos, elapsed, out) {
   tmpTangent.normalize();
 
   const wobble =
-    sectionIndex === 0 ? 0 : Math.sin(elapsed * 0.4 + sectionIndex) * 0.02;
+    sectionIndex === 0
+      ? 0
+      : Math.sin(elapsed * 0.4 * SCENE_AMBIENT_MOTION_MUL + sectionIndex) * 0.02;
   const tangentBase = size * planet.camTangent * framing.tangentMul * framing.planetSide;
   out.position.addScaledVector(tmpTangent, tangentBase * (1 + wobble));
 
@@ -1059,7 +1370,26 @@ function computeSectionCamera(sectionIndex, planet, planetPos, elapsed, out) {
     out.position.addScaledVector(tmpToSun, size * 0.12);
   }
 
-  computeSunLookAt(sectionIndex, out.lookAt);
+  const sunFrameBias = framing.sunFrameBias ?? 0.34;
+  out.position.addScaledVector(
+    tmpTangent,
+    size * sunFrameBias * -framing.planetSide
+  );
+
+  const orbitSunLift = framing.orbitSunLift ?? 0;
+  if (orbitSunLift > 0) {
+    tmpMid.crossVectors(tmpTangent, tmpToSun);
+    if (tmpMid.lengthSq() > 0.001) {
+      tmpMid.normalize();
+      out.position.addScaledVector(tmpMid, size * orbitSunLift);
+    }
+  }
+
+  computeHeroLookAt(sectionIndex, planet, planetPos, tmpToSun, out.lookAt);
+  const sunLookLerp = getHeroLookSunLerp(sectionIndex);
+  if (sunLookLerp > 0) {
+    out.lookAt.lerp(sunOrigin, sunLookLerp);
+  }
   resolveSunOcclusion(
     sectionIndex,
     planet,
@@ -1083,6 +1413,7 @@ function computeSectionCamera(sectionIndex, planet, planetPos, elapsed, out) {
   }
 
   pushPointOutsideBodies(out.position, elapsed, sectionIndex, null, sectionIndex, sectionIndex);
+  enforceMinSunViewDistance(sectionIndex, out.position);
 
   if (planet.nearSun) {
     tmpSeg.copy(out.position).sub(planetPos);
@@ -1125,7 +1456,8 @@ function cubicBezier3(p0, p1, p2, p3, t, out) {
 }
 
 /**
- * Point rectiligne P0→P1 + bosse extérieur / hélice toroïdale (sans collision).
+ * Glide radial Soleil : rapproche / éloigne le centre (+1 section = vers Soleil).
+ * Direction slerpée, Y stable (léger breathe optionnel).
  */
 function rectilinearPointRaw(p0, p1, pathT, fromIndex, toIndex, out) {
   const t = clamp(pathT, 0, 1);
@@ -1134,45 +1466,57 @@ function rectilinearPointRaw(p0, p1, pathT, fromIndex, toIndex, out) {
   }
 
   const effTo = toIndex ?? fromIndex;
-  out.copy(p0).lerp(p1, t);
+  const r0 = tmpSeg.copy(p0).sub(sunOrigin).length();
+  const r1 = tmpMid.copy(p1).sub(sunOrigin).length();
+  const r = THREE.MathUtils.lerp(r0, r1, t);
 
-  const midFactor = Math.sin(Math.PI * t);
-  if (midFactor > 0.001) {
-    const arc = JOURNEY_ARC[fromIndex] ?? { lift: 0.1, side: 0.05 };
-    tmpMid.copy(p0).lerp(p1, 0.5);
-    tmpToSun.copy(tmpMid).sub(sunOrigin);
-    if (tmpToSun.lengthSq() > 0.001) {
+  tmpSeg.copy(p0).sub(sunOrigin);
+  const len0 = tmpSeg.length();
+  if (len0 > 1e-6) {
+    tmpSeg.multiplyScalar(1 / len0);
+  } else {
+    tmpSeg.set(1, 0, 0);
+  }
+  tmpMid.copy(p1).sub(sunOrigin);
+  const len1 = tmpMid.length();
+  if (len1 > 1e-6) {
+    tmpMid.multiplyScalar(1 / len1);
+  } else {
+    tmpMid.copy(tmpSeg);
+  }
+
+  const dot = clamp(tmpSeg.dot(tmpMid), -1, 1);
+  const omega = Math.acos(dot);
+  if (omega < 1e-5) {
+    tmpToSun.copy(tmpSeg);
+  } else {
+    const sinOmega = Math.sin(omega);
+    const w0 = Math.sin((1 - t) * omega) / sinOmega;
+    const w1 = Math.sin(t * omega) / sinOmega;
+    tmpToSun.set(
+      tmpSeg.x * w0 + tmpMid.x * w1,
+      tmpSeg.y * w0 + tmpMid.y * w1,
+      tmpSeg.z * w0 + tmpMid.z * w1
+    );
+    if (tmpToSun.lengthSq() > 1e-8) {
       tmpToSun.normalize();
-      const span = p0.distanceTo(p1);
-      const innerLeg = effTo >= 4 || fromIndex >= 3;
-      let bulgeMul = innerLeg ? 1.42 : 1;
-      if (effTo === 4) {
-        bulgeMul *= 1.18;
-      }
-      if (effTo >= 5) {
-        bulgeMul *= 1.28;
-      }
-      const bulge = arc.lift * midFactor * span * 0.12 * bulgeMul;
-      out.addScaledVector(tmpToSun, bulge);
-
-      tmpTangent.crossVectors(tmpUp, tmpToSun);
-      if (tmpTangent.lengthSq() > 0.001) {
-        tmpTangent.normalize();
-        const torusAmp =
-          span * GLIDE_TORUS_REVOLUTION * midFactor * (innerLeg ? 1.35 : 1);
-        const helix = Math.sin(Math.PI * 2 * t);
-        out.addScaledVector(tmpTangent, helix * torusAmp);
-        const yHelix = innerLeg ? 0.34 : 0.22;
-        out.y += Math.cos(Math.PI * 2 * t) * torusAmp * yHelix;
-        if (innerLeg) {
-          out.y += midFactor * span * 0.018;
-        }
-      }
+    } else {
+      tmpToSun.copy(tmpSeg);
     }
+  }
+
+  out.copy(sunOrigin).addScaledVector(tmpToSun, r);
+
+  if (GLIDE_RADIAL_Y_BREATHE > 0) {
+    const span = Math.abs(r1 - r0);
+    const breathe = Math.sin(Math.PI * t) * span * GLIDE_RADIAL_Y_BREATHE;
+    out.y += breathe * (effTo > fromIndex ? 1 : effTo < fromIndex ? -0.35 : 0);
   }
 
   const sunExtra = getSunPushExtraMargin(fromIndex, effTo, fromIndex + (effTo - fromIndex) * t);
   pushPointOutsideSun(out, sunExtra);
+  const anchor = effTo >= fromIndex ? effTo : fromIndex;
+  enforceMinSunViewDistance(anchor, out);
 
   return out;
 }
@@ -1401,19 +1745,19 @@ function computePlanetFocusWeight(legT) {
  * legT déjà eased via navigation + spacecraftEase.
  */
 function computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySection, out, glideState) {
-  computeSunLookAt(fromIndex, sunLookTarget);
   if (fromIndex === toIndex) {
-    out.copy(sunLookTarget);
+    out.copy(sectionCameras[fromIndex].lookAt);
     return out;
   }
 
-  computeSunLookAt(toIndex, tmpMid);
-  const t = clamp(legT, 0, 1);
-  out.copy(sunLookTarget).lerp(tmpMid, t);
+  const t = easeInOutCubic(clamp(legT, 0, 1));
+  out
+    .copy(sectionCameras[fromIndex].lookAt)
+    .lerp(sectionCameras[toIndex].lookAt, t);
 
   const toPlanet = PLANETS[toIndex];
   getPlanetPosition(toPlanet, elapsed, displaySection, tmpLookDest, glideState);
-  const planetFocus = computePlanetFocusWeight(legT);
+  const planetFocus = computePlanetFocusWeight(legT) * 0.06;
   out.lerp(tmpLookDest, planetFocus);
   return out;
 }
@@ -1511,6 +1855,13 @@ function sampleCameraState(displaySection, elapsed, glideState) {
     fromIndex,
     toIndex
   );
+  const sunClampSection =
+    legT >= GLIDE_HERO_BLEND_START && fromIndex !== toIndex
+      ? toIndex
+      : toIndex === fromIndex
+        ? fromIndex
+        : THREE.MathUtils.lerp(fromIndex, toIndex, legT);
+  enforceMinSunViewDistance(sunClampSection, tmpCamPos);
 
   if (fromIndex === toIndex || legT < 1e-5) {
     tmpCamLook.copy(from.lookAt);
@@ -1553,7 +1904,7 @@ function buildSun() {
   const glowMat = new THREE.MeshBasicMaterial({
     color: 0xffcc55,
     transparent: true,
-    opacity: 0.2,
+    opacity: 0.08,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
@@ -1564,7 +1915,7 @@ function buildSun() {
   const coronaMat = new THREE.MeshBasicMaterial({
     color: 0xff9933,
     transparent: true,
-    opacity: 0.08,
+    opacity: 0.04,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
@@ -1575,7 +1926,7 @@ function buildSun() {
   const hazeMat = new THREE.MeshBasicMaterial({
     color: 0xff6622,
     transparent: true,
-    opacity: 0.04,
+    opacity: 0.02,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
@@ -1583,7 +1934,7 @@ function buildSun() {
   sunHaze.position.copy(sunOrigin);
   scene.add(sunHaze);
 
-  sunLight = new THREE.PointLight(0xffdd88, 5.2, 340, 1.35);
+  sunLight = new THREE.PointLight(0xffdd88, 4.4, 400 * ORBIT_SCALE, 1.35);
   sunLight.position.copy(sunOrigin);
   scene.add(sunLight);
 
@@ -1649,7 +2000,7 @@ function addPlanetEntry(data) {
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.size, 40, 40), mat);
   scene.add(mesh);
 
-  const atmIntensity = data.section === 5 ? 1.4 : data.section == null ? 0.75 : 1.0;
+  const atmIntensity = data.section === 7 ? 1.4 : data.section == null ? 0.75 : 1.0;
   const { mesh: atmMesh, mat: atmMat } = createAtmosphereShell(
     data.size,
     data.atmosphereColor,
@@ -1725,7 +2076,8 @@ function updateStars(elapsed, camPos, displaySection, glideState) {
   for (let i = 0; i < STAR_COUNT; i += 1) {
     const base = starBase[i];
     const i3 = i * 3;
-    const tw = Math.sin(elapsed * base.twinkle + base.phase) * 0.1;
+    const tw =
+      Math.sin(elapsed * base.twinkle * SCENE_AMBIENT_MOTION_MUL + base.phase) * 0.1;
     const par = 1 - base.parallax * 0.35;
     attr.array[i3] = base.x * (1 + tw * 0.003) - px * par;
     attr.array[i3 + 1] = base.y * (1 + tw * 0.003) - py * par;
@@ -1774,16 +2126,20 @@ function updatePlanets(elapsed, displaySection, glideState) {
     mesh.position.copy(pos);
     const axial = data.axialScale ?? 1;
     const spinFactor = PLANET_SPIN_SCALE * axial;
-    mesh.rotation.y = elapsed * data.spinSpeed * spinFactor;
+    mesh.rotation.y = elapsed * data.spinSpeed * spinFactor * PLANET_SPIN_MUL;
 
     if (mat.userData.shaderUniforms) {
-      mat.userData.shaderUniforms.uTime.value = elapsed;
+      mat.userData.shaderUniforms.uTime.value = elapsed * PLANET_SPIN_MUL;
     }
 
-    const emissiveBoost = 0.3 + proximity * 0.65 + (isActive ? 0.3 : 0);
+    const decorNearSun = isDecorative
+      ? clamp((effectiveSection - 5.0) / 2.4, 0, 0.32)
+      : 0;
+    const emissiveBoost =
+      0.3 + proximity * 0.65 + (isActive ? 0.3 : 0) + decorNearSun;
     mat.emissiveIntensity = emissiveBoost;
 
-    const scale = 1 + proximity * 0.22;
+    const scale = 1 + proximity * 0.22 + decorNearSun * 0.08;
     mesh.scale.setScalar(scale);
 
     if (entry.atmMat) {
@@ -1792,26 +2148,67 @@ function updatePlanets(elapsed, displaySection, glideState) {
 
     if (rings) {
       const ringSpin = PLANET_SPIN_SCALE * axial;
-      rings.inner.rotation.z = elapsed * 0.4 * ringSpin;
-      rings.outer.rotation.z = elapsed * 0.28 * ringSpin;
+      rings.inner.rotation.z = elapsed * 0.4 * ringSpin * PLANET_SPIN_MUL;
+      rings.outer.rotation.z = elapsed * 0.28 * ringSpin * PLANET_SPIN_MUL;
     }
   });
 
-  const sunProximity = clamp((effectiveSection - 2.2) / 1.8, 0, 1);
-  const sunScale = 1 + sunProximity * 2.8;
-  const pulse = 1 + Math.sin(elapsed * 1.1) * 0.035;
+  const sunHeat = getSunHeat(displaySection, glideState);
+  const coreScale = 0.58 + sunHeat * 0.42;
+  const horizonBoost = sunHeat < 0.12 ? 1.22 : 1;
+  const sunScale = (coreScale + sunHeat * 0.35) * horizonBoost;
+  const pulse = 1 + Math.sin(elapsed * 1.1 * SCENE_AMBIENT_MOTION_MUL) * 0.035;
+  /** Halos quasi éteints avant §5 — évite le voile crème sur 3D / orbites extérieures. */
+  const haloPresence = sunHeat * sunHeat;
+  const coreEmissive =
+    SUN_REST_CORE_EMISSIVE + sunHeat * (2.82 - SUN_REST_CORE_EMISSIVE);
 
   sun.scale.setScalar(sunScale * pulse);
-  sunGlow.scale.setScalar(sunScale * pulse * 1.65);
-  sunCorona.scale.setScalar(sunScale * pulse * 2.4);
-  sunHaze.scale.setScalar(sunScale * pulse * 3.8);
+  sunGlow.scale.setScalar(sunScale * pulse * (0.45 + haloPresence * 1.1));
+  sunCorona.scale.setScalar(sunScale * pulse * (0.55 + haloPresence * 1.55));
+  sunHaze.scale.setScalar(sunScale * pulse * (0.35 + haloPresence * 2.5));
 
-  sunGlow.material.opacity = 0.14 + sunProximity * 0.22;
-  sunCorona.material.opacity = 0.06 + sunProximity * 0.14;
-  sunHaze.material.opacity = 0.03 + sunProximity * 0.1;
+  sunGlow.material.opacity = haloPresence * 0.26;
+  sunCorona.material.opacity = haloPresence * 0.115;
+  sunHaze.material.opacity = haloPresence * 0.07;
 
-  sunLight.intensity = 4.8 + sunProximity * 3.5 + Math.sin(elapsed * 0.9) * 0.3;
-  sun.material.emissiveIntensity = 2 + sunProximity * 1.5;
+  tmpSunColor.setHex(SUN_PALETTE_OUTER.surface).lerp(
+    tmpSunEmissive.setHex(SUN_PALETTE_INNER.surface),
+    sunHeat
+  );
+  sun.material.color.copy(tmpSunColor);
+  tmpSunEmissive.setHex(SUN_PALETTE_OUTER.emissive).lerp(
+    tmpSunGlow.setHex(SUN_PALETTE_INNER.emissive),
+    sunHeat
+  );
+  sun.material.emissive.copy(tmpSunEmissive);
+  sun.material.emissiveIntensity = coreEmissive;
+
+  tmpSunGlow.setHex(SUN_PALETTE_OUTER.glow).lerp(
+    tmpSunCorona.setHex(SUN_PALETTE_INNER.glow),
+    sunHeat
+  );
+  sunGlow.material.color.copy(tmpSunGlow);
+
+  tmpSunCorona.setHex(SUN_PALETTE_OUTER.corona).lerp(
+    tmpSunHaze.setHex(SUN_PALETTE_INNER.corona),
+    sunHeat
+  );
+  sunCorona.material.color.copy(tmpSunCorona);
+
+  tmpSunHaze.setHex(SUN_PALETTE_OUTER.haze).lerp(
+    tmpSunColor.setHex(SUN_PALETTE_INNER.haze),
+    sunHeat
+  );
+  sunHaze.material.color.copy(tmpSunHaze);
+
+  tmpSunColor.setHex(SUN_PALETTE_OUTER.light).lerp(
+    tmpSunEmissive.setHex(SUN_PALETTE_INNER.light),
+    sunHeat
+  );
+  sunLight.color.copy(tmpSunColor);
+  sunLight.intensity =
+    3.6 + sunHeat * 3.2 + Math.sin(elapsed * 0.9 * SCENE_AMBIENT_MOTION_MUL) * 0.2;
 }
 
 function updateAccentLight(displaySection, elapsed, glideState) {
@@ -1908,22 +2305,23 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
     const driftScale = introAtRest
       ? 0
       : 0.03 * activeBlend * (inLongGlide ? 0.35 : 1) * driftRamp;
-    const driftPhase = elapsed * 0.14 + sectionIndex * 1.7;
+    const driftPhase = elapsed * 0.14 * SCENE_AMBIENT_MOTION_MUL + sectionIndex * 1.7;
     const driftAmp = activePlanet.size * 0.06;
     const driftAttenuation = introAtRest
       ? 0
       : (inLongGlide ? 0.2 : 1 - activeBlend * 0.65) * driftRamp;
     if (!introAtRest && !userOrbit) {
-      camera.position.x += Math.sin(elapsed * 0.28) * 0.024 * driftAttenuation;
-      camera.position.y += Math.sin(elapsed * 0.62) * 0.016 * driftAttenuation;
+      camera.position.x +=
+        Math.sin(elapsed * 0.28 * SCENE_AMBIENT_MOTION_MUL) * 0.024 * driftAttenuation;
+      camera.position.y +=
+        Math.sin(elapsed * 0.62 * SCENE_AMBIENT_MOTION_MUL) * 0.016 * driftAttenuation;
       camera.position.addScaledVector(tmpTangent, Math.sin(driftPhase) * driftAmp * driftScale);
     }
 
     if (userOrbit) {
-      computeSunLookAt(sectionIndex, tmpOrbitLook);
       const orbit = sectionUserOrbit[sectionIndex];
       orbitToPos(
-        tmpOrbitLook,
+        sectionCameras[sectionIndex].lookAt,
         orbit.radius,
         orbit.azimuth,
         orbit.elevation,
@@ -1941,6 +2339,7 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
       sectionIndex,
       sectionIndex
     );
+    enforceMinSunViewDistance(sectionIndex, camera.position);
     if (userOrbit) {
       smoothedCamPos.copy(camera.position);
     }
@@ -1969,9 +2368,13 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 
   if (fog) {
     const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
-    fog.density = 0.005 + effectiveSection * 0.001;
-    const warmth = clamp((effectiveSection - 3) / 1, 0, 1);
-    fog.color.setRGB(0.02 + warmth * 0.06, 0.03 + warmth * 0.02, 0.04 - warmth * 0.02);
+    fog.density = 0.005 + effectiveSection * 0.00085;
+    const warmth = getSunHeat(displaySection, glideState);
+    fog.color.setRGB(
+      0.02 + warmth * 0.05,
+      0.03 + warmth * 0.018,
+      0.04 - warmth * 0.018
+    );
   }
 }
 
@@ -2006,7 +2409,7 @@ export function initScene(canvas) {
     focalMmToFov(FOCAL_REST_MM[0]),
     window.innerWidth / window.innerHeight,
     0.06,
-    620
+    720 * ORBIT_SCALE
   );
 
   scene.add(new THREE.AmbientLight(0x1a2240, 0.14));
@@ -2058,6 +2461,8 @@ export function renderScene(displaySection, glideState = null) {
   updateCamera(displaySection, elapsed, glideState, settleT);
   updateStars(elapsed, camera.position, displaySection, glideState);
   updateAccentLight(displaySection, elapsed, glideState);
+  const sunHeat = getSunHeat(displaySection, glideState);
+  renderer.toneMappingExposure = 1.02 + sunHeat * 0.22;
   renderer.render(scene, camera);
 }
 
