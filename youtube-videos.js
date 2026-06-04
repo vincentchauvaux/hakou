@@ -1,4 +1,11 @@
 (function () {
+  const YOUTUBE_CHANNEL_ID = "UCmm1lsi4IS7RzwFFhIax3ug";
+  const RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
+  const YT_NS = "http://www.youtube.com/xml/schemas/2015";
+  const MAX_VIDEOS = 2;
+  const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+  const LOG_PREFIX = "[Hakou YouTube]";
+
   const THUMB_URL = (id) => `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
   const EMBED_URL = (id) =>
     `https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1`;
@@ -7,18 +14,26 @@
 
   let openVideoModal = null;
 
-  function bindThumb(wrap, videoId, title) {
-    const activate = (event) => {
-      if (event.target.closest(".youtube-thumb-external")) return;
-      event.preventDefault();
-      if (openVideoModal) openVideoModal(videoId, title);
-    };
-    wrap.addEventListener("click", activate);
-    wrap.addEventListener("keydown", (event) => {
+  function activateThumb(slot, event) {
+    if (event.target.closest(".youtube-thumb-external")) return;
+    event.preventDefault();
+    const videoId = slot.dataset.videoId?.trim();
+    if (!videoId || !openVideoModal) return;
+    const title = slot.dataset.videoTitle?.trim() || "Vidéo YouTube";
+    openVideoModal(videoId, title);
+  }
+
+  function bindGridInteraction(grid) {
+    grid.addEventListener("click", (event) => {
+      const slot = event.target.closest(".youtube-thumb[data-video-id]");
+      if (!slot || !grid.contains(slot)) return;
+      activateThumb(slot, event);
+    });
+    grid.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
-      if (event.target.closest(".youtube-thumb-external")) return;
-      event.preventDefault();
-      if (openVideoModal) openVideoModal(videoId, title);
+      const slot = event.target.closest(".youtube-thumb[data-video-id]");
+      if (!slot || !grid.contains(slot)) return;
+      activateThumb(slot, event);
     });
   }
 
@@ -56,7 +71,135 @@
     play.setAttribute("aria-hidden", "true");
 
     slot.replaceChildren(img, play, createExternalLink(videoId));
-    bindThumb(slot, videoId, title);
+  }
+
+  function readFallbackVideos(grid) {
+    return [...grid.querySelectorAll("[data-video-id]")]
+      .map((slot) => ({
+        id: slot.dataset.videoId?.trim() || "",
+        title: slot.dataset.videoTitle?.trim() || "Vidéo YouTube",
+      }))
+      .filter((v) => v.id);
+  }
+
+  function videoIdsKey(videos) {
+    return videos.map((v) => v.id).join(",");
+  }
+
+  async function fetchRssXml() {
+    try {
+      const res = await fetch(RSS_URL, { cache: "no-store" });
+      if (res.ok) return await res.text();
+    } catch {
+      /* CORS ou réseau — tenter proxy public */
+    }
+    try {
+      const proxied = `${CORS_PROXY}${encodeURIComponent(RSS_URL)}`;
+      const res = await fetch(proxied, { cache: "no-store" });
+      if (res.ok) return await res.text();
+    } catch {
+      /* repli HTML */
+    }
+    return null;
+  }
+
+  function parseRssVideos(xmlText) {
+    const doc = new DOMParser().parseFromString(xmlText, "application/xml");
+    if (doc.querySelector("parsererror")) return [];
+
+    const seen = new Set();
+    const videos = [];
+
+    for (const entry of doc.querySelectorAll("entry")) {
+      const id =
+        entry.getElementsByTagNameNS(YT_NS, "videoId")[0]?.textContent?.trim() ||
+        entry.querySelector("id")?.textContent?.replace(/^yt:video:/, "").trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+
+      const title =
+        entry.querySelector("title")?.textContent?.trim() || "Vidéo YouTube";
+      videos.push({ id, title });
+      if (videos.length >= MAX_VIDEOS) break;
+    }
+
+    return videos;
+  }
+
+  function ensureSlots(grid, count) {
+    let slots = [...grid.querySelectorAll("[data-video-id]")];
+    while (slots.length < count) {
+      const slot = document.createElement("div");
+      grid.appendChild(slot);
+      slots.push(slot);
+    }
+    while (slots.length > count) {
+      slots.pop()?.remove();
+    }
+    return [...grid.querySelectorAll("[data-video-id]")];
+  }
+
+  function applyVideosToGrid(grid, videos) {
+    const slots = ensureSlots(grid, videos.length);
+    videos.forEach((video, index) => {
+      const slot = slots[index];
+      if (!slot) return;
+      const prevId = slot.dataset.videoId?.trim();
+      slot.dataset.videoId = video.id;
+      slot.dataset.videoTitle = video.title;
+      if (prevId !== video.id || !slot.classList.contains("youtube-thumb")) {
+        slot.replaceChildren();
+        slot.classList.remove("youtube-thumb");
+        slot.removeAttribute("role");
+        slot.removeAttribute("tabindex");
+        slot.removeAttribute("aria-label");
+        enhanceSlot(slot);
+      } else {
+        const img = slot.querySelector("img");
+        if (img) {
+          img.alt = video.title;
+          if (!img.src.includes(video.id)) img.src = THUMB_URL(video.id);
+        }
+        slot.setAttribute("aria-label", `Lire : ${video.title}`);
+      }
+    });
+  }
+
+  async function syncFromRss(grid, fallbackVideos) {
+    grid.classList.add("video-grid--syncing");
+    const xml = await fetchRssXml();
+    grid.classList.remove("video-grid--syncing");
+
+    if (!xml) {
+      console.warn(
+        `${LOG_PREFIX} Flux RSS indisponible (CORS/réseau) — repli HTML (${fallbackVideos.length} vidéo(s)).`
+      );
+      return "fallback";
+    }
+
+    const rssVideos = parseRssVideos(xml);
+    if (!rssVideos.length) {
+      console.warn(
+        `${LOG_PREFIX} Flux RSS vide ou illisible — repli HTML (${fallbackVideos.length} vidéo(s)).`
+      );
+      return "fallback";
+    }
+
+    const fallbackKey = videoIdsKey(fallbackVideos);
+    const rssKey = videoIdsKey(rssVideos);
+
+    if (rssKey !== fallbackKey) {
+      applyVideosToGrid(grid, rssVideos);
+      console.info(
+        `${LOG_PREFIX} Grille mise à jour depuis le flux RSS (${rssVideos.length} vidéo(s)).`
+      );
+    } else {
+      console.info(
+        `${LOG_PREFIX} Flux RSS OK — mêmes vidéos que le repli HTML (${rssVideos.length}).`
+      );
+    }
+
+    return "rss";
   }
 
   function initVideoModal() {
@@ -115,7 +258,15 @@
     const grid = document.querySelector("#video .video-grid");
     if (!grid) return;
 
-    grid.querySelectorAll("[data-video-id]").forEach(enhanceSlot);
+    bindGridInteraction(grid);
+
+    const fallbackVideos = readFallbackVideos(grid);
+    fallbackVideos.forEach((_, i) => {
+      const slot = grid.querySelectorAll("[data-video-id]")[i];
+      if (slot) enhanceSlot(slot);
+    });
+
+    void syncFromRss(grid, fallbackVideos);
   }
 
   if (document.readyState === "loading") {

@@ -592,8 +592,7 @@ p {
   width: fit-content;
   max-width: min(42vw, 220px);
   box-sizing: border-box;
-  padding-block: 12px;
-  padding-inline: 10px;
+  padding: 10px;
   max-height: min(88vh, 420px);
   overflow-x: hidden;
   overflow-y: hidden;
@@ -624,7 +623,7 @@ p {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 6px 8px;
+  padding: 8px;
   white-space: nowrap;
   border-radius: 8px;
   text-shadow: var(--nav-link-shadow);
@@ -725,6 +724,16 @@ audio {
   display: block;
   width: 100%;
   border: 0;
+}
+
+.video-grid--syncing .youtube-thumb {
+  opacity: 0.97;
+}
+
+.instagram-grid--loading {
+  min-height: min(36vw, 220px);
+  opacity: 0.92;
+  transition: opacity 0.2s ease;
 }
 
 .video-grid {
@@ -1315,13 +1324,12 @@ body.youtube-video-modal-open {
   .side-nav {
     right: 0;
     gap: 3px;
-    padding-block: 10px;
-    padding-inline: 8px;
+    padding: 8px;
   }
 
   .nav-link {
     font-size: 0.72rem;
-    padding: 5px 8px;
+    padding: 6px;
   }
 
   @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
@@ -1369,8 +1377,7 @@ body.youtube-video-modal-open {
 
   .side-nav {
     max-height: min(72vh, 340px);
-    padding-block: 10px;
-    padding-inline: 8px;
+    padding: 8px;
     overflow-y: auto;
     scrollbar-gutter: stable;
   }

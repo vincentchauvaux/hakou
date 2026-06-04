@@ -20,7 +20,7 @@
 
   - Touch : glisser le doigt **vers le haut** = suivant (comme la molette).
 
-- **Menu latéral** (`index.html`) : ordre DOM **Contact → … → Intro** (desktop : colonne droite, proche Soleil en haut). Les `data-zone-link` restent 0–7 alignés sur les sections. **Desktop** : `.side-nav` en `width: fit-content`, `align-items: flex-start`, `padding-inline` symétrique, `overflow-y: hidden` (pas de réserve scrollbar) ; liens `width: auto` (évite le vide à droite des libellés courts). Scroll nav seulement en **laptop compact** (`overflow-y: auto`, `scrollbar-gutter: stable`). Grand desktop (`min-height: 821px`) : nav sans scroll. **`syncUI` / `syncNavLinks`** : état actif via `Number(link.dataset.zoneLink)`, **pas** l’index DOM ; **un seul** lien actif à la fois (y compris en transit). Panels : `getPanelZone(panel)` via `data-zone`. Entrée **Visuel** (`data-zone-link="3"`) entre Video et 3D ; **RPG CR** (5) et **Terre** (6) entre 3D et Contact.
+- **Menu latéral** (`index.html`) : ordre DOM **Contact → … → Intro** (desktop : colonne droite, proche Soleil en haut). Les `data-zone-link` restent 0–7 alignés sur les sections. **Desktop** : `.side-nav` en `width: fit-content`, `align-items: flex-start`, `padding` uniforme (10px ; 8px si `≤920px` ou laptop compact), `overflow-y: hidden` (pas de réserve scrollbar) ; `.nav-link` padding carré (8px desktop, 6px resserré) ; liens `width: auto` (évite le vide à droite des libellés courts). Scroll nav seulement en **laptop compact** (`overflow-y: auto`, `scrollbar-gutter: stable`). Grand desktop (`min-height: 821px`) : nav sans scroll. **`syncUI` / `syncNavLinks`** : état actif via `Number(link.dataset.zoneLink)`, **pas** l’index DOM ; **un seul** lien actif à la fois (y compris en transit). Panels : `getPanelZone(panel)` via `data-zone`. Entrée **Visuel** (`data-zone-link="3"`) entre Video et 3D ; **RPG CR** (5) et **Terre** (6) entre 3D et Contact.
 
 - **Mobile (`≤680px`)** : échelle solaire **horizontale en haut** (Neptune à gauche, Soleil implicite au-delà de Mercure à droite ; marqueur `left: calc((1 - var(--scale-progress)) * 100%)`, **8×8 px**, ticks **1×6 px**, jauge `.solar-scale-gauge` en `width`/`left` pendant le glide uniquement). Menu **barre pleine largeur en bas** : pills égaux (`flex: 1`), ordre visuel **Intro → … → Contact** via `order` CSS sur `data-zone-link`. Gutter panels : `--mobile-solar-top` / `--mobile-chrome-top` (rail + safe-area) / `--mobile-chrome-bottom`. **Chrome viewport** : `body::before` (fixe, `z-index: 2`, dégradé opaque `--bg` **sans** `backdrop-filter` — évite le voile clair sous l’échelle au glide) et `body::after` (verre + blur pour la nav bas) masquent le `#overlay` qui translate ; `#solar-scale` (`z-index: 3`, **fond transparent**, pas de pilule verre) et `.side-nav` (`z-index: 4`) au-dessus. `--mobile-chrome-top` = `calc(var(--mobile-solar-top) + 22px)`.
 
@@ -97,6 +97,8 @@
 
 - **Glide radial** (`rectilinearPointRaw`) : interpolation **rayon depuis le Soleil** (slerp direction P0→P1), **up stable** (`GLIDE_TORUS_REVOLUTION` **0**, `GLIDE_RADIAL_Y_BREATHE` **0,004**). **+1 section** = rayon décroissant (vers Soleil) ; **−1** = rayon croissant. Pas de bosse / tore déroutants ; `enforceMinSunViewDistance` sur la trajectoire.
 
+- **Anneaux d'orbite 3D** : `TorusGeometry` (tube **0,01**), `MeshBasicMaterial` **#5a7098**, opacité **0,22** max, blending additif — pas de `depthWrite` ni `renderOrder`. Halo atmosphère : sphère ×1,14, shader rim `depthWrite: false`. **Revert juin 2026** (fix « torus caché par atmosphère ») : retrait occluder profondeur invisible, `depthWrite`/`renderOrder` planètes-halo-torus et anneaux Saturne `depthWrite` — assombrissait toute la scène ; luminosité = état d'avant. Compromis connu : le tore peut à nouveau dessiner devant le halo atmosphère (comme avant le fix).
+
 - **Système solaire (orbites indépendantes)** :
 
   - **Ambiance très calme (juin 2026)** : `PLANET_ORBIT_SPEED_MUL` **0,08** (orbites + `REST_ORBIT_DRIFT`), `PLANET_SPIN_MUL` **0,03** (rotation propre, anneaux, `uTime` shaders), `SCENE_AMBIENT_MOTION_MUL` **0,08** (pulse Soleil, étoiles, wobble cadrage, dérive caméra repos). Ratios relatifs planètes inchangés ; drag orbite manuel (`REST_ORBIT_AZ/EL_SENS`) et glide caméra inchangés.
@@ -137,9 +139,12 @@
 
 | `scene3d.js` | Three.js, caméra, planètes (8 sections) |
 
-| `youtube-videos.js` | Zone Video : vignettes YouTube, modal lecture |
+| `youtube-videos.js` | Zone Video : RSS chaîne au load + repli HTML, vignettes, modal lecture |
 
-| `instagram-gallery.js` | Zone Visuel : grille Instagram 3×2, modales publication + profil |
+| `instagram-gallery.js` | Zone Visuel : JSON local + détection périmètre, grille 3×2, modales |
+
+| `scripts/refresh-instagram-posts.mjs` | Aide rafraîchissement manuel `instagram-posts.json` |
+| `scripts/verify-instagram-shortcodes.mjs` | Vérifie les shortcodes listés (endpoint `…/media/?size=l` → 404 = post retiré) |
 
 | `styles.css` | Thèmes panels (dont `theme-mercury` Contact), crossfade, `#solar-scale` 8 ticks, menu latéral (desktop **fit-content** + liens non étirés ; mobile barre bas + échelle haut + masques chrome ; **laptop compact** masque haut + scroll panel / nav si besoin), composition `.panel-lead` / grilles, **`.video-grid`** : desktop / laptop **2 col.** `minmax(0,1fr)` ; **mobile `≤680px`** **1 col.** (`grid-template-columns: 1fr`) ; `column-gap` / `row-gap` **≥16px**, enfants `.youtube-thumb` / `[data-video-id]` en `min-width: 0` + `width: 100%` ; **↗ vignettes** (`.youtube-thumb-external`, `.instagram-thumb-external`) **`display: none`** — ouverture via clic vignette → modal (handlers JS inchangés) ; **`.instagram-grid`** : gaps alignés, **liens contenu** (`--panel-link` : `#fff` dark/mid/mercury ; texte panel sur `theme-light` Son — pas les `.panel-btn`), **CTA RPG CR** (`.panel-btn--primary` accent fond/bordure ; `--secondary` texte panel), cube CSS 3D preview |
 
@@ -199,7 +204,7 @@ node --check youtube-videos.js
 
 
 
-Site statique sans backend : les médias sont des iframes / liens embarqués, pas de chargement dynamique au runtime.
+Site statique sans backend dédié : SoundCloud / modales Instagram en iframes ; **YouTube** et **liste Instagram** se synchronisent au **chargement** via `fetch` (voir ci-dessous).
 
 
 
@@ -209,9 +214,9 @@ Site statique sans backend : les médias sont des iframes / liens embarqués, pa
 
 | **Son** (`#son`) | [soundcloud.com/hakou](https://soundcloud.com/hakou) | Lecteur iframe via oEmbed SoundCloud — user API `4170372`, hauteur 450 (mode visuel). |
 
-| **Video** (`#video`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` + `.video-grid` : emplacements `[data-video-id]` / `[data-video-title]` (RSS `channel_id=UCmm1lsi4IS7RzwFFhIax3ug` : `AKtcrYIKgkU`, `M836C1DIto4`). Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, overlay lecture. Clic vignette → modal `#youtube-video-modal` (embed `?autoplay=1`). Icône ↗ masquée (CSS) ; pas de lien externe séparé sur la tuile. |
+| **Video** (`#video`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : au load, **repli immédiat** des `[data-video-id]` / `[data-video-title]` dans `index.html`, puis sync **flux RSS** `https://www.youtube.com/feeds/videos.xml?channel_id=UCmm1lsi4IS7RzwFFhIax3ug` (2 dernières vidéos, ordre flux = récent d’abord, dédupliqué par ID). Si CORS bloque le RSS direct, proxy public `api.allorigins.win` ; si échec → HTML inchangé (pas de flash). Logs console `[Hakou YouTube]`. Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, modal `#youtube-video-modal`. |
 
-| **Visuel** (`#visuel`) | [@kat0gat0](https://www.instagram.com/kat0gat0/) | `instagram-gallery.js` + `#instagram-grid` : grille **3×2** pleine largeur (6 vignettes, pas de tuile profil). Miniatures **locales** (`content/instagram-posts.json` → `assets/instagram/thumb-*.jpg`). Clic vignette (photo ou vidéo/reel) → modal `#instagram-post-modal` : corps scrollable (`.instagram-modal__body`, max ~85vh) + iframe `…/p/{code}/embed` ou `…/reel/{code}/embed`. Icône ↗ vignette masquée (CSS) ; `@kat0gat0` et « Voir sur Instagram » → modal `#instagram-profile-modal` (iframe `kat0gat0/embed`, repli lien si blocage). Sans JSON : placeholders + CTA Reels. |
+| **Visuel** (`#visuel`) | [@kat0gat0](https://www.instagram.com/kat0gat0/) | `instagram-gallery.js` : `fetch` **`content/instagram-posts.json`** (`cache: no-store`, max **6** posts, dédupliqué par shortcode). Miniatures **locales** `assets/instagram/thumb-*.jpg` ; oEmbed navigateur en secours (souvent CORS). **Pas de flux IG automatique** au load — détection périmètre : champ `updatedAt`, comparaison `sessionStorage`, logs `[Hakou Instagram]`. Rafraîchissement manuel : `node scripts/refresh-instagram-posts.mjs` (aide + `--touch-updated`). Grille **3×2**, modales post/profil inchangées. |
 
 | **3D** (`#espace-3d`) | Preview locale | Carte `.card-3d` + cube CSS animé (`.mini-scene`, `.cube`, `.face`) — pas d’embed WebGL dans le panel. |
 
@@ -227,11 +232,13 @@ Site statique sans backend : les médias sont des iframes / liens embarqués, pa
 
 
 
-- **YouTube** : IDs dans `data-video-id` sur `#video` ; RSS public pour les rafraîchir hors site (`feeds/videos.xml?channel_id=…`). Lecture sur site via modal (pas d’iframe dans la grille — évite `pointer-events: none` du scroll gating).
+- **YouTube (dynamique)** : au chargement, RSS chaîne `UCmm1lsi4IS7RzwFFhIax3ug` ; repli HTML si fetch/proxy échoue. **CORS** : le flux direct peut être refusé par le navigateur → proxy `allorigins` (tiers, sans clé). Pas de quota API. Mettre à jour les `data-video-id` dans `index.html` si la chaîne change de handle mais garde la même chaîne — optionnel, le RSS prime quand il répond.
 
 - **SoundCloud** : embed officiel ; couleur accent `%237f9dff` dans l’URL du player. Mobile : iframe non interactive (`pointer-events: none`) pour ne pas bloquer le scroll du panel — ouvrir le profil via le lien sous le lecteur.
 
-- **Instagram** : pas d’API Meta sans token. oEmbed : souvent **CORS** / login. **Miniatures** : `curl -L -o assets/instagram/thumb-N.jpg "https://www.instagram.com/p/{SHORTCODE}/media/?size=l"` (reels : shortcode identique, URL `/p/…/media/`). JSON : `{ url, thumbnail, isVideo }`. **Lecture sur site** : modales scrollables + iframe `/embed` (posts/reels et profil `…/kat0gat0/embed`). Tester via serveur HTTP local (`npx serve .` ou équivalent) — `file://` peut bloquer l’iframe. Fermeture : fond, ×, Échap. Pas d’`embed.js` dans la grille.
+- **Instagram (statique + détection)** : pas d’API Meta gratuite côté navigateur. **Liste** : éditer `content/instagram-posts.json` (`updatedAt` ISO + `posts[]`, max **6** vignettes). **Miniatures** : `curl -L -o assets/instagram/thumb-N.jpg "https://www.instagram.com/p/{SHORTCODE}/media/?size=l"` (reels : même shortcode, URL `/p/…/media/`). Après suppression d’un post sur IG : retirer l’entrée du JSON, supprimer le `thumb-N.jpg` orphelin, `node scripts/refresh-instagram-posts.mjs --touch-updated`. **Vérif shortcodes** : `node scripts/verify-instagram-shortcodes.mjs` — `media` en **404** (`text/html`) = publication indisponible (ex. juin 2026 : retrait de `CdodCb2oF46` / `thumb-5.jpg`). oEmbed live : **CORS** / login. Token optionnel : `.env.example` → scripts/cron **serveur** uniquement, jamais dans le repo. **Lecture sur site** : modales + iframe `/embed`. Tester avec `npx serve .` — `file://` bloque JSON/iframes. Script aide : `node scripts/refresh-instagram-posts.mjs`.
+
+- **Clés secrètes** : `.env` gitignoré ; `.env.example` documente `INSTAGRAM_ACCESS_TOKEN`, `YOUTUBE_API_KEY`, `HAKOU_CORS_PROXY_PREFIX` (non lus par les JS du site aujourd’hui).
 
 - **Interaction vidéo zone Video** : plus d’iframe embarquée dans la grille ; vignettes cliquables + modal (comme Instagram Visuel).
 
