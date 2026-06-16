@@ -792,6 +792,175 @@ function onTouchMove(event) {
   }
 }
 
+const EMBED_SCROLL_HOST_SELECTOR =
+  ".soundcloud-embed, .instagram-embed-panel__scroll";
+const EMBED_TOUCH_LAYER_CLASS = "embed-touch-layer";
+const EMBED_SCROLL_LOCK_PX = 8;
+const EMBED_TAP_MAX_MOVE_PX = 12;
+const EMBED_TAP_MAX_MS = 350;
+
+function panelCanScrollBy(panel, delta) {
+  if (!panel || Math.abs(delta) < 0.5) return false;
+  const maxScroll = getPanelMaxScroll(panel);
+  if (delta > 0) {
+    return panel.scrollTop < maxScroll - PANEL_SCROLL_OVERFLOW_EPS;
+  }
+  return panel.scrollTop > PANEL_SCROLL_OVERFLOW_EPS;
+}
+
+function applyPanelScrollDelta(panel, delta) {
+  const maxScroll = getPanelMaxScroll(panel);
+  panel.scrollTop = clamp(panel.scrollTop + delta, 0, maxScroll);
+}
+
+function forwardEmbedTapToIframe(layer, iframe, clientX, clientY) {
+  layer.style.pointerEvents = "none";
+  requestAnimationFrame(() => {
+    const hit = document.elementFromPoint(clientX, clientY);
+    const frame =
+      hit === iframe ? iframe : hit?.tagName === "IFRAME" ? hit : iframe;
+    frame?.dispatchEvent(
+      new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX,
+        clientY,
+      })
+    );
+    requestAnimationFrame(() => {
+      layer.style.pointerEvents = "";
+    });
+  });
+}
+
+function bindEmbedTouchLayer(layer) {
+  const host = layer.parentElement;
+  const iframe = host?.querySelector("iframe") ?? null;
+  let startX = 0;
+  let startY = 0;
+  let lastY = 0;
+  let startMs = 0;
+  let gestureMode = null;
+
+  layer.addEventListener(
+    "touchstart",
+    (event) => {
+      if (!isMobilePanelScroll() || isAnimating || solarScaleDragActive) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      lastY = touch.clientY;
+      startMs = performance.now();
+      gestureMode = null;
+    },
+    { passive: true }
+  );
+
+  layer.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!isMobilePanelScroll() || isAnimating || solarScaleDragActive) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+
+      const panel = host?.closest(".panel");
+      if (!panel?.classList.contains("is-active")) return;
+
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      const stepDy = lastY - touch.clientY;
+
+      if (!gestureMode) {
+        if (
+          Math.abs(dx) < EMBED_SCROLL_LOCK_PX &&
+          Math.abs(dy) < EMBED_SCROLL_LOCK_PX
+        ) {
+          return;
+        }
+        gestureMode = Math.abs(dy) > Math.abs(dx) ? "scroll" : "ignore";
+        if (gestureMode === "ignore") return;
+      }
+      if (gestureMode !== "scroll" || Math.abs(stepDy) < 0.5) return;
+
+      if (!panelCanScrollBy(panel, stepDy)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      applyPanelScrollDelta(panel, stepDy);
+      lastY = touch.clientY;
+      updateTouchScrollStall(panel, stepDy > 0 ? 1 : stepDy < 0 ? -1 : 0);
+    },
+    { passive: false }
+  );
+
+  layer.addEventListener(
+    "touchend",
+    (event) => {
+      if (!isMobilePanelScroll()) return;
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+
+      if (gestureMode === "scroll") {
+        gestureMode = null;
+        return;
+      }
+
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      const elapsed = performance.now() - startMs;
+
+      if (
+        iframe &&
+        Math.abs(dx) < EMBED_TAP_MAX_MOVE_PX &&
+        Math.abs(dy) < EMBED_TAP_MAX_MOVE_PX &&
+        elapsed < EMBED_TAP_MAX_MS
+      ) {
+        forwardEmbedTapToIframe(layer, iframe, touch.clientX, touch.clientY);
+      }
+      gestureMode = null;
+    },
+    { passive: true }
+  );
+
+  layer.addEventListener(
+    "touchcancel",
+    () => {
+      gestureMode = null;
+    },
+    { passive: true }
+  );
+}
+
+function syncEmbedTouchLayers(root) {
+  const hosts = root.querySelectorAll(EMBED_SCROLL_HOST_SELECTOR);
+  if (!isMobilePanelScroll()) {
+    hosts.forEach((host) => {
+      host.querySelector(`.${EMBED_TOUCH_LAYER_CLASS}`)?.remove();
+    });
+    return;
+  }
+
+  hosts.forEach((host) => {
+    let layer = host.querySelector(`.${EMBED_TOUCH_LAYER_CLASS}`);
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.className = EMBED_TOUCH_LAYER_CLASS;
+      layer.setAttribute("aria-hidden", "true");
+      host.appendChild(layer);
+      bindEmbedTouchLayer(layer);
+    }
+  });
+}
+
+function initEmbedPanelScroll(root) {
+  syncEmbedTouchLayers(root);
+  window
+    .matchMedia(PANEL_INTERNAL_SCROLL_MQ)
+    .addEventListener("change", () => syncEmbedTouchLayers(root));
+}
+
 export function initNavigation(root) {
   overlay = root.querySelector("#overlay");
   solarScaleEl = root.querySelector("#solar-scale");
@@ -812,6 +981,7 @@ export function initNavigation(root) {
   });
 
   initSolarScaleInteraction();
+  initEmbedPanelScroll(root);
 
   document.addEventListener("wheel", onWheel, { passive: false, capture: true });
   document.addEventListener("keydown", onKeyDown);

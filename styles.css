@@ -813,6 +813,22 @@ audio {
   pointer-events: auto;
 }
 
+/* Couche scroll synthétique (mobile + laptop compact) — voir navigation.js initEmbedPanelScroll */
+@media (max-width: 680px), (min-width: 681px) and (max-height: 820px) {
+  .soundcloud-embed,
+  .instagram-embed-panel__scroll {
+    position: relative;
+  }
+
+  .embed-touch-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    touch-action: pan-y;
+    background: transparent;
+  }
+}
+
 .instagram-grid--loading {
   min-height: min(36vw, 220px);
 }
@@ -1923,15 +1939,9 @@ body.youtube-video-modal-open {
     height: min(420px, 65vh);
   }
 
-  .soundcloud-embed {
-    /* Scroll panel sur les marges / texte ; iframe interactive ci-dessous. */
-    touch-action: pan-y;
-  }
-
   .soundcloud-embed iframe {
     height: 300px;
     pointer-events: auto;
-    /* Taps play/pause ; le panel garde pan-y hors iframe (stall bord si besoin). */
     touch-action: manipulation;
   }
 
