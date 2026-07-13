@@ -278,3 +278,11 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 
 - **Interaction vidéo zone Video** : plus d’iframe embarquée dans la grille ; vignettes cliquables + modal (comme Instagram Visuel).
 
+## Déploiement (juillet 2026)
+
+- **Prod** : [hakou.be](https://hakou.be) est servi par **GitHub Pages** (`CNAME` → `hakou.be`, DNS `185.199.x.x`). Pas de déploiement VPS pour ce site statique.
+- **Publish** : `git push git@github.com:vincentchauvaux/hakou.git main` (SSH ; le remote HTTPS `origin` peut échouer sans token). Déploiement Pages automatique après push sur `main` (délai cache ~1–10 min).
+- **Build optionnel** : `node scripts/refresh-instagram-posts.mjs --refresh` — met à jour `content/instagram-posts.json` + `assets/instagram/thumb-*.jpg` (token Meta ou permaliens dans `content/instagram-sources.txt`). Pas de bundler / compile JS.
+- **Dev local** : `npx serve .` (pas `file://`).
+- **VPS** (`djgoons` / `nexroof`, `54.76.151.62`) : autres projets ; SSH port 22 **timeout** depuis l’environnement agent (juil. 2026) — ne pas confondre avec hakou.be.
+
