@@ -1634,7 +1634,9 @@ body.youtube-video-modal-open {
 
   #son.panel.is-active,
   #video.panel.is-active,
-  #visuel.panel.is-active {
+  #visuel.panel.is-active,
+  #venus.panel.is-active,
+  #plugin.panel.is-active {
     padding-bottom: calc(var(--compact-chrome-bottom) + min(48px, 8vh));
   }
 }
@@ -1976,7 +1978,9 @@ body.youtube-video-modal-open {
 
   #son.panel.is-active,
   #video.panel.is-active,
-  #visuel.panel.is-active {
+  #visuel.panel.is-active,
+  #venus.panel.is-active,
+  #plugin.panel.is-active {
     padding-bottom: calc(
       var(--mobile-chrome-bottom) + min(80px, 12vh)
     );
