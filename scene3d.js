@@ -431,7 +431,7 @@ const PLANETS = [
     camTangent: 0.4,
   },
   {
-    name: "Venus", // panel UI §5 : RPG CR (corps 3D inchangé)
+    name: "Venus", // panel UI §5 : Sites (corps 3D inchangé)
     orbitRadius: scaledOrbit(10.2),
     size: 0.54,
     color: 0xe8d8a8,

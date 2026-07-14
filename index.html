@@ -46,8 +46,8 @@
         <span class="nav-label">Plugin</span>
       </a>
       <a href="#venus" class="nav-link" data-zone-link="5">
-        <span class="nav-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 19.5 9.5 17.5 19 6.5 19 4.5 9.5Z"/><path d="M12 3.5 19.5 9.5 4.5 9.5Z" fill="currentColor" fill-opacity="0.12" stroke="none"/><path d="M12 3.5 12 12"/><path d="M4.5 9.5 12 12 19.5 9.5"/><path d="M6.5 19 12 12 17.5 19"/></svg></span>
-        <span class="nav-label">RPG CR</span>
+        <span class="nav-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+        <span class="nav-label">Sites</span>
       </a>
       <a href="#espace-3d" class="nav-link" data-zone-link="4">
         <span class="nav-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 20 8v8l-8 5-8-5V8z"/><path d="M12 3v13M4 8l8 5 8-5"/></svg></span>
@@ -203,47 +203,54 @@
 
       <section id="venus" class="panel theme-mid" data-zone="5">
         <div class="panel-lead">
-          <p class="tag">RPG CR</p>
-          <h2>Jeu de rôle assisté par LLM</h2>
+          <p class="tag">Sites</p>
+          <h2>Projets en ligne</h2>
           <p>
-            RPG CR explore un jeu de rôle narratif dans l'univers Hakou, guidé
-            par un modèle de langage tournant en local via LM Studio — pas de
-            cloud obligatoire, une table et une machine suffisent pour lancer
-            une session.
+            Sites web heberges sur le VPS — jeux, outils et experiences du
+            projet Hakou.
           </p>
-          <div class="panel-cta-row">
-            <a
-              href="https://lmstudio.ai/download"
-              class="panel-btn panel-btn--primary"
-              target="_blank"
-              rel="noopener"
-            >
-              <svg
-                class="panel-btn__icon"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
+        </div>
+        <div class="sites-grid">
+          <div class="panel-card site-card">
+            <p class="card-title">RPG CR</p>
+            <p>
+              Jeu de role narratif dans l'univers Hakou, guide par un modele de
+              langage tournant en local via LM Studio.
+            </p>
+            <div class="panel-cta-row">
+              <a
+                href="https://vps-e09ed6db.vps.ovh.net/rpg-cr/"
+                class="panel-btn panel-btn--primary"
+                target="_blank"
+                rel="noopener"
               >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Télécharger LM Studio
-            </a>
-            <a
-              href="https://hakou.be/rpg-cr"
-              class="panel-btn panel-btn--secondary"
-              target="_blank"
-              rel="noopener"
-            >
-              Découvrir RPG CR
-            </a>
+                Ouvrir RPG CR
+              </a>
+              <a
+                href="https://lmstudio.ai/download"
+                class="panel-btn panel-btn--secondary"
+                target="_blank"
+                rel="noopener"
+              >
+                LM Studio
+              </a>
+            </div>
+          </div>
+          <div class="panel-card site-card">
+            <p class="card-title">Hirakana</p>
+            <p>
+              Application web Hirakana — experience interactive du projet Hakou.
+            </p>
+            <div class="panel-cta-row">
+              <a
+                href="https://vps-e09ed6db.vps.ovh.net/hirakana/"
+                class="panel-btn panel-btn--primary"
+                target="_blank"
+                rel="noopener"
+              >
+                Ouvrir Hirakana
+              </a>
+            </div>
           </div>
         </div>
       </section>
