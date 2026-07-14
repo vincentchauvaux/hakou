@@ -391,6 +391,15 @@ function panelAtScrollEnd(panel) {
   );
 }
 
+/** Petit débordement : exiger le scroll max avant changement de section (CTA bas de carte). */
+function panelBottomAllowsSectionGate(panel) {
+  const maxScroll = getPanelMaxScroll(panel);
+  if (maxScroll <= getPanelScrollEdgeBuffer() * 2) {
+    return panelAtScrollEnd(panel);
+  }
+  return panelScrollAtBottom(panel) || panelAtScrollEnd(panel);
+}
+
 function panelNearScrollEnd(panel) {
   const edge = getEffectivePanelScrollEdgeBuffer(panel);
   return (
@@ -429,10 +438,9 @@ function canFeedSectionGate(dir) {
   if (!panel || !panelHasVerticalOverflow(panel)) return true;
   if (dir > 0) {
     return (
-      panelScrollAtBottom(panel) ||
-      panelAtScrollEnd(panel) ||
+      panelBottomAllowsSectionGate(panel) ||
       (touchScrollStallSteps >= MOBILE_TOUCH_SCROLL_STALL_MAX &&
-        panelNearScrollEnd(panel))
+        panelAtScrollEnd(panel))
     );
   }
   if (dir < 0) return panelScrollAtTop(panel);

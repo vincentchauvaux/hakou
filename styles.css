@@ -1635,9 +1635,13 @@ body.youtube-video-modal-open {
   #son.panel.is-active,
   #video.panel.is-active,
   #visuel.panel.is-active,
-  #venus.panel.is-active,
   #plugin.panel.is-active {
     padding-bottom: calc(var(--compact-chrome-bottom) + min(48px, 8vh));
+  }
+
+  #venus.panel.is-active {
+    padding-bottom: calc(var(--compact-chrome-bottom) + min(88px, 14vh));
+    scroll-padding-bottom: calc(var(--compact-chrome-bottom) + min(88px, 14vh));
   }
 }
 
@@ -1979,10 +1983,18 @@ body.youtube-video-modal-open {
   #son.panel.is-active,
   #video.panel.is-active,
   #visuel.panel.is-active,
-  #venus.panel.is-active,
   #plugin.panel.is-active {
     padding-bottom: calc(
       var(--mobile-chrome-bottom) + min(80px, 12vh)
+    );
+  }
+
+  #venus.panel.is-active {
+    padding-bottom: calc(
+      var(--mobile-chrome-bottom) + min(160px, 24vh)
+    );
+    scroll-padding-bottom: calc(
+      var(--mobile-chrome-bottom) + min(160px, 24vh)
     );
   }
 }
