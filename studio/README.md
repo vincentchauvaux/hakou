@@ -31,3 +31,7 @@ sudo nginx -t && sudo systemctl reload nginx
 4. **Client secret** → uniquement `studio/.env` sur le VPS (`GOOGLE_CLIENT_SECRET`), jamais GitHub Pages.
 
 Allowlist défaut : `vincent.chauvaux@gmail.com` (`ALLOWED_EMAILS`).
+
+## Statut Radio public
+
+`GET /api/radio/status` — **sans auth**, CORS vers hakou.be. Détecte un live YouTube Public + archives RSS. Utilisé par [`radio.js`](../radio.js) pour tous les visiteurs.

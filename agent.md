@@ -149,7 +149,7 @@
 
 | `youtube-videos.js` | Zone Video : RSS (pool ~12) → **2 aléatoires** / visite + repli HTML, modal |
 
-| `radio.js` | Zone Radio : lit `content/radio.json` → badge LIVE / hors antenne, embed YouTube, grille archives |
+| `radio.js` | Zone Radio : `content/radio.json` + **API publique** VPS `/api/radio/status` (live YouTube pour **tous** les visiteurs, sans login) + repli RSS archives ; poll ~90 s |
 
 | `instagram-gallery.js` | Zone Visuel : au load, **JSON &lt; 7 j + 6 posts** → grille native immédiate ; sinon découverte client **3 s** (`web_profile_info`, `_sharedData` via allorigins, embed/profil HTML) ; **≥ 1 shortcode** → grille native **3×2 simple** (`…/p/{code}/media/?size=l`, modales post) ; **`.instagram-embed-panel` masqué** dès qu’une grille native s’affiche ; échec → iframe embed **standard** `hakoulik/embed` (~**480–520px**, sans recadrage agressif) ; modale profil via chapô **@hakoulik** ; sync live arrière-plan si grille partielle |
 
@@ -234,7 +234,7 @@ Site statique sans backend dédié : SoundCloud / modales Instagram / Radio YouT
 
 | **Son** (`#son`) | [soundcloud.com/hakou](https://soundcloud.com/hakou) | Lecteur iframe via oEmbed SoundCloud — user API `4170372`, hauteur 450 (mode visuel). |
 
-| **Radio** (`#radio`, `data-zone="2"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) + `content/radio.json` | `radio.js` : badge **LIVE** / Hors antenne ; embed YouTube 16:9 ; grille archives cliquable. **Live** : `live: true` + `liveVideoId` (manuel ou `scripts/refresh-radio-status.mjs` + `YOUTUBE_API_KEY`). **Hors live** : premier archive ou message « prochain set ». Orbite 3D : **Pluton**. **Droits** : Spotify Famille dans Rekordbox ≠ licence de diffusion publique — préférer tracks acquises / sets déjà OK Content ID. **Workflow live** : Rekordbox → BlackHole (audio) + OBS (écran ± cam) → YouTube Live 1080p → mettre à jour `radio.json` + push Pages ; après le set, ajouter l’id VOD dans `archives`. |
+| **Radio** (`#radio`, `data-zone="2"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `radio.js` : badge **LIVE** / Hors antenne ; embed YouTube 16:9 ; archives. **Live public** : l’API VPS `GET /hakou-studio/api/radio/status` (sans auth) détecte un live YouTube **Public** et alimente tous les visiteurs — **pas** lié au login Google intro/studio. Repli : `content/radio.json` + RSS chaîne. **Important** : un live YouTube **privé / non répertorié** n’est visible que pour toi connecté à YouTube — le passer en **Public** pour hakou.be. Orbite 3D : **Pluton**. **Droits** : Spotify Famille dans Rekordbox ≠ licence diffusion publique. **Workflow** : Rekordbox → OBS → YouTube Live **Public** → la page Radio se met à jour seule (poll ~90 s) ; VOD récentes via RSS en archives. |
 
 | **Video** (`#video`, `data-zone="3"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : au load, **repli immédiat** des `[data-video-id]` dans `index.html`, puis sync **flux RSS** `…/feeds/videos.xml?channel_id=UCmm1lsi4IS7RzwFFhIax3ug` — parse **12** entrées récentes, **shuffle → 2** affichées (chaque visite peut différer). CORS : proxy `api.allorigins.win` ; échec → HTML inchangé (`.video-grid--syncing`, opacité ~0,97, pas de flash). Logs `[Hakou YouTube]`. Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, modal `#youtube-video-modal`. |
 
@@ -283,7 +283,7 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 
 - **YouTube (dynamique)** : RSS chaîne `UCmm1lsi4IS7RzwFFhIax3ug`, pool **12** récentes, **2 aléatoires** par chargement (Fisher-Yates). Repli HTML si fetch/proxy échoue. **CORS** : flux direct souvent OK ; sinon proxy `api.allorigins.win` (tiers, sans clé, timeouts possibles). Pas de quota API YouTube Data. `data-video-id` dans `index.html` = filet de sécurité hors-ligne.
 
-- **Radio** : source de vérité `content/radio.json` (pas de détection live côté navigateur sans push). Refresh optionnel : `node scripts/refresh-radio-status.mjs` (`YOUTUBE_API_KEY`). Mobile / laptop compact : `.embed-touch-layer` sur `.radio-player__frame`.
+- **Radio** : sync live **publique** via VPS `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/radio/status` (scrape `/live` + RSS, cache ~45 s ; option `YOUTUBE_API_KEY` sur le VPS). `content/radio.json` porte `statusApi` + repli. Pas de gate login sur la page Radio. Mobile / laptop : `.embed-touch-layer` sur `.radio-player__frame`.
 
 - **SoundCloud** : embed officiel ; couleur accent `%237f9dff` dans l’URL du player. Mobile / laptop compact : `.embed-touch-layer` sur `.soundcloud-embed` — swipe vertical scroll le panel ; tap court tente play via click synthétique sur l’iframe ; repli lien profil sous le lecteur.
 

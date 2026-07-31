@@ -11,6 +11,7 @@ import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getRadioStatus } from "./radio-status.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = join(__dirname, ".env");
@@ -39,6 +40,10 @@ function loadEnv() {
 const env = loadEnv();
 const PORT = Number(env.PORT || 8787);
 const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID || "";
+const YOUTUBE_API_KEY = env.YOUTUBE_API_KEY || "";
+const RADIO_CHANNEL_ID =
+  env.RADIO_CHANNEL_ID || "UCmm1lsi4IS7RzwFFhIax3ug";
+const RADIO_CHANNEL_HANDLE = env.RADIO_CHANNEL_HANDLE || "@MrEtibaliomecus";
 const SESSION_SECRET =
   env.SESSION_SECRET || randomBytes(32).toString("hex");
 const SESSION_COOKIE = env.SESSION_COOKIE_NAME || "hakou_studio_session";
@@ -152,6 +157,29 @@ app.get("/api/health", (_req, res) => {
     googleConfigured: Boolean(GOOGLE_CLIENT_ID),
     allowedCount: ALLOWED_EMAILS.size,
   });
+});
+
+/** Public — statut live + archives pour la page Radio (tous les visiteurs). */
+app.get("/api/radio/status", async (_req, res) => {
+  try {
+    const status = await getRadioStatus({
+      channelId: RADIO_CHANNEL_ID,
+      channelHandle: RADIO_CHANNEL_HANDLE,
+      youtubeApiKey: YOUTUBE_API_KEY || undefined,
+    });
+    res.setHeader("Cache-Control", "public, max-age=30");
+    res.json(status);
+  } catch (err) {
+    console.error("[Hakou Studio] radio status", err.message || err);
+    res.status(502).json({
+      ok: false,
+      live: false,
+      liveVideoId: null,
+      liveTitle: null,
+      archives: [],
+      error: "statut radio indisponible",
+    });
+  }
 });
 
 app.get("/api/auth/config", (_req, res) => {

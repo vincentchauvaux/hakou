@@ -1,5 +1,10 @@
 (() => {
   const RADIO_JSON_URL = "./content/radio.json";
+  const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+  const POLL_MS = 90_000;
+  const ARCHIVE_MAX = 8;
+  const YT_NS_HINT = "yt:videoId";
+
   const THUMB_URL = (id) =>
     `https://img.youtube.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
   const EMBED_URL = (id) =>
@@ -8,6 +13,9 @@
     `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
 
   const LOG = "[Hakou Radio]";
+
+  let pollTimer = null;
+  let lastAppliedKey = "";
 
   function $(id) {
     return document.getElementById(id);
@@ -94,12 +102,139 @@
     });
   }
 
+  function normalizeArchives(list) {
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((a) => a && typeof a.id === "string" && a.id.trim())
+      .map((a) => ({
+        id: a.id.trim(),
+        title:
+          (typeof a.title === "string" && a.title.trim()) || "Set archivé",
+      }))
+      .slice(0, ARCHIVE_MAX);
+  }
+
+  function configKey(data) {
+    return [
+      data.live ? "1" : "0",
+      data.liveVideoId || "",
+      normalizeArchives(data.archives)
+        .map((a) => a.id)
+        .join(","),
+    ].join("|");
+  }
+
   async function loadRadioConfig() {
     const res = await fetch(RADIO_JSON_URL, { cache: "no-store" });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
     return res.json();
+  }
+
+  async function fetchStatusApi(statusApi) {
+    if (!statusApi) return null;
+    const url = String(statusApi).replace(/\/$/, "");
+    const res = await fetch(`${url}?t=${Date.now()}`, {
+      cache: "no-store",
+      mode: "cors",
+    });
+    if (!res.ok) throw new Error(`status API HTTP ${res.status}`);
+    return res.json();
+  }
+
+  async function fetchRssXml(channelId) {
+    const rss = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
+    try {
+      const res = await fetch(rss, { cache: "no-store" });
+      if (res.ok) return await res.text();
+    } catch {
+      /* CORS */
+    }
+    try {
+      const res = await fetch(`${CORS_PROXY}${encodeURIComponent(rss)}`, {
+        cache: "no-store",
+      });
+      if (res.ok) return await res.text();
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  function parseRssArchives(xml, liveId) {
+    if (!xml || !xml.includes(YT_NS_HINT)) return [];
+    const out = [];
+    for (const part of xml.split("<entry>").slice(1)) {
+      const id = part.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)?.[1]?.trim();
+      const title = part
+        .match(/<title>([^<]*)<\/title>/)?.[1]
+        ?.trim()
+        .replace(/&amp;/g, "&");
+      if (!id || id === liveId) continue;
+      out.push({ id, title: title || "Set archivé" });
+      if (out.length >= ARCHIVE_MAX) break;
+    }
+    return out;
+  }
+
+  async function resolveRadioData(base) {
+    const channelId = base.channelId || "UCmm1lsi4IS7RzwFFhIax3ug";
+    const statusApi =
+      base.statusApi ||
+      "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/radio/status";
+
+    let live = Boolean(base.live) && Boolean(base.liveVideoId);
+    let liveVideoId = live ? String(base.liveVideoId).trim() : null;
+    let liveTitle =
+      (typeof base.liveTitle === "string" && base.liveTitle.trim()) || null;
+    let archives = normalizeArchives(base.archives);
+    let source = "radio.json";
+
+    try {
+      const remote = await fetchStatusApi(statusApi);
+      if (remote && remote.ok !== false) {
+        source = remote.source || "status-api";
+        if (remote.live && remote.liveVideoId) {
+          live = true;
+          liveVideoId = String(remote.liveVideoId).trim();
+          liveTitle =
+            (typeof remote.liveTitle === "string" && remote.liveTitle.trim()) ||
+            "Mix en direct";
+        } else {
+          live = false;
+          liveVideoId = null;
+          liveTitle = null;
+        }
+        const remoteArchives = normalizeArchives(remote.archives);
+        if (remoteArchives.length) archives = remoteArchives;
+      }
+    } catch (err) {
+      console.warn(LOG, "status API indisponible — repli local/RSS", err);
+    }
+
+    if (!archives.length) {
+      try {
+        const xml = await fetchRssXml(channelId);
+        const fromRss = parseRssArchives(xml, liveVideoId);
+        if (fromRss.length) {
+          archives = fromRss;
+          if (source === "radio.json") source = "rss";
+        }
+      } catch (err) {
+        console.warn(LOG, "RSS archives", err);
+      }
+    }
+
+    return {
+      ...base,
+      channelId,
+      live,
+      liveVideoId,
+      liveTitle,
+      archives,
+      source,
+    };
   }
 
   function applyConfig(data) {
@@ -109,9 +244,8 @@
     const grid = $("radio-archives-grid");
     if (!frame) return;
 
-    const archives = Array.isArray(data.archives)
-      ? data.archives.filter((a) => a && typeof a.id === "string" && a.id.trim())
-      : [];
+    const key = configKey(data);
+    const archives = normalizeArchives(data.archives);
     const live =
       Boolean(data.live) &&
       typeof data.liveVideoId === "string" &&
@@ -120,6 +254,12 @@
     const liveTitle =
       (typeof data.liveTitle === "string" && data.liveTitle.trim()) ||
       "Mix en direct";
+
+    // Évite de recharger l’iframe si rien n’a changé (poll)
+    if (key === lastAppliedKey && frame.querySelector("iframe")) {
+      return;
+    }
+    lastAppliedKey = key;
 
     let activeId = null;
 
@@ -158,19 +298,27 @@
     }
 
     console.info(LOG, liveId ? `live ${liveId}` : `${archives.length} archive(s)`, {
+      source: data.source || "local",
       watch: activeId ? WATCH_URL(activeId) : null,
     });
   }
 
-  async function init() {
+  async function refresh() {
     try {
       if (!$("radio")) return;
-      const data = await loadRadioConfig();
-      applyConfig(data || {});
+      const base = await loadRadioConfig();
+      const data = await resolveRadioData(base || {});
+      applyConfig(data);
     } catch (err) {
       console.warn(LOG, "config indisponible", err);
       setStatus("offline", "Prochain set à venir");
     }
+  }
+
+  async function init() {
+    await refresh();
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(refresh, POLL_MS);
   }
 
   if (document.readyState === "loading") {
