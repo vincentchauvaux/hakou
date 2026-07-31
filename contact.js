@@ -61,7 +61,8 @@
     if (!anchor || !user || !domain) return;
     const email = `${user}@${domain}`;
     anchor.href = `mailto:${email}`;
-    anchor.textContent = email;
+    anchor.setAttribute("aria-label", `E-mail ${email}`);
+    anchor.title = email;
     anchor.removeAttribute("data-contact-email");
   }
 
