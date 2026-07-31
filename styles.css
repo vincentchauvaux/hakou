@@ -38,6 +38,11 @@
   --panel-block-gap: clamp(1rem, 2.5vh, 1.5rem);
 }
 
+body[data-intro="pending"],
+body[data-intro="playing"] {
+  background: #000;
+}
+
 /* —— Intro gate —— */
 .intro-gate {
   position: fixed;
