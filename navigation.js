@@ -721,30 +721,6 @@ function feedGate(dir, amount) {
   }
 }
 
-/**
- * Direction de section pour la molette.
- * Sans scroll interne (ou panel sans débordement) : modèle spatial inversé
- * (molette haut → suivant). Avec débordement panel : chaîne alignée sur le
- * contenu (continuer vers le bas en bas de page → section suivante) — évite
- * le blocage Radio / Son / etc. après un scroll contenu vers le bas.
- */
-function sectionDirFromWheelDelta(deltaY) {
-  if (Math.abs(deltaY) < 0.5) return 0;
-  if (isMobilePanelScroll()) {
-    const panel = getActivePanel();
-    if (panel && panelHasVerticalOverflow(panel)) {
-      return deltaY > 0 ? 1 : -1;
-    }
-  }
-  return deltaY < 0 ? 1 : deltaY > 0 ? -1 : 0;
-}
-
-function activePanelHasOverflow() {
-  if (!isMobilePanelScroll()) return false;
-  const panel = getActivePanel();
-  return Boolean(panel && panelHasVerticalOverflow(panel));
-}
-
 function onWheel(event) {
   if (navigationLocked) {
     event.preventDefault();
@@ -758,7 +734,29 @@ function onWheel(event) {
   }
 
   const delta = event.deltaY;
-  const dir = sectionDirFromWheelDelta(delta);
+  if (Math.abs(delta) < 0.5) return;
+
+  // Panel avec débordement : laisser le scroll natif tant qu’il reste du contenu
+  // dans le sens du geste ; au bord, enchaîner la section (bas→suivant, haut→précédent).
+  if (isMobilePanelScroll()) {
+    const panel = getActivePanel();
+    if (panel && panelHasVerticalOverflow(panel)) {
+      if (panelCanScrollBy(panel, delta)) {
+        if (mobileEdgeChargeDir !== 0) resetMobileEdgeCharge();
+        return;
+      }
+      const dir = delta > 0 ? 1 : -1;
+      if (!canMove(dir) || !canFeedSectionGate(dir)) return;
+      event.preventDefault();
+      const amount = Math.abs(delta);
+      if (!accumulateMobileEdgeCharge(dir, amount, { touch: false })) return;
+      feedGate(dir, MOBILE_EDGE_GATE_PULSE);
+      return;
+    }
+  }
+
+  // Sans débordement : modèle spatial (molette haut → section suivante).
+  const dir = delta < 0 ? 1 : delta > 0 ? -1 : 0;
   if (!dir || !canMove(dir)) {
     if (!isMobilePanelScroll()) event.preventDefault();
     return;
@@ -775,15 +773,35 @@ function onWheel(event) {
 function onKeyDown(event) {
   if (navigationLocked || solarScaleDragActive || isAnimating) return;
 
-  const contentAlign = activePanelHasOverflow();
   let dir = 0;
+  let contentDelta = 0;
   if (["ArrowUp", "PageUp"].includes(event.key)) {
-    dir = contentAlign ? -1 : 1;
+    dir = 1;
+    contentDelta = -1;
   } else if (["ArrowDown", "PageDown", " "].includes(event.key)) {
-    dir = contentAlign ? 1 : -1;
+    dir = -1;
+    contentDelta = 1;
   }
 
   if (!dir) return;
+
+  if (isMobilePanelScroll()) {
+    const panel = getActivePanel();
+    if (panel && panelHasVerticalOverflow(panel)) {
+      if (panelCanScrollBy(panel, contentDelta)) {
+        event.preventDefault();
+        applyPanelScrollDelta(
+          panel,
+          contentDelta * Math.min(panel.clientHeight * 0.85, 280)
+        );
+        if (mobileEdgeChargeDir !== 0) resetMobileEdgeCharge();
+        return;
+      }
+      // Au bord : bas→suivant, haut→précédent (aligné contenu).
+      dir = contentDelta > 0 ? 1 : -1;
+    }
+  }
+
   if (!canMove(dir)) return;
   if (!canFeedSectionGate(dir)) return;
 
