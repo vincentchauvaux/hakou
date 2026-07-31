@@ -826,12 +826,19 @@ p {
   overflow-x: hidden;
   overflow-y: hidden;
   overscroll-behavior: contain;
+  scrollbar-width: none;
   border-radius: 14px 0 0 14px;
   background: var(--nav-glass-bg);
   border: 1px solid var(--nav-glass-border);
   border-right: none;
   box-shadow: var(--nav-glass-shadow);
   pointer-events: auto;
+}
+
+.side-nav::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
@@ -1917,7 +1924,14 @@ body.youtube-video-modal-open {
     max-height: min(72vh, 340px);
     padding: 8px;
     overflow-y: auto;
-    scrollbar-gutter: stable;
+    scrollbar-width: none;
+    scrollbar-gutter: auto;
+  }
+
+  .side-nav::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   .panel {

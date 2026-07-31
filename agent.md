@@ -305,10 +305,10 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 
 Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Neptune.
 
-- **Assets** : [`assets/logo-hakou.svg`](assets/logo-hakou.svg) (texture intro ; fond artboard retiré pour transparence) ; PNG `logo-hakou.png` conservé en secours ; nébuleuses [`assets/nebula/nebula-a.png`](assets/nebula/nebula-a.png) … `c.png`.
-- **Scène** (`scene3d.js`) : groupe `introGate` — plan logo (texture transparente, léger boil) + 3 plans nébuleuse additive. Caméra gate devant le logo, alignée vers le cadrage héro §0. `startIntroGateZoom` (~3,4 s) : avance à travers le logo, nébuleuses s’écartent, arrive sur `sectionCameras[0]`.
+- **Assets** : [`assets/logo-hakou.svg`](assets/logo-hakou.svg) chargé via **`SVGLoader`** → formes `ShapeGeometry` (vrai vectoriel 3D, pas une texture bitmap) ; PNG `logo-hakou.png` conservé en secours ; nébuleuses [`assets/nebula/nebula-a.png`](assets/nebula/nebula-a.png) … `c.png`.
+- **Scène** (`scene3d.js`) : groupe `introGate` — logo SVG vectoriel (groupe de meshes blancs) + 3 plans nébuleuse additive. Caméra gate devant le logo, alignée vers le cadrage héro §0. `startIntroGateZoom` (~3,4 s) : avance à travers le logo, nébuleuses s’écartent, arrive sur `sectionCameras[0]`.
 - **UI** (`#intro-gate`) : hit-area `#intro-enter` centrée, hint « Cliquer le logo pour entrer », bouton `#intro-login` haut-droite. Bouton **`#intro-replay`** bas-gauche (petit, visible seulement si `data-intro="done"`) → `replayIntroGate()` : clear `sessionStorage`, `goToSectionIndex(0)`, réaffiche le gate 3D.
-- **État** : `body[data-intro="pending"|"playing"|"done"]` masque nav / échelle / overlay pendant pending+playing. `sessionStorage` clé `hakou-intro-done` : skip au refresh de session. `setNavigationLocked(true)` bloque molette / clavier / touch / menu.
+- **État** : `body[data-intro="pending"|"playing"|"done"]` masque nav / échelle / overlay pendant pending+playing. `sessionStorage` clé `hakou-intro-done` : skip au refresh de session. `setNavigationLocked(true)` bloque molette / clavier / touch / menu. **Menu latéral** : scrollbar masquée aussi en laptop compact (`scrollbar-width: none` / `::-webkit-scrollbar`).
 - **Auth Google (Étape 2)** :
   - Client : [`auth-client.js`](auth-client.js) + GIS ; config publique [`content/auth-config.json`](content/auth-config.json) — **Client ID** renseigné (`245439358451-…apps.googleusercontent.com`), `authApiBase` / `studioUrl` → `https://vps-e09ed6db.vps.ovh.net/hakou-studio`, allowlist `vincent.chauvaux@gmail.com`.
   - Serveur VPS : `/opt/hakou-studio` (code + `pm2` `hakou-studio` :8787). `POST /api/auth/google` vérifie l’ID token GIS, cookie HttpOnly `SameSite=None; Secure` path `/hakou-studio`.

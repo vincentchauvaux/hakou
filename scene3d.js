@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 
 const SECTION_COUNT = 9;
 const STAR_COUNT = 2800;
@@ -2453,6 +2454,99 @@ function easeInOutCubicLocal(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+function setIntroLogoOpacity(opacity) {
+  if (!introLogoMesh) return;
+  const o = clamp(opacity, 0, 1);
+  introLogoMesh.traverse((obj) => {
+    if (!obj.isMesh || !obj.material) return;
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    mats.forEach((mat) => {
+      mat.transparent = true;
+      mat.opacity = o;
+      mat.needsUpdate = true;
+    });
+  });
+  introLogoMesh.visible = o > 0.02;
+}
+
+function disposeIntroLogo() {
+  if (!introLogoMesh) return;
+  introLogoMesh.traverse((obj) => {
+    if (!obj.isMesh) return;
+    obj.geometry?.dispose();
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    mats.forEach((mat) => {
+      mat?.map?.dispose?.();
+      mat?.dispose?.();
+    });
+  });
+  introLogoMesh = null;
+}
+
+function buildIntroLogoFromSvg(data) {
+  const content = new THREE.Group();
+  content.name = "introLogoContent";
+  let order = 12;
+
+  for (const path of data.paths) {
+    const style = path.userData?.style || {};
+    const fill = style.fill;
+    if (!fill || fill === "none") continue;
+
+    const color = new THREE.Color();
+    try {
+      color.setStyle(fill);
+    } catch {
+      color.set(0xffffff);
+    }
+
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: style.fillOpacity ?? 1,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+
+    const shapes = SVGLoader.createShapes(path);
+    for (const shape of shapes) {
+      const geometry = new THREE.ShapeGeometry(shape, 24);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.renderOrder = order++;
+      content.add(mesh);
+    }
+  }
+
+  if (!content.children.length) {
+    throw new Error("SVG logo sans formes");
+  }
+
+  // Centrer + inverser Y (SVG → Three)
+  const box = new THREE.Box3().setFromObject(content);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  content.position.set(-center.x, -center.y, -center.z);
+  content.scale.y *= -1;
+
+  const boxFlip = new THREE.Box3().setFromObject(content);
+  const centerFlip = boxFlip.getCenter(new THREE.Vector3());
+  content.position.x -= centerFlip.x;
+  content.position.y -= centerFlip.y;
+
+  const root = new THREE.Group();
+  root.name = "introLogo";
+  root.add(content);
+
+  const targetH = 3.4;
+  const s = targetH / Math.max(size.y, 0.001);
+  root.scale.setScalar(s);
+  introGateLogoBaseScale = s;
+  introLogoMesh = root;
+  introGateGroup.add(introLogoMesh);
+  layoutIntroGate();
+}
+
 function buildIntroGate() {
   if (!scene || introGateGroup) return;
   introGateGroup = new THREE.Group();
@@ -2460,33 +2554,21 @@ function buildIntroGate() {
   introGateGroup.visible = false;
   scene.add(introGateGroup);
 
-  const loader = new THREE.TextureLoader();
-  loader.load(
+  const svgLoader = new SVGLoader();
+  svgLoader.load(
     INTRO_LOGO_URL,
-    (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() ?? 4);
-      const aspect = (tex.image?.width || 390) / (tex.image?.height || 340);
-      const h = 3.4;
-      const w = h * aspect;
-      const geo = new THREE.PlaneGeometry(w, h);
-      const mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        toneMapped: false,
-      });
-      introLogoMesh = new THREE.Mesh(geo, mat);
-      introLogoMesh.renderOrder = 12;
-      introGateGroup.add(introLogoMesh);
-      introGateLogoBaseScale = 1;
-      layoutIntroGate();
+    (data) => {
+      try {
+        buildIntroLogoFromSvg(data);
+      } catch (err) {
+        console.warn("[Hakou Intro] SVG vectoriel", err);
+      }
     },
     undefined,
-    (err) => console.warn("[Hakou Intro] logo introuvable", err)
+    (err) => console.warn("[Hakou Intro] logo SVG introuvable", err)
   );
 
+  const loader = new THREE.TextureLoader();
   INTRO_NEBULA_URLS.forEach((url, i) => {
     loader.load(
       url,
@@ -2605,8 +2687,7 @@ function updateIntroGate(elapsed) {
     const through = clamp((t - 0.35) / 0.45, 0, 1);
     const scale = introGateLogoBaseScale * (1 + through * 14);
     introLogoMesh.scale.setScalar(scale);
-    introLogoMesh.material.opacity = 1 - clamp((t - 0.55) / 0.35, 0, 1);
-    introLogoMesh.visible = introLogoMesh.material.opacity > 0.02;
+    setIntroLogoOpacity(1 - clamp((t - 0.55) / 0.35, 0, 1));
   }
 
   // Nébuleuses s’écartent
@@ -2651,9 +2732,9 @@ export function setIntroGateActive(active) {
   introGateZooming = false;
   if (introGateGroup) introGateGroup.visible = introGateActive;
   if (introLogoMesh) {
-    introLogoMesh.visible = true;
-    introLogoMesh.material.opacity = 1;
+    setIntroLogoOpacity(1);
     introLogoMesh.scale.setScalar(introGateLogoBaseScale);
+    introLogoMesh.rotation.z = 0;
   }
   introNebulaMeshes.forEach((mesh) => {
     mesh.material.opacity = mesh.userData.baseOpacity ?? 0.4;
@@ -2680,11 +2761,7 @@ function disposeIntroGate() {
   introGateActive = false;
   introGateZooming = false;
   introGateOnComplete = null;
-  if (introLogoMesh) {
-    introLogoMesh.geometry?.dispose();
-    introLogoMesh.material?.map?.dispose();
-    introLogoMesh.material?.dispose();
-  }
+  disposeIntroLogo();
   introNebulaMeshes.forEach((mesh) => {
     mesh.geometry?.dispose();
     mesh.material?.map?.dispose();
@@ -2694,7 +2771,6 @@ function disposeIntroGate() {
     scene?.remove(introGateGroup);
   }
   introGateGroup = null;
-  introLogoMesh = null;
   introNebulaMeshes = [];
 }
 
