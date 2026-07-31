@@ -12,6 +12,13 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRadioStatus } from "./radio-status.mjs";
+import {
+  appendContactInbox,
+  checkRateLimit,
+  deliverContactEmail,
+  getClientIp,
+  validateContactPayload,
+} from "./contact.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = join(__dirname, ".env");
@@ -75,6 +82,13 @@ const CORS_ORIGINS = new Set(
     .split(",")
     .map((o) => o.trim())
     .filter(Boolean)
+);
+const CONTACT_TO = String(
+  env.CONTACT_TO || "vincent.chauvaux@gmail.com"
+).trim();
+const CONTACT_RATE_MAX = Number(env.CONTACT_RATE_MAX || 3);
+const CONTACT_RATE_WINDOW_MS = Number(
+  env.CONTACT_RATE_WINDOW_MS || 60 * 60 * 1000
 );
 
 const googleClient = GOOGLE_CLIENT_ID
@@ -197,6 +211,63 @@ app.get("/api/radio/status", async (_req, res) => {
       archives: [],
       error: "statut radio indisponible",
     });
+  }
+});
+
+/**
+ * Public — formulaire Contact (honeypot + filtres + rate-limit).
+ * Honeypot / trop rapide : 200 silencieux (ne pas tipper les bots).
+ */
+app.post("/api/contact", async (req, res) => {
+  const ip = getClientIp(req);
+  const parsed = validateContactPayload(req.body || {});
+
+  if (!parsed.ok && parsed.soft) {
+    res.json({ ok: true });
+    return;
+  }
+  if (!parsed.ok) {
+    res.status(400).json({ ok: false, error: parsed.error });
+    return;
+  }
+
+  if (!checkRateLimit(ip, { max: CONTACT_RATE_MAX, windowMs: CONTACT_RATE_WINDOW_MS })) {
+    res.status(429).json({
+      ok: false,
+      error: "Trop de messages. Réessaie dans une heure.",
+    });
+    return;
+  }
+
+  const entry = {
+    ...parsed.data,
+    ip,
+    ua: String(req.headers["user-agent"] || "").slice(0, 200),
+    at: new Date().toISOString(),
+  };
+
+  try {
+    appendContactInbox(entry);
+  } catch (err) {
+    console.error("[Hakou Studio] contact inbox", err.message || err);
+  }
+
+  try {
+    const delivery = await deliverContactEmail(env, parsed.data);
+    if (delivery.sent) {
+      res.json({ ok: true, delivered: true });
+      return;
+    }
+    console.warn("[Hakou Studio] contact email skip:", delivery.reason);
+    res.json({
+      ok: true,
+      delivered: false,
+      queued: true,
+      to: CONTACT_TO,
+    });
+  } catch (err) {
+    console.error("[Hakou Studio] contact mail", err.message || err);
+    res.json({ ok: true, delivered: false, queued: true });
   }
 });
 

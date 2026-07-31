@@ -1,5 +1,7 @@
 ﻿node_modules/
 .env
+studio/.env
+studio/data/
 **/client_secret*.json
 *.apps.googleusercontent.com.json
 .DS_Store

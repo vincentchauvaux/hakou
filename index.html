@@ -514,12 +514,76 @@
               >@MrEtibaliomecus</a
             ><br />
             SoundCloud:
-            <a href="https://soundcloud.com/hakou" target="_blank" rel="noopener noreferrer">hakou</a>
+            <a href="https://soundcloud.com/hakou" target="_blank" rel="noopener noreferrer">hakou</a
+            ><br />
+            E-mail :
+            <a
+              href="#"
+              data-contact-email
+              class="contact-email-link"
+              >écrire à Hakou</a
+            >
           </p>
         </div>
-        <div class="panel-card">
-          <p class="card-title">Disponibilite</p>
-          <p>Projets artistiques, direction sonore, clips et experiences immersives.</p>
+        <div class="panel-card contact-card">
+          <p class="card-title">Écrire un message</p>
+          <p class="contact-card__lead">
+            Projets artistiques, direction sonore, clips et experiences immersives.
+          </p>
+          <form id="contact-form" class="contact-form" novalidate>
+            <input type="hidden" name="filledAt" value="" />
+            <!-- Honeypot anti-bot : doit rester vide -->
+            <div class="contact-form__honey" aria-hidden="true">
+              <label for="contact-company">Company</label>
+              <input
+                type="text"
+                id="contact-company"
+                name="company"
+                tabindex="-1"
+                autocomplete="off"
+              />
+            </div>
+            <label class="contact-form__field">
+              <span>Nom</span>
+              <input
+                type="text"
+                name="name"
+                required
+                maxlength="80"
+                autocomplete="name"
+                placeholder="Ton nom"
+              />
+            </label>
+            <label class="contact-form__field">
+              <span>E-mail</span>
+              <input
+                type="email"
+                name="email"
+                required
+                maxlength="120"
+                autocomplete="email"
+                placeholder="toi@exemple.com"
+              />
+            </label>
+            <label class="contact-form__field">
+              <span>Message</span>
+              <textarea
+                name="message"
+                required
+                maxlength="2000"
+                rows="4"
+                placeholder="Parle-moi du projet…"
+              ></textarea>
+            </label>
+            <button
+              type="submit"
+              id="contact-form-submit"
+              class="panel-btn panel-btn--primary contact-form__submit"
+            >
+              Envoyer
+            </button>
+            <p id="contact-form-status" class="contact-form__status" hidden></p>
+          </form>
         </div>
       </section>
     </div>
@@ -616,6 +680,7 @@
     <script src="./youtube-videos.js" defer></script>
     <script src="./radio.js" defer></script>
     <script src="./instagram-gallery.js" defer></script>
+    <script src="./contact.js" defer></script>
     <script type="module" src="./main.js"></script>
   </body>
 </html>

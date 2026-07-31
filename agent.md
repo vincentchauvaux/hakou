@@ -153,6 +153,12 @@
 
 | `radio.js` | Zone Radio : `content/radio.json` + **API publique** VPS `/api/radio/status` — priorité **studio HLS** (MediaMTX) → live YouTube → archives RSS ; poll ~20 s ; player `hls.js` si `studioLive` |
 
+| `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |
+
+| `content/contact-config.json` | `contactApi`, parties e-mail (`emailUser` / `emailDomain`) |
+
+| `studio/contact.mjs` | Validation serveur, rate-limit, inbox JSONL, envoi SMTP (nodemailer) |
+
 | `instagram-gallery.js` | Zone Visuel : au load, **JSON &lt; 7 j + 6 posts** → grille native immédiate ; sinon découverte client **3 s** (`web_profile_info`, `_sharedData` via allorigins, embed/profil HTML) ; **≥ 1 shortcode** → grille native **3×2 simple** (`…/p/{code}/media/?size=l`, modales post) ; **`.instagram-embed-panel` masqué** dès qu’une grille native s’affiche ; échec → iframe embed **standard** `hakoulik/embed` (~**480–520px**, sans recadrage agressif) ; modale profil via chapô **@hakoulik** ; sync live arrière-plan si grille partielle |
 
 | `scripts/refresh-instagram-posts.mjs` | Pipeline `--refresh` (Graph API / scrape / sources → JSON + thumbs) ; `--playwright` (dev local, Chromium) ; `--touch-updated`, `--download-thumbs` |
@@ -201,6 +207,8 @@
 
 node --check radio.js
 
+node --check contact.js
+
 node --check youtube-videos.js
 
 node --check instagram-gallery.js
@@ -248,7 +256,7 @@ Site statique sans backend dédié : SoundCloud / modales Instagram / Radio YouT
 
 | **Plugin** (`#plugin`, `data-zone="7"`) | GitHub | Quatre boutons `.panel-btn` (`target="_blank"`, `rel="noopener"`) : **Hakou Dark Mode** (`#plugin-1`) → `https://github.com/vincentchauvaux/og-elementor-dark-mode/tree/cursor/wporg-publication-prep` ; **OG Time Tab** (`#plugin-2`) → `https://github.com/vincentchauvaux/og-time-tab/archive/refs/heads/master.zip` (`href` + `data-github-zip`, `download`) ; **Hakou Lighthouse** (`#plugin-3`) → `https://github.com/vincentchauvaux/Lighthouse` ; **Space H** (`#plugin-4`) → `https://github.com/vincentchauvaux/spaceh`. Nav **Plugin** ; icône mobile prise. Orbite 3D : Terre inchangée (`section: 7`). |
 
-| **Contact** (`#contact`, `data-zone="8"`) | Liens réseaux | Instagram `@hakoulik`, YouTube `@MrEtibaliomecus`, SoundCloud `hakou`. Thème `theme-mercury` (surface rocheuse, Soleil visible en 3D à l'horizon uniquement). |
+| **Contact** (`#contact`, `data-zone="8"`) | Liens + formulaire | Instagram `@hakoulik`, YouTube `@MrEtibaliomecus`, SoundCloud `hakou`, e-mail **vincent.chauvaux@gmail.com** (révélé en JS via `content/contact-config.json`). Formulaire `contact.js` → `POST /hakou-studio/api/contact` : **honeypot** `company`, délai min. ~1,8 s, filtres nom/e-mail/message (longueur, ≤2 URLs, blocklist spam), rate-limit **3/h/IP**. Inbox fichier `studio/data/contact-messages.jsonl` + e-mail SMTP optionnel (`CONTACT_SMTP_*`, nodemailer). Thème `theme-mercury`. |
 
 
 
