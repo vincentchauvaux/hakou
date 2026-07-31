@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hakou Studio — Partage écran</title>
+    <link rel="stylesheet" href="./studio.css" />
+  </head>
+  <body class="studio-body">
+    <header class="studio-top">
+      <p class="tag">Studio Radio</p>
+      <div class="studio-top__actions">
+        <span id="studio-user" class="studio-user"></span>
+        <button type="button" id="studio-logout" class="studio-btn studio-btn--ghost">
+          Déconnexion
+        </button>
+      </div>
+    </header>
+
+    <main class="studio-card studio-card--wide">
+      <h1>Partage d’écran + son</h1>
+      <p>
+        Connecté. L’ingest live (MediaMTX / WHIP) arrive à l’étape 3 — pour
+        l’instant cette page confirme l’auth et prépare les permissions
+        navigateur.
+      </p>
+
+      <div class="studio-preview">
+        <video id="studio-preview" playsinline muted autoplay></video>
+        <p id="studio-preview-empty" class="studio-preview__empty">
+          Aucun flux local — lance un test de capture.
+        </p>
+      </div>
+
+      <div class="studio-actions">
+        <button type="button" id="studio-start" class="studio-btn studio-btn--primary">
+          Tester écran + son
+        </button>
+        <button type="button" id="studio-stop" class="studio-btn studio-btn--ghost" disabled>
+          Arrêter
+        </button>
+      </div>
+      <p id="studio-status" class="muted" role="status"></p>
+    </main>
+
+    <script type="module" src="./studio.js"></script>
+  </body>
+</html>

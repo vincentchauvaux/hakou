@@ -17,8 +17,30 @@
       }
     </script>
   </head>
-  <body>
+  <body data-intro="pending">
     <canvas id="three-canvas" aria-hidden="true"></canvas>
+
+    <div id="intro-gate" class="intro-gate" role="dialog" aria-modal="true" aria-labelledby="intro-hint">
+      <button
+        type="button"
+        id="intro-login"
+        class="intro-login"
+        aria-label="Se connecter"
+        title="Se connecter"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </button>
+      <button
+        type="button"
+        id="intro-enter"
+        class="intro-enter"
+        aria-label="Entrer sur le site"
+      ></button>
+      <p id="intro-hint" class="intro-hint">Cliquer le logo pour entrer</p>
+    </div>
 
     <div id="solar-scale" class="solar-scale" aria-hidden="true">
       <div class="solar-scale-track">

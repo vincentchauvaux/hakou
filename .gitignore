@@ -1,3 +1,5 @@
 ﻿node_modules/
 .env
+**/client_secret*.json
+*.apps.googleusercontent.com.json
 .DS_Store

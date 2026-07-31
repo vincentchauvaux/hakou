@@ -1225,6 +1225,7 @@ function orbitToPos(lookAt, radius, azimuth, elevation, out) {
 
 function canOrbitDrag() {
   return (
+    !introGateActive &&
     !lastGlideAnimating &&
     lastSettleT >= 1 &&
     introSnapFrames >= INTRO_SNAP_FRAMES
@@ -2424,6 +2425,279 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
   }
 }
 
+/* —— Intro gate (logo plan + nébuleuses + zoom caméra) —— */
+const INTRO_GATE_MS = 3400;
+const INTRO_LOGO_URL = "./assets/logo-hakou.png";
+const INTRO_NEBULA_URLS = [
+  "./assets/nebula/nebula-a.png",
+  "./assets/nebula/nebula-b.png",
+  "./assets/nebula/nebula-c.png",
+];
+
+let introGateActive = false;
+let introGateGroup = null;
+let introLogoMesh = null;
+let introNebulaMeshes = [];
+let introGateZooming = false;
+let introGateZoomStartMs = 0;
+let introGateOnComplete = null;
+let introGateCamStart = new THREE.Vector3();
+let introGateCamEnd = new THREE.Vector3();
+let introGateLookStart = new THREE.Vector3();
+let introGateLookEnd = new THREE.Vector3();
+let introGateLogoBaseScale = 1;
+const introGateTmp = new THREE.Vector3();
+const introGateTmpB = new THREE.Vector3();
+
+function easeInOutCubicLocal(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function buildIntroGate() {
+  if (!scene || introGateGroup) return;
+  introGateGroup = new THREE.Group();
+  introGateGroup.name = "introGate";
+  introGateGroup.visible = false;
+  scene.add(introGateGroup);
+
+  const loader = new THREE.TextureLoader();
+  loader.load(
+    INTRO_LOGO_URL,
+    (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() ?? 4);
+      const aspect = (tex.image?.width || 267) / (tex.image?.height || 150);
+      const h = 3.4;
+      const w = h * aspect;
+      const geo = new THREE.PlaneGeometry(w, h);
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+      });
+      introLogoMesh = new THREE.Mesh(geo, mat);
+      introLogoMesh.renderOrder = 12;
+      introGateGroup.add(introLogoMesh);
+      introGateLogoBaseScale = 1;
+      layoutIntroGate();
+    },
+    undefined,
+    (err) => console.warn("[Hakou Intro] logo introuvable", err)
+  );
+
+  INTRO_NEBULA_URLS.forEach((url, i) => {
+    loader.load(
+      url,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const size = 18 + i * 4;
+        const geo = new THREE.PlaneGeometry(size, size);
+        const mat = new THREE.MeshBasicMaterial({
+          map: tex,
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          opacity: 0.42 - i * 0.06,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.renderOrder = 8 + i;
+        mesh.userData.nebulaIndex = i;
+        mesh.userData.baseOpacity = mat.opacity;
+        introNebulaMeshes.push(mesh);
+        introGateGroup.add(mesh);
+        layoutIntroGate();
+      },
+      undefined,
+      () => {}
+    );
+  });
+}
+
+function layoutIntroGate() {
+  if (!introGateGroup || !camera) return;
+  refreshSectionCameras(0, 0);
+  const home = sectionCameras[0];
+  if (!home) return;
+
+  introGateTmp.copy(home.position).sub(home.lookAt).normalize();
+  const logoPos = introGateTmpB.copy(home.lookAt).addScaledVector(introGateTmp, 7.2);
+  const camStart = introGateCamStart
+    .copy(logoPos)
+    .addScaledVector(introGateTmp, 9.5);
+  introGateCamEnd.copy(home.position);
+  introGateLookStart.copy(logoPos);
+  introGateLookEnd.copy(home.lookAt);
+
+  if (introLogoMesh) {
+    introLogoMesh.position.copy(logoPos);
+    introLogoMesh.lookAt(camStart);
+  }
+
+  introNebulaMeshes.forEach((mesh, i) => {
+    const side = i % 2 === 0 ? 1 : -1;
+    const lift = (i - 1) * 1.8;
+    mesh.position
+      .copy(logoPos)
+      .addScaledVector(introGateTmp, -1.2 - i * 1.4)
+      .add(new THREE.Vector3(side * (3.5 + i), lift, side * -1.2));
+    mesh.lookAt(camStart);
+    mesh.userData.restPosition = mesh.position.clone();
+    mesh.userData.partOffset = new THREE.Vector3(
+      side * (10 + i * 3),
+      lift * 1.4 + (i === 1 ? 6 : -2),
+      -4 - i
+    );
+  });
+
+  if (introGateActive && !introGateZooming) {
+    camera.position.copy(camStart);
+    camera.lookAt(introGateLookStart);
+    camera.fov = 38;
+    camera.updateProjectionMatrix();
+    smoothedCamPos.copy(camStart);
+  }
+}
+
+function updateIntroGate(elapsed) {
+  if (!introGateActive || !camera) return;
+
+  if (introLogoMesh && !introGateZooming) {
+    const boil =
+      1 +
+      Math.sin(elapsed * 11.3) * 0.012 +
+      Math.sin(elapsed * 17.7 + 1.2) * 0.008;
+    introLogoMesh.scale.setScalar(introGateLogoBaseScale * boil);
+    introLogoMesh.rotation.z = Math.sin(elapsed * 3.1) * 0.018;
+  }
+
+  introNebulaMeshes.forEach((mesh, i) => {
+    const rest = mesh.userData.restPosition;
+    if (!rest) return;
+    const drift = Math.sin(elapsed * (0.22 + i * 0.05) + i) * 0.35;
+    mesh.position.copy(rest);
+    mesh.position.x += drift;
+    mesh.position.y += Math.cos(elapsed * 0.18 + i) * 0.25;
+    mesh.rotation.z = elapsed * 0.03 * (i % 2 === 0 ? 1 : -1);
+  });
+
+  if (!introGateZooming) {
+    camera.position.copy(introGateCamStart);
+    camera.lookAt(introGateLookStart);
+    return;
+  }
+
+  const t = clamp((performance.now() - introGateZoomStartMs) / INTRO_GATE_MS, 0, 1);
+  const e = easeInOutCubicLocal(t);
+
+  camera.position.lerpVectors(introGateCamStart, introGateCamEnd, e);
+  introGateTmp.lerpVectors(introGateLookStart, introGateLookEnd, e);
+  camera.lookAt(introGateTmp);
+  camera.fov = THREE.MathUtils.lerp(38, FOCAL_REST_MM[0] ? focalMmToFov(FOCAL_REST_MM[0]) : 42, e);
+  camera.updateProjectionMatrix();
+  smoothedCamPos.copy(camera.position);
+
+  // Traverse logo : grossit puis disparaît
+  if (introLogoMesh) {
+    const through = clamp((t - 0.35) / 0.45, 0, 1);
+    const scale = introGateLogoBaseScale * (1 + through * 14);
+    introLogoMesh.scale.setScalar(scale);
+    introLogoMesh.material.opacity = 1 - clamp((t - 0.55) / 0.35, 0, 1);
+    introLogoMesh.visible = introLogoMesh.material.opacity > 0.02;
+  }
+
+  // Nébuleuses s’écartent
+  const part = clamp((t - 0.25) / 0.7, 0, 1);
+  const partE = easeInOutCubicLocal(part);
+  introNebulaMeshes.forEach((mesh) => {
+    const rest = mesh.userData.restPosition;
+    const off = mesh.userData.partOffset;
+    if (!rest || !off) return;
+    mesh.position.copy(rest).addScaledVector(off, partE);
+    mesh.material.opacity = (mesh.userData.baseOpacity ?? 0.4) * (1 - partE * 0.92);
+  });
+
+  if (fog) {
+    fog.density = THREE.MathUtils.lerp(0.012, 0.005, e);
+  }
+
+  if (t >= 1) {
+    introGateZooming = false;
+    introGateActive = false;
+    if (introGateGroup) introGateGroup.visible = false;
+    introSnapFrames = 0;
+    camSmoothReady = false;
+    const cb = introGateOnComplete;
+    introGateOnComplete = null;
+    if (typeof cb === "function") cb();
+  }
+}
+
+export function isIntroGateActive() {
+  return introGateActive;
+}
+
+export function isIntroGateZooming() {
+  return introGateZooming;
+}
+
+/** Active le mode intro (caméra sur logo). Retourne false si WebGL absent. */
+export function setIntroGateActive(active) {
+  if (!scene || !camera) return false;
+  introGateActive = Boolean(active);
+  introGateZooming = false;
+  if (introGateGroup) introGateGroup.visible = introGateActive;
+  if (introLogoMesh) {
+    introLogoMesh.visible = true;
+    introLogoMesh.material.opacity = 1;
+    introLogoMesh.scale.setScalar(introGateLogoBaseScale);
+  }
+  introNebulaMeshes.forEach((mesh) => {
+    mesh.material.opacity = mesh.userData.baseOpacity ?? 0.4;
+    if (mesh.userData.restPosition) mesh.position.copy(mesh.userData.restPosition);
+  });
+  if (introGateActive) {
+    layoutIntroGate();
+    if (fog) fog.density = 0.012;
+  }
+  return true;
+}
+
+/** Lance le zoom à travers le logo. `onComplete` quand l’accueil est révélé. */
+export function startIntroGateZoom(onComplete) {
+  if (!introGateActive || introGateZooming) return false;
+  layoutIntroGate();
+  introGateZooming = true;
+  introGateZoomStartMs = performance.now();
+  introGateOnComplete = onComplete ?? null;
+  return true;
+}
+
+function disposeIntroGate() {
+  introGateActive = false;
+  introGateZooming = false;
+  introGateOnComplete = null;
+  if (introLogoMesh) {
+    introLogoMesh.geometry?.dispose();
+    introLogoMesh.material?.map?.dispose();
+    introLogoMesh.material?.dispose();
+  }
+  introNebulaMeshes.forEach((mesh) => {
+    mesh.geometry?.dispose();
+    mesh.material?.map?.dispose();
+    mesh.material?.dispose();
+  });
+  if (introGateGroup) {
+    scene?.remove(introGateGroup);
+  }
+  introGateGroup = null;
+  introLogoMesh = null;
+  introNebulaMeshes = [];
+}
+
 export function getSectionFraming(sectionIndex) {
   const framing = SECTION_FRAMING[clamp(sectionIndex, 0, SECTION_COUNT - 1)];
   return {
@@ -2473,6 +2747,7 @@ export function initScene(canvas) {
   buildSun();
   buildPlanets();
   buildStars();
+  buildIntroGate();
 
   clock = new THREE.Clock();
   refreshSectionCameras(0, 0);
@@ -2514,17 +2789,26 @@ export function renderScene(displaySection, glideState = null) {
   }
   updatePlanets(elapsed, displaySection, glideState);
   updateOrbitRings(displaySection, glideState);
-  updateCamera(displaySection, elapsed, glideState, settleT);
   updateStars(elapsed, camera.position, displaySection, glideState);
   updateAccentLight(displaySection, elapsed, glideState);
+
+  if (introGateActive) {
+    updateIntroGate(elapsed);
+  } else {
+    updateCamera(displaySection, elapsed, glideState, settleT);
+  }
+
   const sunHeat = getSunHeat(displaySection, glideState);
-  renderer.toneMappingExposure = 1.02 + sunHeat * 0.22;
+  renderer.toneMappingExposure = introGateActive
+    ? 0.92
+    : 1.02 + sunHeat * 0.22;
   renderer.render(scene, camera);
 }
 
 export function disposeScene() {
   window.removeEventListener("resize", onResize);
   disposeRestOrbitInteraction();
+  disposeIntroGate();
   planetEntries.forEach(({ mesh, mat, atmMesh, atmMat, rings }) => {
     mesh.geometry?.dispose();
     mat?.dispose();

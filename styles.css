@@ -38,6 +38,146 @@
   --panel-block-gap: clamp(1rem, 2.5vh, 1.5rem);
 }
 
+/* —— Intro gate —— */
+.intro-gate {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--chrome-z) + 5);
+  pointer-events: none;
+}
+
+.intro-login {
+  pointer-events: auto;
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+  background: rgba(5, 8, 18, 0.55);
+  color: #e8edf7;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.intro-login svg {
+  width: 20px;
+  height: 20px;
+}
+
+.intro-login:hover,
+.intro-login:focus-visible {
+  background: rgba(127, 157, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.55);
+  outline: none;
+}
+
+.intro-login.is-stub {
+  border-color: rgba(127, 157, 255, 0.7);
+  transform: scale(1.06);
+}
+
+.intro-login.is-loading {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.intro-login:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.intro-google-fallback {
+  pointer-events: auto;
+  position: absolute;
+  top: max(66px, calc(env(safe-area-inset-top) + 52px));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 3;
+}
+
+.intro-enter {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  transform: translate(-50%, -50%);
+  width: min(42vw, 280px);
+  height: min(28vw, 180px);
+  max-width: 320px;
+  max-height: 200px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.intro-enter:disabled {
+  pointer-events: none;
+  cursor: default;
+}
+
+.intro-enter:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.55);
+  outline-offset: 8px;
+  border-radius: 12px;
+}
+
+.intro-hint {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  bottom: max(48px, calc(env(safe-area-inset-bottom) + 36px));
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0 1rem;
+  color: rgba(232, 237, 247, 0.72);
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+
+body[data-intro="pending"] .side-nav,
+body[data-intro="pending"] #solar-scale,
+body[data-intro="pending"] #overlay,
+body[data-intro="playing"] .side-nav,
+body[data-intro="playing"] #solar-scale,
+body[data-intro="playing"] #overlay {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body[data-intro="playing"] .intro-login,
+body[data-intro="playing"] .intro-hint {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+body[data-intro="done"] .intro-gate,
+.intro-gate[hidden] {
+  display: none !important;
+}
+
+body[data-webgl="unavailable"][data-intro="pending"] .side-nav,
+body[data-webgl="unavailable"][data-intro="pending"] #solar-scale,
+body[data-webgl="unavailable"][data-intro="pending"] #overlay {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
 /* Thèmes typographiques par panel (contraste localisé) */
 .panel.theme-dark {
   --panel-text: #e8edf7;

@@ -135,11 +135,17 @@
 
 |---------|------|
 
-| `main.js` | Boucle RAF, lie navigation + rendu ; repli sans WebGL si `initScene` échoue |
+| `main.js` | Boucle RAF, lie navigation + rendu + intro gate ; repli sans WebGL si `initScene` échoue |
 
-| `navigation.js` | Gating scroll, overlay, glide state, échelle solaire |
+| `intro-gate.js` | Intro : `sessionStorage` skip, gate 3D, clic logo → zoom, login Google → studio |
 
-| `scene3d.js` | Three.js, caméra, planètes (9 sections) |
+| `auth-client.js` | GIS Google + `POST` auth VPS (`content/auth-config.json`) |
+
+| `studio/` | Service Node VPS : auth allowlist + page studio (capture test) |
+
+| `navigation.js` | Gating scroll, overlay, glide state, échelle solaire ; `setNavigationLocked` pendant intro |
+
+| `scene3d.js` | Three.js, caméra, planètes (9 sections) ; mode **intro gate** (logo plan + nébuleuses PNG + zoom) |
 
 | `youtube-videos.js` | Zone Video : RSS (pool ~12) → **2 aléatoires** / visite + repli HTML, modal |
 
@@ -198,6 +204,8 @@ node --check youtube-videos.js
 node --check instagram-gallery.js
 
 node --check scripts/refresh-radio-status.mjs
+
+node --input-type=module --check < intro-gate.js
 
 # modules ES (navigation / scene3d / main) :
 node --input-type=module --check < navigation.js
@@ -293,11 +301,28 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 
 - **Interaction vidéo zone Video** : plus d’iframe embarquée dans la grille ; vignettes cliquables + modal (comme Instagram Visuel).
 
+## Intro gate (juil. 2026 — Étape 1 + 2)
+
+Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Neptune.
+
+- **Assets** : [`assets/logo-hakou.png`](assets/logo-hakou.png) (PNG provisoire ; SVG plus tard) ; nébuleuses [`assets/nebula/nebula-a.png`](assets/nebula/nebula-a.png) … `c.png`.
+- **Scène** (`scene3d.js`) : groupe `introGate` — plan logo (texture transparente, léger boil) + 3 plans nébuleuse additive. Caméra gate devant le logo, alignée vers le cadrage héro §0. `startIntroGateZoom` (~3,4 s) : avance à travers le logo, nébuleuses s’écartent, arrive sur `sectionCameras[0]`.
+- **UI** (`#intro-gate`) : hit-area `#intro-enter` centrée, hint « Cliquer le logo pour entrer », bouton `#intro-login` haut-droite.
+- **État** : `body[data-intro="pending"|"playing"|"done"]` masque nav / échelle / overlay pendant pending+playing. `sessionStorage` clé `hakou-intro-done` : skip au refresh de session. `setNavigationLocked(true)` bloque molette / clavier / touch / menu.
+- **Auth Google (Étape 2)** :
+  - Client : [`auth-client.js`](auth-client.js) + GIS ; config publique [`content/auth-config.json`](content/auth-config.json) — **Client ID** renseigné (`245439358451-…apps.googleusercontent.com`), `authApiBase` / `studioUrl` → `https://vps-e09ed6db.vps.ovh.net/hakou-studio`, allowlist `vincent.chauvaux@gmail.com`.
+  - Serveur VPS : `/opt/hakou-studio` (code + `pm2` `hakou-studio` :8787). `POST /api/auth/google` vérifie l’ID token GIS, cookie HttpOnly `SameSite=None; Secure` path `/hakou-studio`.
+  - **Secrets** : `GOOGLE_CLIENT_SECRET` + `SESSION_SECRET` uniquement dans `/opt/hakou-studio/.env` (`chmod 600`, hors git). Le JSON `client_secret_*.json` Google ne doit **jamais** être committer (`.gitignore`).
+  - Nginx : snippet `/etc/nginx/snippets/hakou-studio.conf` (`location /hakou-studio/` → `127.0.0.1:8787`), `include` dans le vhost HTTPS `streamtv` (`vps-e09ed6db.vps.ovh.net`). Exemple repo : [`studio/deploy/nginx-hakou-studio.conf.example`](studio/deploy/nginx-hakou-studio.conf.example).
+  - Après login OK : zoom intro puis **redirect** vers le studio. Sans session → 401 sur `/hakou-studio/`.
+  - Setup détaillé : [`studio/README.md`](studio/README.md).
+- **Roadmap** : Étape 3 = ingest MediaMTX / WHIP depuis le studio → flux Radio spectateurs (le stub studio teste déjà `getDisplayMedia`).
+
 ## Déploiement (juillet 2026)
 
 - **Prod** : [hakou.be](https://hakou.be) est servi par **GitHub Pages** (`CNAME` → `hakou.be`, DNS `185.199.x.x`). Pas de déploiement VPS pour ce site statique.
 - **Publish** : `git push git@github.com:vincentchauvaux/hakou.git main` (SSH ; le remote HTTPS `origin` peut échouer sans token). Déploiement Pages automatique après push sur `main` (délai cache ~1–10 min).
 - **Build optionnel** : `node scripts/refresh-instagram-posts.mjs --refresh` — met à jour `content/instagram-posts.json` + `assets/instagram/thumb-*.jpg` ; `node scripts/refresh-radio-status.mjs` — live + archives Radio. Pas de bundler / compile JS.
 - **Dev local** : `npx serve .` (pas `file://`).
-- **VPS** (`djgoons` / `nexroof`, `54.76.151.62`) : autres projets ; SSH port 22 **timeout** depuis l’environnement agent (juil. 2026) — ne pas confondre avec hakou.be.
+- **VPS OVH Hakou** : `vps-e09ed6db.vps.ovh.net` → `51.178.44.114` (SSH `root`, nginx + pm2). Services sous préfixe : `/hirakana/`, `/rpg-cr/`, **`/hakou-studio/`**. Ne pas confondre avec **djgoons / nexroof** (`54.76.151.62`, autres projets ; SSH parfois timeout depuis l’agent).
 

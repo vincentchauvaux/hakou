@@ -7,6 +7,7 @@ import {
 
 let sectionCount = 9;
 let scaleSectionMax = 8;
+let navigationLocked = false;
 const TRANSITION_MS = 3200;
 const LONG_JUMP_MS_PER_STEP = 900;
 const GATE_WHEEL_TOTAL = 140;
@@ -677,6 +678,7 @@ function startGlide(toIndex, fromSection) {
 }
 
 function goToSection(index) {
+  if (navigationLocked) return;
   const target = clamp(index, 0, sectionCount - 1);
   if (target === currentSection) {
     resetGate();
@@ -720,6 +722,10 @@ function feedGate(dir, amount) {
 }
 
 function onWheel(event) {
+  if (navigationLocked) {
+    event.preventDefault();
+    return;
+  }
   if (solarScaleDragActive) return;
 
   if (isAnimating) {
@@ -746,7 +752,7 @@ function onWheel(event) {
 }
 
 function onKeyDown(event) {
-  if (solarScaleDragActive || isAnimating) return;
+  if (navigationLocked || solarScaleDragActive || isAnimating) return;
 
   let dir = 0;
   if (["ArrowUp", "PageUp"].includes(event.key)) {
@@ -766,6 +772,7 @@ function onKeyDown(event) {
 }
 
 function onTouchStart(event) {
+  if (navigationLocked) return;
   if (event.target?.closest?.("#solar-scale")) return;
   if (event.target?.closest?.(".side-nav")) return;
 
@@ -778,6 +785,7 @@ function onTouchStart(event) {
 }
 
 function onTouchMove(event) {
+  if (navigationLocked) return;
   if (event.target?.closest?.(".side-nav")) return;
 
   if (solarScaleDragActive) {
@@ -1082,4 +1090,17 @@ export function getGlideState() {
     t: glideT,
     animating: isAnimating,
   };
+}
+
+/** Bloque molette / clavier / touch / menu (intro gate). */
+export function setNavigationLocked(locked) {
+  navigationLocked = Boolean(locked);
+  if (navigationLocked) {
+    gateProgress = 0;
+    lastGateDir = 0;
+  }
+}
+
+export function isNavigationLocked() {
+  return navigationLocked;
 }

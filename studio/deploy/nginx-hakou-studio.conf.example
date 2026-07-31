@@ -1,0 +1,25 @@
+# Hakou Studio — snippet Nginx (HTTPS, hostname OVH)
+# À inclure dans le server {} de vps-e09ed6db.vps.ovh.net
+# (à côté de hirakana / rpg-cr).
+#
+# Installation :
+#   sudo cp studio/deploy/nginx-hakou-studio.conf.example /etc/nginx/snippets/hakou-studio.conf
+#   # Dans le bloc server HTTPS :
+#   include snippets/hakou-studio.conf;
+#   sudo nginx -t && sudo systemctl reload nginx
+
+location = /hakou-studio {
+    return 301 $scheme://$host/hakou-studio/;
+}
+
+location /hakou-studio/ {
+    proxy_pass http://127.0.0.1:8787/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 300s;
+}
