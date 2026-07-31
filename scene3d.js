@@ -2439,7 +2439,6 @@ let introGateActive = false;
 let introGateGroup = null;
 let introLogoMesh = null;
 let introNebulaMeshes = [];
-let introVeilMesh = null;
 let introGateZooming = false;
 let introGateZoomStartMs = 0;
 let introGateOnComplete = null;
@@ -2550,31 +2549,6 @@ function buildIntroLogoFromSvg(data) {
   layoutIntroGate();
 }
 
-function ensureIntroVeil() {
-  if (introVeilMesh || !introGateGroup) return;
-  const geo = new THREE.PlaneGeometry(120, 120);
-  const mat = new THREE.MeshBasicMaterial({
-    color: INTRO_SCENE_BG,
-    transparent: true,
-    opacity: 1,
-    depthWrite: true,
-    side: THREE.DoubleSide,
-    toneMapped: false,
-  });
-  introVeilMesh = new THREE.Mesh(geo, mat);
-  introVeilMesh.name = "introVeil";
-  introVeilMesh.renderOrder = 7;
-  introGateGroup.add(introVeilMesh);
-}
-
-function setIntroVeilOpacity(opacity) {
-  if (!introVeilMesh?.material) return;
-  const o = clamp(opacity, 0, 1);
-  introVeilMesh.material.opacity = o;
-  introVeilMesh.material.depthWrite = o > 0.08;
-  introVeilMesh.visible = o > 0.01;
-}
-
 function applyIntroSceneBackground(active) {
   if (!scene) return;
   if (active) {
@@ -2584,7 +2558,7 @@ function applyIntroSceneBackground(active) {
     scene.background = new THREE.Color(INTRO_SCENE_BG);
     if (fog) {
       fog.color.setHex(INTRO_SCENE_BG);
-      fog.density = 0.02;
+      fog.density = 0.035;
     }
   } else if (introSceneBgRestore != null) {
     scene.background = new THREE.Color(introSceneBgRestore);
@@ -2593,13 +2567,35 @@ function applyIntroSceneBackground(active) {
   }
 }
 
+/** Masque soleils / planètes / étoiles pendant l’intro au repos (évite un plan-voile visible). */
+function setUniverseVisible(visible) {
+  const flag = Boolean(visible);
+  [sun, sunGlow, sunCorona, sunHaze, sunLight, stars].forEach((obj) => {
+    if (obj) obj.visible = flag;
+  });
+  planetEntries.forEach(({ mesh, atmMesh, rings }) => {
+    if (mesh) mesh.visible = flag;
+    if (atmMesh) atmMesh.visible = flag;
+    if (rings?.inner) rings.inner.visible = flag;
+    if (rings?.outer) rings.outer.visible = flag;
+  });
+  orbitMeshes.forEach((m) => {
+    m.visible = flag;
+  });
+}
+
+function setIntroNebulaeVisible(visible) {
+  introNebulaMeshes.forEach((mesh) => {
+    mesh.visible = Boolean(visible);
+  });
+}
+
 function buildIntroGate() {
   if (!scene || introGateGroup) return;
   introGateGroup = new THREE.Group();
   introGateGroup.name = "introGate";
   introGateGroup.visible = false;
   scene.add(introGateGroup);
-  ensureIntroVeil();
 
   const svgLoader = new SVGLoader();
   svgLoader.load(
@@ -2636,6 +2632,7 @@ function buildIntroGate() {
         mesh.renderOrder = 5 + i;
         mesh.userData.nebulaIndex = i;
         mesh.userData.baseOpacity = mat.opacity;
+        mesh.visible = false;
         introNebulaMeshes.push(mesh);
         introGateGroup.add(mesh);
         layoutIntroGate();
@@ -2666,15 +2663,6 @@ function layoutIntroGate() {
     introLogoMesh.lookAt(camStart);
   }
 
-  ensureIntroVeil();
-  if (introVeilMesh) {
-    // Voile noir juste derrière le logo : masque l’univers au repos
-    introVeilMesh.position
-      .copy(logoPos)
-      .addScaledVector(introGateTmp, -2.4);
-    introVeilMesh.lookAt(camStart);
-  }
-
   introNebulaMeshes.forEach((mesh, i) => {
     const side = i % 2 === 0 ? 1 : -1;
     const lift = (i - 1) * 1.8;
@@ -2697,7 +2685,6 @@ function layoutIntroGate() {
     camera.fov = 38;
     camera.updateProjectionMatrix();
     smoothedCamPos.copy(camStart);
-    setIntroVeilOpacity(1);
   }
 }
 
@@ -2710,16 +2697,9 @@ function updateIntroGate(elapsed) {
     introLogoMesh.rotation.z = 0;
   }
 
-  // Nébuleuses figées derrière le voile au repos
   if (!introGateZooming) {
-    introNebulaMeshes.forEach((mesh) => {
-      const rest = mesh.userData.restPosition;
-      if (rest) mesh.position.copy(rest);
-      mesh.rotation.z = 0;
-    });
     camera.position.copy(introGateCamStart);
     camera.lookAt(introGateLookStart);
-    setIntroVeilOpacity(1);
     return;
   }
 
@@ -2733,9 +2713,15 @@ function updateIntroGate(elapsed) {
   camera.updateProjectionMatrix();
   smoothedCamPos.copy(camera.position);
 
-  // Voile noir → transparent : découvre l’univers
-  const veilFade = clamp((t - 0.08) / 0.72, 0, 1);
-  setIntroVeilOpacity(1 - easeInOutCubicLocal(veilFade));
+  // Fond / brouillard : du noir opaque vers l’univers
+  const reveal = easeInOutCubicLocal(clamp((t - 0.05) / 0.7, 0, 1));
+  if (scene?.background?.isColor) {
+    scene.background.setRGB(0, 0, 0);
+  }
+  if (fog) {
+    fog.color.setHex(INTRO_SCENE_BG);
+    fog.density = THREE.MathUtils.lerp(0.035, 0.005, reveal);
+  }
 
   // Logo : fondu doux (sans explosion d’échelle)
   if (introLogoMesh) {
@@ -2746,27 +2732,25 @@ function updateIntroGate(elapsed) {
     setIntroLogoOpacity(1 - clamp((t - 0.42) / 0.48, 0, 1));
   }
 
-  // Nébuleuses s’écartent une fois le noir entamé
-  const part = clamp((t - 0.2) / 0.75, 0, 1);
+  // Nébuleuses apparaissent puis s’écartent
+  const part = clamp((t - 0.12) / 0.78, 0, 1);
   const partE = easeInOutCubicLocal(part);
   introNebulaMeshes.forEach((mesh) => {
     const rest = mesh.userData.restPosition;
     const off = mesh.userData.partOffset;
     if (!rest || !off) return;
     mesh.position.copy(rest).addScaledVector(off, partE);
-    mesh.material.opacity =
-      (mesh.userData.baseOpacity ?? 0.4) * (1 - partE * 0.92);
+    const base = mesh.userData.baseOpacity ?? 0.4;
+    mesh.material.opacity = base * (1 - partE) * clamp(t / 0.2, 0, 1);
   });
-
-  if (fog) {
-    fog.density = THREE.MathUtils.lerp(0.02, 0.005, e);
-  }
 
   if (t >= 1) {
     introGateZooming = false;
     introGateActive = false;
-    setIntroVeilOpacity(0);
+    setUniverseVisible(true);
+    setIntroNebulaeVisible(false);
     applyIntroSceneBackground(false);
+    if (fog) fog.density = 0.005;
     if (introGateGroup) introGateGroup.visible = false;
     introSnapFrames = 0;
     camSmoothReady = false;
@@ -2795,18 +2779,14 @@ export function setIntroGateActive(active) {
     introLogoMesh.scale.setScalar(introGateLogoBaseScale);
     introLogoMesh.rotation.z = 0;
   }
-  introNebulaMeshes.forEach((mesh) => {
-    mesh.material.opacity = mesh.userData.baseOpacity ?? 0.4;
-    if (mesh.userData.restPosition) mesh.position.copy(mesh.userData.restPosition);
-    mesh.rotation.z = 0;
-  });
   if (introGateActive) {
-    ensureIntroVeil();
-    setIntroVeilOpacity(1);
+    setUniverseVisible(false);
+    setIntroNebulaeVisible(false);
     applyIntroSceneBackground(true);
     layoutIntroGate();
   } else {
-    setIntroVeilOpacity(0);
+    setUniverseVisible(true);
+    setIntroNebulaeVisible(false);
     applyIntroSceneBackground(false);
   }
   return true;
@@ -2816,6 +2796,12 @@ export function setIntroGateActive(active) {
 export function startIntroGateZoom(onComplete) {
   if (!introGateActive || introGateZooming) return false;
   layoutIntroGate();
+  setUniverseVisible(true);
+  setIntroNebulaeVisible(true);
+  introNebulaMeshes.forEach((mesh) => {
+    mesh.material.opacity = 0;
+    if (mesh.userData.restPosition) mesh.position.copy(mesh.userData.restPosition);
+  });
   introGateZooming = true;
   introGateZoomStartMs = performance.now();
   introGateOnComplete = onComplete ?? null;
@@ -2827,12 +2813,8 @@ function disposeIntroGate() {
   introGateZooming = false;
   introGateOnComplete = null;
   applyIntroSceneBackground(false);
+  setUniverseVisible(true);
   disposeIntroLogo();
-  if (introVeilMesh) {
-    introVeilMesh.geometry?.dispose();
-    introVeilMesh.material?.dispose();
-    introVeilMesh = null;
-  }
   introNebulaMeshes.forEach((mesh) => {
     mesh.geometry?.dispose();
     mesh.material?.map?.dispose();
