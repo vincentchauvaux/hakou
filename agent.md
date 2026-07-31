@@ -149,7 +149,7 @@
 
 | `youtube-videos.js` | Zone Video : RSS (pool ~12) → **2 aléatoires** / visite + repli HTML, modal |
 
-| `radio.js` | Zone Radio : `content/radio.json` + **API publique** VPS `/api/radio/status` (live YouTube pour **tous** les visiteurs, sans login) + repli RSS archives ; poll ~90 s |
+| `radio.js` | Zone Radio : `content/radio.json` + **API publique** VPS `/api/radio/status` — priorité **studio HLS** (MediaMTX) → live YouTube → archives RSS ; poll ~20 s ; player `hls.js` si `studioLive` |
 
 | `instagram-gallery.js` | Zone Visuel : au load, **JSON &lt; 7 j + 6 posts** → grille native immédiate ; sinon découverte client **3 s** (`web_profile_info`, `_sharedData` via allorigins, embed/profil HTML) ; **≥ 1 shortcode** → grille native **3×2 simple** (`…/p/{code}/media/?size=l`, modales post) ; **`.instagram-embed-panel` masqué** dès qu’une grille native s’affiche ; échec → iframe embed **standard** `hakoulik/embed` (~**480–520px**, sans recadrage agressif) ; modale profil via chapô **@hakoulik** ; sync live arrière-plan si grille partielle |
 
