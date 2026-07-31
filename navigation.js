@@ -12,7 +12,7 @@ const TRANSITION_MS = 3200;
 const LONG_JUMP_MS_PER_STEP = 900;
 const GATE_WHEEL_TOTAL = 140;
 const GATE_TOUCH_TOTAL = 72;
-/** Mobile ≤680px ou laptop desktop à hauteur limitée (scroll panel + gating bord). */
+/** Mobile ≤680px ou laptop desktop à hauteur limitée — couches tactile embeds. */
 const PANEL_INTERNAL_SCROLL_MQ =
   "(max-width: 680px), (min-width: 681px) and (max-height: 820px)";
 const MOBILE_PANEL_SCROLL_MQ = PANEL_INTERNAL_SCROLL_MQ;
@@ -20,10 +20,10 @@ const PANEL_SCROLL_OVERFLOW_EPS = 2;
 const MOBILE_PANEL_EDGE_BUFFER_PX = 80;
 const MOBILE_PANEL_EDGE_BUFFER_VH = 0.12;
 const MOBILE_TOUCH_SCROLL_STALL_MAX = 4;
-/** Mobile au bord du panel : charge à remplir avant d’alimenter feedGate (évite le zap au premier scroll résiduel). */
-const MOBILE_EDGE_CHARGE_WHEEL_TOTAL = 220;
-const MOBILE_EDGE_CHARGE_TOUCH_TOTAL = 108;
-/** Pulse feedGate après une charge bord complète (~2,4 pulses pour gateProgress ≥ 1). */
+/** Au bord du panel : charge à remplir avant d’alimenter feedGate (évite le zap). */
+const MOBILE_EDGE_CHARGE_WHEEL_TOTAL = 260;
+const MOBILE_EDGE_CHARGE_TOUCH_TOTAL = 120;
+/** Pulse feedGate après une charge bord complète (~2–3 pulses pour gateProgress ≥ 1). */
 const MOBILE_EDGE_GATE_PULSE = GATE_WHEEL_TOTAL * 0.42;
 const SECTION_THEMES = ["dark", "light", "mid", "mid", "mid", "mid", "mid", "mid", "mercury"];
 
@@ -335,8 +335,18 @@ function resetGate() {
   resetMobileEdgeCharge();
 }
 
-function isMobilePanelScroll() {
+function isCompactPanelChrome() {
   return window.matchMedia(MOBILE_PANEL_SCROLL_MQ).matches;
+}
+
+/** Scroll interne + gating bord : tous viewports (contenu d’abord, puis section). */
+function isPanelScrollMode() {
+  return true;
+}
+
+/** @deprecated alias — préférer isPanelScrollMode / isCompactPanelChrome */
+function isMobilePanelScroll() {
+  return isPanelScrollMode();
 }
 
 function getActivePanel() {
@@ -352,7 +362,6 @@ function resetPanelScrollTop(panel) {
 }
 
 function getPanelScrollEdgeBuffer() {
-  if (!isMobilePanelScroll()) return PANEL_SCROLL_OVERFLOW_EPS;
   return Math.min(
     MOBILE_PANEL_EDGE_BUFFER_PX,
     window.innerHeight * MOBILE_PANEL_EDGE_BUFFER_VH
@@ -366,7 +375,7 @@ function getPanelMaxScroll(panel) {
 /** Tampon réduit si la zone scrollable est petite (évite un « bas » inaccessible). */
 function getEffectivePanelScrollEdgeBuffer(panel) {
   const base = getPanelScrollEdgeBuffer();
-  if (!panel || !isMobilePanelScroll()) return base;
+  if (!panel) return base;
   const maxScroll = getPanelMaxScroll(panel);
   if (maxScroll <= PANEL_SCROLL_OVERFLOW_EPS) return base;
   return Math.min(base, Math.floor(maxScroll / 2));
@@ -377,7 +386,7 @@ function panelHasVerticalOverflow(panel) {
 }
 
 function panelScrollAtTop(panel) {
-  return panel.scrollTop <= getEffectivePanelScrollEdgeBuffer(panel);
+  return panel.scrollTop <= PANEL_SCROLL_OVERFLOW_EPS;
 }
 
 function panelScrollAtBottom(panel) {
@@ -393,13 +402,9 @@ function panelAtScrollEnd(panel) {
   );
 }
 
-/** Petit débordement : exiger le scroll max avant changement de section (CTA bas de carte). */
+/** Section suivante : uniquement en bas réel (pas de tampon soft → zap précoce). */
 function panelBottomAllowsSectionGate(panel) {
-  const maxScroll = getPanelMaxScroll(panel);
-  if (maxScroll <= getPanelScrollEdgeBuffer() * 2) {
-    return panelAtScrollEnd(panel);
-  }
-  return panelScrollAtBottom(panel) || panelAtScrollEnd(panel);
+  return panelAtScrollEnd(panel);
 }
 
 function panelNearScrollEnd(panel) {
@@ -433,9 +438,11 @@ function updateTouchScrollStall(panel, dir) {
   touchPanelScrollTop = top;
 }
 
-/** Mobile : gating section seulement si le scroll interne est au bord (ou pas de débordement). */
+/**
+ * Changement de section seulement si le panel n’a pas de débordement,
+ * ou si on est au bord strict dans le sens demandé.
+ */
 function canFeedSectionGate(dir) {
-  if (!isMobilePanelScroll()) return true;
   const panel = getActivePanel();
   if (!panel || !panelHasVerticalOverflow(panel)) return true;
   if (dir > 0) {
@@ -449,16 +456,16 @@ function canFeedSectionGate(dir) {
   return true;
 }
 
-/** Mobile + débordement vertical : charge au bord avant feedGate ; desktop / milieu de panel : passage direct. */
+/** Débordement vertical : charge au bord avant feedGate. */
 function needsMobileEdgeCharge(dir) {
-  if (!isMobilePanelScroll() || !dir) return false;
+  if (!dir) return false;
   const panel = getActivePanel();
   if (!panel || !panelHasVerticalOverflow(panel)) return false;
   return canFeedSectionGate(dir);
 }
 
 /**
- * Accumule l’effort au bord (mobile). Retourne true si feedGate peut recevoir un pulse.
+ * Accumule l’effort au bord. Retourne true si feedGate peut recevoir un pulse.
  * Reset si direction change ou si l’utilisateur quitte le bord.
  */
 function accumulateMobileEdgeCharge(dir, amount, { touch = false } = {}) {
@@ -484,13 +491,11 @@ function accumulateMobileEdgeCharge(dir, amount, { touch = false } = {}) {
 }
 
 function resetActivePanelScroll() {
-  if (!isMobilePanelScroll()) return;
   resetPanelScrollTop(getActivePanel());
 }
 
-/** Mobile : ne pas remettre le panel sortant à 0 pendant le crossfade (évite le saut vers le haut). */
+/** Ne pas remettre le panel sortant à 0 pendant le crossfade (évite le saut vers le haut). */
 function resetGlideDepartingPanelScroll() {
-  if (!isMobilePanelScroll()) return;
   resetPanelScrollTop(getPanelByZone(glideFromIndex));
 }
 
@@ -692,11 +697,8 @@ function goToSection(index) {
   currentSection = target;
   startGlide(target, fromSection);
   resetGate();
-  if (isMobilePanelScroll()) {
-    resetPanelScrollTop(getPanelByZone(target));
-  } else {
-    panels.forEach((panel) => resetPanelScrollTop(panel));
-  }
+  // Destination à 0 ; les autres gardent leur position jusqu’à fin de glide.
+  resetPanelScrollTop(getPanelByZone(target));
 }
 
 function feedGate(dir, amount) {
@@ -721,6 +723,16 @@ function feedGate(dir, amount) {
   }
 }
 
+/**
+ * Direction de section alignée sur le scroll page (cohérent overlay translateY).
+ * Molette / trackpad bas (deltaY > 0) → section suivante ; haut → précédente.
+ * Touch : doigt vers le haut = même sens (voir onTouchMove).
+ */
+function sectionDirFromContentDelta(deltaY) {
+  if (Math.abs(deltaY) < 0.5) return 0;
+  return deltaY > 0 ? 1 : -1;
+}
+
 function onWheel(event) {
   if (navigationLocked) {
     event.preventDefault();
@@ -736,29 +748,17 @@ function onWheel(event) {
   const delta = event.deltaY;
   if (Math.abs(delta) < 0.5) return;
 
-  // Panel avec débordement : laisser le scroll natif tant qu’il reste du contenu
-  // dans le sens du geste ; au bord, enchaîner la section (bas→suivant, haut→précédent).
-  if (isMobilePanelScroll()) {
-    const panel = getActivePanel();
-    if (panel && panelHasVerticalOverflow(panel)) {
-      if (panelCanScrollBy(panel, delta)) {
-        if (mobileEdgeChargeDir !== 0) resetMobileEdgeCharge();
-        return;
-      }
-      const dir = delta > 0 ? 1 : -1;
-      if (!canMove(dir) || !canFeedSectionGate(dir)) return;
-      event.preventDefault();
-      const amount = Math.abs(delta);
-      if (!accumulateMobileEdgeCharge(dir, amount, { touch: false })) return;
-      feedGate(dir, MOBILE_EDGE_GATE_PULSE);
-      return;
-    }
+  const panel = getActivePanel();
+
+  // Contenu d’abord : ne pas changer de section tant qu’il reste à défiler.
+  if (panel && panelHasVerticalOverflow(panel) && panelCanScrollBy(panel, delta)) {
+    if (mobileEdgeChargeDir !== 0) resetMobileEdgeCharge();
+    return;
   }
 
-  // Sans débordement : modèle spatial (molette haut → section suivante).
-  const dir = delta < 0 ? 1 : delta > 0 ? -1 : 0;
+  const dir = sectionDirFromContentDelta(delta);
   if (!dir || !canMove(dir)) {
-    if (!isMobilePanelScroll()) event.preventDefault();
+    event.preventDefault();
     return;
   }
 
@@ -767,48 +767,46 @@ function onWheel(event) {
   event.preventDefault();
   const amount = Math.abs(delta);
   if (!accumulateMobileEdgeCharge(dir, amount, { touch: false })) return;
-  feedGate(dir, isMobilePanelScroll() ? MOBILE_EDGE_GATE_PULSE : amount);
+  feedGate(
+    dir,
+    panel && panelHasVerticalOverflow(panel) ? MOBILE_EDGE_GATE_PULSE : amount
+  );
 }
 
 function onKeyDown(event) {
   if (navigationLocked || solarScaleDragActive || isAnimating) return;
 
-  let dir = 0;
   let contentDelta = 0;
-  if (["ArrowUp", "PageUp"].includes(event.key)) {
-    dir = 1;
-    contentDelta = -1;
-  } else if (["ArrowDown", "PageDown", " "].includes(event.key)) {
-    dir = -1;
+  if (["ArrowDown", "PageDown", " "].includes(event.key)) {
     contentDelta = 1;
+  } else if (["ArrowUp", "PageUp"].includes(event.key)) {
+    contentDelta = -1;
   }
 
-  if (!dir) return;
+  if (!contentDelta) return;
 
-  if (isMobilePanelScroll()) {
-    const panel = getActivePanel();
-    if (panel && panelHasVerticalOverflow(panel)) {
-      if (panelCanScrollBy(panel, contentDelta)) {
-        event.preventDefault();
-        applyPanelScrollDelta(
-          panel,
-          contentDelta * Math.min(panel.clientHeight * 0.85, 280)
-        );
-        if (mobileEdgeChargeDir !== 0) resetMobileEdgeCharge();
-        return;
-      }
-      // Au bord : bas→suivant, haut→précédent (aligné contenu).
-      dir = contentDelta > 0 ? 1 : -1;
-    }
+  const panel = getActivePanel();
+  if (panel && panelHasVerticalOverflow(panel) && panelCanScrollBy(panel, contentDelta)) {
+    event.preventDefault();
+    applyPanelScrollDelta(
+      panel,
+      contentDelta * Math.min(panel.clientHeight * 0.85, 280)
+    );
+    if (mobileEdgeChargeDir !== 0) resetMobileEdgeCharge();
+    return;
   }
 
+  const dir = sectionDirFromContentDelta(contentDelta);
   if (!canMove(dir)) return;
   if (!canFeedSectionGate(dir)) return;
 
   event.preventDefault();
   const amount = GATE_WHEEL_TOTAL;
   if (!accumulateMobileEdgeCharge(dir, amount, { touch: false })) return;
-  feedGate(dir, isMobilePanelScroll() ? MOBILE_EDGE_GATE_PULSE : amount);
+  feedGate(
+    dir,
+    panel && panelHasVerticalOverflow(panel) ? MOBILE_EDGE_GATE_PULSE : amount
+  );
 }
 
 function onTouchStart(event) {
@@ -847,10 +845,21 @@ function onTouchMove(event) {
   const delta = touchStartY - y;
   if (Math.abs(delta) < 2) return;
 
+  // Doigt vers le haut → contenu vers le bas → section suivante (aligné page).
   const dir = Math.sign(delta);
   if (!canMove(dir)) return;
 
   const panel = getActivePanel();
+  if (
+    panel &&
+    panelHasVerticalOverflow(panel) &&
+    panelCanScrollBy(panel, delta)
+  ) {
+    touchStartY = y;
+    if (mobileEdgeChargeDir !== 0) resetMobileEdgeCharge();
+    return;
+  }
+
   if (panel) updateTouchScrollStall(panel, dir);
 
   if (!canFeedSectionGate(dir)) {
@@ -864,7 +873,12 @@ function onTouchMove(event) {
   touchStartY = y;
   if (!accumulateMobileEdgeCharge(dir, amount, { touch: true })) return;
 
-  feedGate(dir, isMobilePanelScroll() ? MOBILE_EDGE_GATE_PULSE : amount);
+  feedGate(
+    dir,
+    panel && panelHasVerticalOverflow(panel)
+      ? MOBILE_EDGE_GATE_PULSE
+      : amount
+  );
 
   if (touchGateAcc >= GATE_TOUCH_TOTAL) {
     touchGateAcc = 0;
@@ -925,7 +939,7 @@ function bindEmbedTouchLayer(layer) {
   layer.addEventListener(
     "touchstart",
     (event) => {
-      if (!isMobilePanelScroll() || isAnimating || solarScaleDragActive) return;
+      if (!isCompactPanelChrome() || isAnimating || solarScaleDragActive) return;
       const touch = event.touches[0];
       if (!touch) return;
       startX = touch.clientX;
@@ -940,7 +954,7 @@ function bindEmbedTouchLayer(layer) {
   layer.addEventListener(
     "touchmove",
     (event) => {
-      if (!isMobilePanelScroll() || isAnimating || solarScaleDragActive) return;
+      if (!isCompactPanelChrome() || isAnimating || solarScaleDragActive) return;
       const touch = event.touches[0];
       if (!touch) return;
 
@@ -982,7 +996,7 @@ function bindEmbedTouchLayer(layer) {
   layer.addEventListener(
     "touchend",
     (event) => {
-      if (!isMobilePanelScroll()) return;
+      if (!isCompactPanelChrome()) return;
       const touch = event.changedTouches[0];
       if (!touch) return;
 
@@ -1019,7 +1033,7 @@ function bindEmbedTouchLayer(layer) {
 
 function syncEmbedTouchLayers(root) {
   const hosts = root.querySelectorAll(EMBED_SCROLL_HOST_SELECTOR);
-  if (!isMobilePanelScroll()) {
+  if (!isCompactPanelChrome()) {
     hosts.forEach((host) => {
       host.querySelector(`.${EMBED_TOUCH_LAYER_CLASS}`)?.remove();
     });

@@ -734,7 +734,10 @@ body {
 .panel.is-active {
   opacity: 1;
   transform: translateY(0) translateX(0);
-  /* Scroll interne possible (mobile / laptop compact) sans barre visible */
+  /* Scroll interne si le contenu dépasse — barre masquée */
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -743,6 +746,15 @@ body {
   width: 0;
   height: 0;
   display: none;
+}
+
+.panel:not(.is-active) {
+  overflow-y: hidden;
+}
+
+#overlay[data-adjacent-glide="true"] .panel.is-active,
+#overlay[data-long-jump="true"] .panel.is-active {
+  overflow-y: hidden;
 }
 
 .panel.panel--frame-right .panel-lead,
