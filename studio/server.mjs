@@ -15,9 +15,13 @@ import { getRadioStatus } from "./radio-status.mjs";
 import {
   appendContactInbox,
   checkRateLimit,
+  createCaptchaChallenge,
   deliverContactEmail,
   getClientIp,
+  isAllowedContactOrigin,
   validateContactPayload,
+  verifyCaptchaChallenge,
+  verifyRecaptcha,
 } from "./contact.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -90,6 +94,14 @@ const CONTACT_RATE_MAX = Number(env.CONTACT_RATE_MAX || 3);
 const CONTACT_RATE_WINDOW_MS = Number(
   env.CONTACT_RATE_WINDOW_MS || 60 * 60 * 1000
 );
+const CONTACT_CAPTCHA_SECRET =
+  env.CONTACT_CAPTCHA_SECRET || env.SESSION_SECRET || "hakou-contact-dev";
+const CONTACT_RECAPTCHA_SECRET = String(
+  env.CONTACT_RECAPTCHA_SECRET || ""
+).trim();
+const CONTACT_RECAPTCHA_SITE_KEY = String(
+  env.CONTACT_RECAPTCHA_SITE_KEY || ""
+).trim();
 
 const googleClient = GOOGLE_CLIENT_ID
   ? new OAuth2Client(GOOGLE_CLIENT_ID)
@@ -215,12 +227,45 @@ app.get("/api/radio/status", async (_req, res) => {
 });
 
 /**
- * Public — formulaire Contact (honeypot + filtres + rate-limit).
+ * Public — challenge captcha arithmétique (HMAC, usage unique).
+ */
+app.get("/api/contact/captcha", (req, res) => {
+  const ip = getClientIp(req);
+  if (
+    !checkRateLimit(ip, {
+      max: 30,
+      windowMs: CONTACT_RATE_WINDOW_MS,
+      key: "captcha",
+    })
+  ) {
+    res.status(429).json({ ok: false, error: "Trop de captchas demandés." });
+    return;
+  }
+  const challenge = createCaptchaChallenge(CONTACT_CAPTCHA_SECRET);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    ok: true,
+    token: challenge.token,
+    question: challenge.question,
+    expiresInSec: challenge.expiresInSec,
+    recaptchaSiteKey: CONTACT_RECAPTCHA_SITE_KEY || null,
+  });
+});
+
+/**
+ * Public — formulaire Contact (honeypot + captcha + filtres + rate-limit).
  * Honeypot / trop rapide : 200 silencieux (ne pas tipper les bots).
  */
 app.post("/api/contact", async (req, res) => {
   const ip = getClientIp(req);
-  const parsed = validateContactPayload(req.body || {});
+  const origin = req.headers.origin;
+  if (!isAllowedContactOrigin(origin, CORS_ORIGINS)) {
+    res.status(403).json({ ok: false, error: "Origine non autorisée." });
+    return;
+  }
+
+  const body = req.body || {};
+  const parsed = validateContactPayload(body);
 
   if (!parsed.ok && parsed.soft) {
     res.json({ ok: true });
@@ -231,7 +276,41 @@ app.post("/api/contact", async (req, res) => {
     return;
   }
 
-  if (!checkRateLimit(ip, { max: CONTACT_RATE_MAX, windowMs: CONTACT_RATE_WINDOW_MS })) {
+  const captcha = verifyCaptchaChallenge(
+    CONTACT_CAPTCHA_SECRET,
+    body.captchaToken,
+    body.captchaAnswer
+  );
+  if (!captcha.ok) {
+    res.status(400).json({ ok: false, error: captcha.error });
+    return;
+  }
+
+  if (CONTACT_RECAPTCHA_SECRET) {
+    try {
+      const grecaptcha = await verifyRecaptcha(
+        CONTACT_RECAPTCHA_SECRET,
+        body.recaptchaToken,
+        ip
+      );
+      if (!grecaptcha.ok) {
+        res.status(400).json({ ok: false, error: grecaptcha.error });
+        return;
+      }
+    } catch (err) {
+      console.error("[Hakou Studio] recaptcha", err.message || err);
+      res.status(502).json({ ok: false, error: "Vérification captcha indisponible." });
+      return;
+    }
+  }
+
+  if (
+    !checkRateLimit(ip, {
+      max: CONTACT_RATE_MAX,
+      windowMs: CONTACT_RATE_WINDOW_MS,
+      key: "contact",
+    })
+  ) {
     res.status(429).json({
       ok: false,
       error: "Trop de messages. Réessaie dans une heure.",

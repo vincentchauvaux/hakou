@@ -8,7 +8,7 @@
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const URL_RE = /https?:\/\/|www\./gi;
   const SPAM_RE =
-    /\b(viagra|casino|crypto\s*invest|click here|earn money|seo\s*service|porn)\b/i;
+    /\b(viagra|casino|crypto\s*invest|click here|earn money|seo\s*service|porn|loan\s*approval|telegram\s*@)\b/i;
 
   function $(id) {
     return document.getElementById(id);
@@ -22,7 +22,7 @@
       .slice(0, max);
   }
 
-  function validateLocal({ name, email, message, company }) {
+  function validateLocal({ name, email, message, company, captchaAnswer }) {
     if (String(company || "").trim()) {
       return { soft: true };
     }
@@ -40,6 +40,9 @@
     }
     if (SPAM_RE.test(message) || SPAM_RE.test(name)) {
       return { error: "Message refusé par le filtre anti-spam." };
+    }
+    if (!String(captchaAnswer || "").trim()) {
+      return { error: "Réponds au captcha." };
     }
     return { ok: true };
   }
@@ -59,6 +62,11 @@
     anchor.removeAttribute("data-contact-email");
   }
 
+  function apiBase(config) {
+    const api = config.contactApi || FALLBACK_API;
+    return api.replace(/\/api\/contact\/?$/, "");
+  }
+
   async function loadConfig() {
     try {
       const res = await fetch(CONFIG_URL, { cache: "no-store" });
@@ -68,10 +76,36 @@
       console.warn(LOG, "config", err);
       return {
         contactApi: FALLBACK_API,
+        captchaApi:
+          "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/contact/captcha",
         emailUser: "vincent.chauvaux",
         emailDomain: "gmail.com",
       };
     }
+  }
+
+  function loadRecaptchaScript(siteKey) {
+    return new Promise((resolve, reject) => {
+      if (window.grecaptcha?.render) {
+        resolve();
+        return;
+      }
+      const existing = document.querySelector("script[data-hakou-recaptcha]");
+      if (existing) {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", () => reject(new Error("recaptcha")));
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = `https://www.google.com/recaptcha/api.js?render=explicit`;
+      s.async = true;
+      s.defer = true;
+      s.dataset.hakouRecaptcha = "1";
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("recaptcha load"));
+      document.head.appendChild(s);
+      void siteKey;
+    });
   }
 
   async function init() {
@@ -79,6 +113,11 @@
     const statusEl = $("contact-form-status");
     const submitBtn = $("contact-form-submit");
     const emailLink = document.querySelector("[data-contact-email]");
+    const captchaQuestion = $("contact-captcha-question");
+    const captchaTokenInput = $("contact-captcha-token");
+    const captchaAnswerInput = $("contact-captcha-answer");
+    const captchaRefresh = $("contact-captcha-refresh");
+    const recaptchaHost = $("contact-recaptcha");
     if (!form) return;
 
     const config = await loadConfig();
@@ -86,6 +125,53 @@
 
     const filledAtInput = form.querySelector('[name="filledAt"]');
     if (filledAtInput) filledAtInput.value = String(Date.now());
+
+    let recaptchaWidgetId = null;
+    let recaptchaSiteKey = null;
+
+    async function refreshCaptcha() {
+      if (captchaQuestion) captchaQuestion.textContent = "Chargement du captcha…";
+      if (captchaTokenInput) captchaTokenInput.value = "";
+      if (captchaAnswerInput) captchaAnswerInput.value = "";
+      try {
+        const url =
+          config.captchaApi || `${apiBase(config)}/api/contact/captcha`;
+        const res = await fetch(url, { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.token) {
+          throw new Error(data.error || "captcha indisponible");
+        }
+        if (captchaTokenInput) captchaTokenInput.value = data.token;
+        if (captchaQuestion) captchaQuestion.textContent = data.question;
+
+        if (data.recaptchaSiteKey && recaptchaHost) {
+          recaptchaSiteKey = data.recaptchaSiteKey;
+          recaptchaHost.hidden = false;
+          await loadRecaptchaScript(recaptchaSiteKey);
+          await new Promise((r) => window.grecaptcha.ready(r));
+          if (recaptchaWidgetId == null) {
+            recaptchaWidgetId = window.grecaptcha.render(recaptchaHost, {
+              sitekey: recaptchaSiteKey,
+              theme: "dark",
+            });
+          } else {
+            window.grecaptcha.reset(recaptchaWidgetId);
+          }
+        }
+      } catch (err) {
+        console.warn(LOG, "captcha", err);
+        if (captchaQuestion) {
+          captchaQuestion.textContent =
+            "Captcha indisponible — réessaie plus tard.";
+        }
+      }
+    }
+
+    captchaRefresh?.addEventListener("click", () => {
+      refreshCaptcha();
+    });
+
+    await refreshCaptcha();
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -98,13 +184,26 @@
         message: sanitize(fd.get("message"), 2000),
         company: sanitize(fd.get("company"), 200),
         filledAt: Number(fd.get("filledAt")) || Date.now(),
+        captchaToken: String(fd.get("captchaToken") || ""),
+        captchaAnswer: sanitize(fd.get("captchaAnswer"), 8),
+        recaptchaToken: "",
       };
+
+      if (recaptchaWidgetId != null && window.grecaptcha) {
+        payload.recaptchaToken =
+          window.grecaptcha.getResponse(recaptchaWidgetId) || "";
+        if (!payload.recaptchaToken) {
+          setStatus(statusEl, "Valide le captcha Google.", "error");
+          return;
+        }
+      }
 
       const local = validateLocal(payload);
       if (local.soft) {
         setStatus(statusEl, "Message envoyé. Merci !", "ok");
         form.reset();
         if (filledAtInput) filledAtInput.value = String(Date.now());
+        await refreshCaptcha();
         return;
       }
       if (local.error) {
@@ -120,7 +219,10 @@
         const api = config.contactApi || FALLBACK_API;
         const res = await fetch(api, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
           body: JSON.stringify(payload),
         });
         const data = await res.json().catch(() => ({}));
@@ -130,6 +232,7 @@
         setStatus(statusEl, "Message envoyé. Merci !", "ok");
         form.reset();
         if (filledAtInput) filledAtInput.value = String(Date.now());
+        await refreshCaptcha();
       } catch (err) {
         console.warn(LOG, err);
         setStatus(
@@ -137,6 +240,7 @@
           err?.message || "Envoi impossible pour le moment.",
           "error"
         );
+        await refreshCaptcha();
       } finally {
         form.dataset.busy = "0";
         if (submitBtn) submitBtn.disabled = false;

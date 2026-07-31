@@ -575,6 +575,37 @@
                 placeholder="Parle-moi du projet…"
               ></textarea>
             </label>
+            <div class="contact-form__captcha">
+              <input type="hidden" name="captchaToken" id="contact-captcha-token" value="" />
+              <label class="contact-form__field">
+                <span id="contact-captcha-question">Chargement du captcha…</span>
+                <div class="contact-form__captcha-row">
+                  <input
+                    type="text"
+                    name="captchaAnswer"
+                    id="contact-captcha-answer"
+                    required
+                    inputmode="numeric"
+                    autocomplete="off"
+                    maxlength="8"
+                    placeholder="Réponse"
+                  />
+                  <button
+                    type="button"
+                    id="contact-captcha-refresh"
+                    class="panel-btn panel-btn--secondary contact-form__captcha-refresh"
+                    aria-label="Nouveau captcha"
+                  >
+                    ↻
+                  </button>
+                </div>
+              </label>
+              <div
+                id="contact-recaptcha"
+                class="contact-form__recaptcha"
+                hidden
+              ></div>
+            </div>
             <button
               type="submit"
               id="contact-form-submit"

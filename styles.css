@@ -1024,6 +1024,29 @@ p {
   border: none;
 }
 
+.contact-form__captcha-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.contact-form__captcha-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-form__captcha-refresh {
+  flex: 0 0 auto;
+  min-width: 2.6rem;
+  padding-left: 0.7rem;
+  padding-right: 0.7rem;
+  cursor: pointer;
+}
+
+.contact-form__recaptcha {
+  margin-top: 4px;
+}
+
 .contact-form__submit:disabled {
   opacity: 0.55;
   cursor: wait;
