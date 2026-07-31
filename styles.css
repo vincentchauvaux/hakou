@@ -1021,11 +1021,46 @@ audio {
   margin-top: 0.85rem;
 }
 
-.site-card p:not(.card-title) {
+.site-card p:not(.card-title):not(.site-card__kicker) {
   margin: 0;
   font-size: 0.92rem;
   line-height: 1.5;
   color: var(--panel-muted, rgba(200, 210, 235, 0.78));
+}
+
+.site-card__kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--panel-tag, var(--tag));
+}
+
+.site-card--feature {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem 1.5rem;
+}
+
+.site-card--feature .site-card__body {
+  flex: 1 1 14rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.site-card--feature .card-title {
+  margin: 0;
+}
+
+.site-card--feature .panel-cta-row {
+  margin-top: 0;
+  flex: 0 0 auto;
 }
 
 .video-grid {
