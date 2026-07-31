@@ -316,7 +316,12 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Ne
   - Nginx : snippet `/etc/nginx/snippets/hakou-studio.conf` (`location /hakou-studio/` → `127.0.0.1:8787`), `include` dans le vhost HTTPS `streamtv` (`vps-e09ed6db.vps.ovh.net`). Exemple repo : [`studio/deploy/nginx-hakou-studio.conf.example`](studio/deploy/nginx-hakou-studio.conf.example).
   - Après login OK : zoom intro puis **redirect** vers le studio. Sans session → 401 sur `/hakou-studio/`.
   - Setup détaillé : [`studio/README.md`](studio/README.md).
-- **Roadmap** : Étape 3 = ingest MediaMTX / WHIP depuis le studio → flux Radio spectateurs (le stub studio teste déjà `getDisplayMedia`).
+- **Live studio (Étape 3)** :
+  - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.
+  - Nginx : `/hakou-live/whip/` → WHIP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)).
+  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP.
+  - Spectateurs : [`radio.js`](radio.js) si `studioLive` + `hlsUrl` → player HLS (`hls.js`) **sans login**. Priorité studio > YouTube live > archives.
+  - Install : [`studio/deploy/install-mediamtx.sh`](studio/deploy/install-mediamtx.sh) + secrets `MEDIAMTX_PUBLISH_PASS` / `MEDIAMTX_API_PASS` dans `/opt/hakou-studio/.env` et `mediamtx.yml`.
 
 ## Déploiement (juillet 2026)
 

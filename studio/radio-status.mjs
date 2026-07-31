@@ -9,7 +9,7 @@ const ARCHIVE_MAX = 8;
 const CACHE_TTL_MS = 45_000;
 const ARCHIVE_KEYWORDS = /\b(set|mix|radio|dj|live|techno|hard|gaming)\b/i;
 
-let cache = { at: 0, payload: null };
+let cache = { at: 0, yt: null };
 
 function extractJsonObject(html, marker) {
   const idx = html.indexOf(marker);
@@ -198,54 +198,124 @@ async function fetchArchives(channelId, liveId) {
   return parseRssArchives(xml, liveId);
 }
 
+async function detectStudioLive(opts = {}) {
+  const apiBase = String(opts.mediamtxApiBase || "http://127.0.0.1:9997").replace(
+    /\/$/,
+    ""
+  );
+  const pathName = opts.mediamtxPath || "hakou";
+  const hlsUrl =
+    opts.hlsPublicUrl ||
+    "https://vps-e09ed6db.vps.ovh.net/hakou-live/hls/hakou/index.m3u8";
+  const apiUser = opts.mediamtxApiUser || "api";
+  const apiPass = opts.mediamtxApiPass || "";
+  if (!apiPass) return null;
+
+  const headers = {
+    Authorization: `Basic ${Buffer.from(`${apiUser}:${apiPass}`).toString("base64")}`,
+  };
+  try {
+    const res = await fetch(
+      `${apiBase}/v3/paths/get/${encodeURIComponent(pathName)}`,
+      { headers }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.ready) return null;
+    return {
+      hlsUrl,
+      title: "Live studio Hakou",
+    };
+  } catch (err) {
+    console.warn("[Hakou Radio] MediaMTX:", err.message || err);
+    return null;
+  }
+}
+
 /**
- * @param {{ channelId?: string, channelHandle?: string, youtubeApiKey?: string }} opts
+ * @param {{
+ *   channelId?: string,
+ *   channelHandle?: string,
+ *   youtubeApiKey?: string,
+ *   mediamtxApiBase?: string,
+ *   mediamtxPath?: string,
+ *   mediamtxApiUser?: string,
+ *   mediamtxApiPass?: string,
+ *   hlsPublicUrl?: string,
+ * }} opts
  */
 export async function getRadioStatus(opts = {}) {
   const now = Date.now();
-  if (cache.payload && now - cache.at < CACHE_TTL_MS) {
-    return { ...cache.payload, cached: true };
-  }
-
   const channelId = opts.channelId || DEFAULT_CHANNEL_ID;
   const channelHandle = opts.channelHandle || DEFAULT_HANDLE;
 
-  let live = null;
-  let source = "scrape";
-  try {
-    live = await detectLiveWithApiKey(channelId, opts.youtubeApiKey);
-    if (live) source = "youtube-api";
-  } catch (err) {
-    console.warn("[Hakou Radio] API live:", err.message || err);
-  }
-  if (!live) {
-    live = await detectLive(channelId, channelHandle);
-    source = live ? "scrape" : source;
+  const studio = await detectStudioLive(opts);
+
+  let yt = cache.yt;
+  if (!yt || now - cache.at >= CACHE_TTL_MS) {
+    let live = null;
+    let source = "scrape";
+    try {
+      live = await detectLiveWithApiKey(channelId, opts.youtubeApiKey);
+      if (live) source = "youtube-api";
+    } catch (err) {
+      console.warn("[Hakou Radio] API live:", err.message || err);
+    }
+    if (!live) {
+      live = await detectLive(channelId, channelHandle);
+      source = live ? "scrape" : source;
+    }
+
+    let archives = [];
+    try {
+      archives = await fetchArchives(channelId, live?.id || null);
+    } catch (err) {
+      console.warn("[Hakou Radio] archives RSS:", err.message || err);
+    }
+
+    yt = {
+      live: Boolean(live),
+      liveVideoId: live?.id || null,
+      liveTitle: live?.title || null,
+      archives,
+      source: live ? source : archives.length ? "rss" : "none",
+    };
+    cache = { at: now, yt };
   }
 
-  let archives = [];
-  try {
-    archives = await fetchArchives(channelId, live?.id || null);
-  } catch (err) {
-    console.warn("[Hakou Radio] archives RSS:", err.message || err);
+  if (studio) {
+    return {
+      ok: true,
+      channelId,
+      channelHandle,
+      live: true,
+      studioLive: true,
+      liveVideoId: null,
+      liveTitle: studio.title,
+      hlsUrl: studio.hlsUrl,
+      archives: yt.archives || [],
+      updatedAt: new Date().toISOString(),
+      source: "studio",
+      cached: false,
+    };
   }
 
-  const payload = {
+  return {
     ok: true,
     channelId,
     channelHandle,
-    live: Boolean(live),
-    liveVideoId: live?.id || null,
-    liveTitle: live?.title || null,
-    archives,
+    live: Boolean(yt.live),
+    studioLive: false,
+    liveVideoId: yt.liveVideoId || null,
+    liveTitle: yt.liveTitle || null,
+    hlsUrl: null,
+    archives: yt.archives || [],
     updatedAt: new Date().toISOString(),
-    source: live ? source : archives.length ? "rss" : "none",
-    cached: false,
+    source: yt.source,
+    cached: now - cache.at < CACHE_TTL_MS,
   };
-  cache = { at: now, payload };
-  return payload;
 }
 
 export function clearRadioStatusCache() {
-  cache = { at: 0, payload: null };
+  cache = { at: 0, yt: null };
 }

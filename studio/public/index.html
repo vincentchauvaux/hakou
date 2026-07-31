@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hakou Studio — Partage écran</title>
+    <title>Hakou Studio — Live Radio</title>
     <link rel="stylesheet" href="./studio.css" />
   </head>
   <body class="studio-body">
@@ -18,26 +18,29 @@
     </header>
 
     <main class="studio-card studio-card--wide">
-      <h1>Partage d’écran + son</h1>
+      <h1>Diffuser vers la Radio</h1>
       <p>
-        Connecté. L’ingest live (MediaMTX / WHIP) arrive à l’étape 3 — pour
-        l’instant cette page confirme l’auth et prépare les permissions
-        navigateur.
+        Partage ton écran (+ son) : le flux part en WHIP vers le serveur, puis
+        s’affiche en direct sur
+        <a href="https://hakou.be/#radio" target="_blank" rel="noopener noreferrer"
+          >hakou.be → Radio</a
+        >
+        pour tous les visiteurs (HLS).
       </p>
 
       <div class="studio-preview">
         <video id="studio-preview" playsinline muted autoplay></video>
         <p id="studio-preview-empty" class="studio-preview__empty">
-          Aucun flux local — lance un test de capture.
+          Aucun flux — lance « Passer en direct ».
         </p>
       </div>
 
       <div class="studio-actions">
         <button type="button" id="studio-start" class="studio-btn studio-btn--primary">
-          Tester écran + son
+          Passer en direct
         </button>
         <button type="button" id="studio-stop" class="studio-btn studio-btn--ghost" disabled>
-          Arrêter
+          Couper l’antenne
         </button>
       </div>
       <p id="studio-status" class="muted" role="status"></p>

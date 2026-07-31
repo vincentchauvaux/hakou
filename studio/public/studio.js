@@ -7,6 +7,9 @@ const stopBtn = document.getElementById("studio-stop");
 const logoutBtn = document.getElementById("studio-logout");
 
 let localStream = null;
+let peerConnection = null;
+let whipResourceUrl = null;
+let whipAuthHeader = null;
 
 function setStatus(msg) {
   if (statusEl) statusEl.textContent = msg || "";
@@ -24,11 +27,99 @@ async function loadMe() {
   }
 }
 
+function waitIceGatheringComplete(pc) {
+  if (pc.iceGatheringState === "complete") return Promise.resolve();
+  return new Promise((resolve) => {
+    const check = () => {
+      if (pc.iceGatheringState === "complete") {
+        pc.removeEventListener("icegatheringstatechange", check);
+        resolve();
+      }
+    };
+    pc.addEventListener("icegatheringstatechange", check);
+    setTimeout(resolve, 2500);
+  });
+}
+
+async function fetchIngestConfig() {
+  const res = await fetch("./api/studio/ingest", { credentials: "include" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `ingest HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function publishWhip(stream, ingest) {
+  const pc = new RTCPeerConnection({
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  });
+  peerConnection = pc;
+
+  for (const track of stream.getTracks()) {
+    pc.addTrack(track, stream);
+  }
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await waitIceGatheringComplete(pc);
+
+  const sdp = pc.localDescription?.sdp;
+  if (!sdp) throw new Error("SDP local manquant");
+
+  const res = await fetch(ingest.whipUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/sdp",
+      Authorization: ingest.authorization,
+    },
+    body: sdp,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`WHIP ${res.status}${text ? `: ${text.slice(0, 120)}` : ""}`);
+  }
+
+  const answer = await res.text();
+  let location = res.headers.get("Location");
+  if (location) {
+    try {
+      location = new URL(location, ingest.whipUrl).href;
+    } catch {
+      /* keep raw */
+    }
+  }
+  whipResourceUrl = location;
+  whipAuthHeader = ingest.authorization;
+  await pc.setRemoteDescription({ type: "answer", sdp: answer });
+  return ingest.hlsUrl;
+}
+
+async function stopWhip() {
+  try {
+    if (whipResourceUrl) {
+      await fetch(whipResourceUrl, {
+        method: "DELETE",
+        headers: whipAuthHeader ? { Authorization: whipAuthHeader } : {},
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+  whipResourceUrl = null;
+  whipAuthHeader = null;
+  peerConnection?.close();
+  peerConnection = null;
+}
+
 async function startCapture() {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     setStatus("getDisplayMedia indisponible sur ce navigateur.");
     return;
   }
+  startBtn.disabled = true;
+  setStatus("Demande de partage d’écran…");
   try {
     localStream = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: 30 },
@@ -38,33 +129,45 @@ async function startCapture() {
       preview.srcObject = localStream;
       previewWrap?.classList.add("is-live");
     }
-    startBtn.disabled = true;
+    localStream.getVideoTracks()[0]?.addEventListener("ended", stopCapture);
+
+    setStatus("Connexion WHIP au serveur…");
+    const ingest = await fetchIngestConfig();
+    const hlsUrl = await publishWhip(localStream, ingest);
     stopBtn.disabled = false;
     setStatus(
-      "Capture locale OK (écran ± audio). Ingest serveur = étape 3."
+      `En direct — les visiteurs Radio voient le flux HLS (~2–5 s). ${hlsUrl}`
     );
-    localStream.getVideoTracks()[0]?.addEventListener("ended", stopCapture);
   } catch (err) {
     console.warn("[Hakou Studio]", err);
+    await stopWhip();
+    localStream?.getTracks()?.forEach((t) => t.stop());
+    localStream = null;
+    if (preview) preview.srcObject = null;
+    previewWrap?.classList.remove("is-live");
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
     setStatus(
       err?.name === "NotAllowedError"
         ? "Permission refusée — autorise écran / son."
-        : "Impossible de démarrer la capture."
+        : err?.message || "Impossible de démarrer le live."
     );
   }
 }
 
-function stopCapture() {
+async function stopCapture() {
+  await stopWhip();
   localStream?.getTracks()?.forEach((t) => t.stop());
   localStream = null;
   if (preview) preview.srcObject = null;
   previewWrap?.classList.remove("is-live");
   startBtn.disabled = false;
   stopBtn.disabled = true;
-  setStatus("Capture arrêtée.");
+  setStatus("Live arrêté.");
 }
 
 logoutBtn?.addEventListener("click", async () => {
+  await stopCapture();
   await fetch("./api/auth/logout", {
     method: "POST",
     credentials: "include",

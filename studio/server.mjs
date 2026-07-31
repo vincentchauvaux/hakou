@@ -44,6 +44,18 @@ const YOUTUBE_API_KEY = env.YOUTUBE_API_KEY || "";
 const RADIO_CHANNEL_ID =
   env.RADIO_CHANNEL_ID || "UCmm1lsi4IS7RzwFFhIax3ug";
 const RADIO_CHANNEL_HANDLE = env.RADIO_CHANNEL_HANDLE || "@MrEtibaliomecus";
+const MEDIAMTX_PATH = env.MEDIAMTX_PATH || "hakou";
+const MEDIAMTX_API_BASE = env.MEDIAMTX_API_BASE || "http://127.0.0.1:9997";
+const MEDIAMTX_API_USER = env.MEDIAMTX_API_USER || "api";
+const MEDIAMTX_API_PASS = env.MEDIAMTX_API_PASS || "";
+const MEDIAMTX_PUBLISH_USER = env.MEDIAMTX_PUBLISH_USER || "publisher";
+const MEDIAMTX_PUBLISH_PASS = env.MEDIAMTX_PUBLISH_PASS || "";
+const WHIP_PUBLIC_URL =
+  env.WHIP_PUBLIC_URL ||
+  `https://vps-e09ed6db.vps.ovh.net/hakou-live/whip/${MEDIAMTX_PATH}/whip`;
+const HLS_PUBLIC_URL =
+  env.HLS_PUBLIC_URL ||
+  `https://vps-e09ed6db.vps.ovh.net/hakou-live/hls/${MEDIAMTX_PATH}/index.m3u8`;
 const SESSION_SECRET =
   env.SESSION_SECRET || randomBytes(32).toString("hex");
 const SESSION_COOKIE = env.SESSION_COOKIE_NAME || "hakou_studio_session";
@@ -166,8 +178,13 @@ app.get("/api/radio/status", async (_req, res) => {
       channelId: RADIO_CHANNEL_ID,
       channelHandle: RADIO_CHANNEL_HANDLE,
       youtubeApiKey: YOUTUBE_API_KEY || undefined,
+      mediamtxApiBase: MEDIAMTX_API_BASE,
+      mediamtxPath: MEDIAMTX_PATH,
+      mediamtxApiUser: MEDIAMTX_API_USER,
+      mediamtxApiPass: MEDIAMTX_API_PASS || undefined,
+      hlsPublicUrl: HLS_PUBLIC_URL,
     });
-    res.setHeader("Cache-Control", "public, max-age=30");
+    res.setHeader("Cache-Control", "public, max-age=15");
     res.json(status);
   } catch (err) {
     console.error("[Hakou Studio] radio status", err.message || err);
@@ -176,10 +193,42 @@ app.get("/api/radio/status", async (_req, res) => {
       live: false,
       liveVideoId: null,
       liveTitle: null,
+      hlsUrl: null,
       archives: [],
       error: "statut radio indisponible",
     });
   }
+});
+
+function requireSession(req, res) {
+  const session = verifySession(req.cookies?.[SESSION_COOKIE]);
+  if (!session) {
+    res.status(401).json({ error: "connexion requise" });
+    return null;
+  }
+  return session;
+}
+
+/** Credentials WHIP pour le studio (allowlist uniquement). */
+app.get("/api/studio/ingest", (req, res) => {
+  if (!requireSession(req, res)) return;
+  if (!MEDIAMTX_PUBLISH_PASS) {
+    res.status(503).json({
+      error: "ingest MediaMTX non configuré (MEDIAMTX_PUBLISH_PASS)",
+    });
+    return;
+  }
+  const basic = Buffer.from(
+    `${MEDIAMTX_PUBLISH_USER}:${MEDIAMTX_PUBLISH_PASS}`
+  ).toString("base64");
+  res.json({
+    path: MEDIAMTX_PATH,
+    whipUrl: WHIP_PUBLIC_URL,
+    hlsUrl: HLS_PUBLIC_URL,
+    authorization: `Basic ${basic}`,
+    // Alternative OBS / certains clients WHIP
+    bearer: `${MEDIAMTX_PUBLISH_USER}:${MEDIAMTX_PUBLISH_PASS}`,
+  });
 });
 
 app.get("/api/auth/config", (_req, res) => {

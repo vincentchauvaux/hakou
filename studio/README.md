@@ -34,4 +34,13 @@ Allowlist défaut : `vincent.chauvaux@gmail.com` (`ALLOWED_EMAILS`).
 
 ## Statut Radio public
 
-`GET /api/radio/status` — **sans auth**, CORS vers hakou.be. Détecte un live YouTube Public + archives RSS. Utilisé par [`radio.js`](../radio.js) pour tous les visiteurs.
+`GET /api/radio/status` — **sans auth**, CORS vers hakou.be. Priorité : **studio MediaMTX** (HLS) → live YouTube Public → archives RSS.
+
+## Étape 3 — Live studio (WHIP → HLS)
+
+1. Installer MediaMTX : `MEDIAMTX_PUBLISH_PASS=… MEDIAMTX_API_PASS=… sudo bash studio/deploy/install-mediamtx.sh`
+2. Nginx : [`deploy/nginx-hakou-live.conf.example`](deploy/nginx-hakou-live.conf.example) → `/etc/nginx/snippets/hakou-live.conf` + `include` dans le vhost HTTPS.
+3. Ouvrir **UDP 8189** (ICE WebRTC).
+4. Dans `studio/.env` : `MEDIAMTX_PUBLISH_PASS`, `MEDIAMTX_API_PASS` (identiques à la config MediaMTX).
+5. Studio connecté → « Passer en direct » → WHIP ; Radio hakou.be lit `…/hakou-live/hls/hakou/index.m3u8`.
+

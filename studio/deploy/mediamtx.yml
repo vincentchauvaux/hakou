@@ -1,0 +1,74 @@
+###############################################
+# Hakou — MediaMTX (WHIP ingest + HLS lecture)
+# Path public : hakou
+###############################################
+
+logLevel: info
+logDestinations: [stdout]
+
+# API locale (statut path pour /api/radio/status)
+api: true
+apiAddress: 127.0.0.1:9997
+
+metrics: false
+pprof: false
+playback: false
+
+rtsp: false
+rtmp: false
+srt: false
+
+###############################################
+# Auth interne
+# - lecture HLS : anonyme (spectateurs hakou.be)
+# - publish WHIP : user publisher + pass (studio authentifié)
+###############################################
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    permissions:
+      - action: read
+      - action: playback
+  - user: publisher
+    pass: "CHANGE_ME_PUBLISH_PASS"
+    permissions:
+      - action: publish
+        path: hakou
+  - user: api
+    pass: "CHANGE_ME_API_PASS"
+    permissions:
+      - action: api
+
+###############################################
+# HLS (spectateurs)
+###############################################
+
+hls: true
+hlsAddress: 127.0.0.1:8888
+hlsEncryption: false
+hlsAllowOrigins: ["https://hakou.be", "http://localhost:3000", "http://127.0.0.1:3000", "https://vps-e09ed6db.vps.ovh.net"]
+hlsAlwaysRemux: true
+hlsVariant: fmp4
+hlsSegmentDuration: 2s
+hlsPartDuration: 400ms
+hlsSegmentCount: 7
+hlsMuxerCloseAfter: 30s
+
+###############################################
+# WebRTC / WHIP (studio)
+###############################################
+
+webrtc: true
+webrtcAddress: 127.0.0.1:8889
+webrtcEncryption: false
+webrtcAllowOrigins: ["https://hakou.be", "http://localhost:3000", "http://127.0.0.1:3000", "https://vps-e09ed6db.vps.ovh.net"]
+webrtcLocalUDPAddress: :8189
+webrtcAdditionalHosts: [vps-e09ed6db.vps.ovh.net, 51.178.44.114]
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+
+paths:
+  hakou:
+    source: publisher

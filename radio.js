@@ -1,7 +1,7 @@
 (() => {
   const RADIO_JSON_URL = "./content/radio.json";
   const CORS_PROXY = "https://api.allorigins.win/raw?url=";
-  const POLL_MS = 90_000;
+  const POLL_MS = 20_000;
   const ARCHIVE_MAX = 8;
   const YT_NS_HINT = "yt:videoId";
 
@@ -13,9 +13,12 @@
     `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
 
   const LOG = "[Hakou Radio]";
+  const HLS_CDN = "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js";
 
   let pollTimer = null;
   let lastAppliedKey = "";
+  let hlsPlayer = null;
+  let hlsScriptPromise = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -32,8 +35,20 @@
     titleEl.textContent = title;
   }
 
+  function destroyHls() {
+    if (hlsPlayer) {
+      try {
+        hlsPlayer.destroy();
+      } catch {
+        /* ignore */
+      }
+      hlsPlayer = null;
+    }
+  }
+
   function clearFrame(frame) {
-    frame.querySelectorAll("iframe").forEach((el) => el.remove());
+    destroyHls();
+    frame.querySelectorAll("iframe, video.radio-hls").forEach((el) => el.remove());
   }
 
   function showEmpty(frame, emptyEl, message) {
@@ -42,6 +57,59 @@
       emptyEl.hidden = false;
       if (message) emptyEl.textContent = message;
     }
+  }
+
+  function loadHlsScript() {
+    if (window.Hls) return Promise.resolve(window.Hls);
+    if (hlsScriptPromise) return hlsScriptPromise;
+    hlsScriptPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = HLS_CDN;
+      s.async = true;
+      s.onload = () => resolve(window.Hls);
+      s.onerror = () => reject(new Error("hls.js indisponible"));
+      document.head.appendChild(s);
+    });
+    return hlsScriptPromise;
+  }
+
+  async function playHls(frame, emptyEl, hlsUrl, title) {
+    if (!frame || !hlsUrl) return;
+    clearFrame(frame);
+    if (emptyEl) emptyEl.hidden = true;
+
+    const video = document.createElement("video");
+    video.className = "radio-hls";
+    video.controls = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    video.title = title || "Hakou Radio Live";
+    frame.appendChild(video);
+
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = hlsUrl;
+      try {
+        await video.play();
+      } catch {
+        /* autoplay bloqué — controls OK */
+      }
+      return;
+    }
+
+    const Hls = await loadHlsScript();
+    if (!Hls?.isSupported()) {
+      showEmpty(frame, emptyEl, "Lecture HLS non supportée sur ce navigateur.");
+      return;
+    }
+    hlsPlayer = new Hls({
+      enableWorker: true,
+      lowLatencyMode: true,
+    });
+    hlsPlayer.loadSource(hlsUrl);
+    hlsPlayer.attachMedia(video);
+    hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+      video.play().catch(() => {});
+    });
   }
 
   function playVideo(frame, emptyEl, videoId, title) {
@@ -117,6 +185,8 @@
   function configKey(data) {
     return [
       data.live ? "1" : "0",
+      data.studioLive ? "s" : "y",
+      data.hlsUrl || "",
       data.liveVideoId || "",
       normalizeArchives(data.archives)
         .map((a) => a.id)
@@ -190,21 +260,35 @@
       (typeof base.liveTitle === "string" && base.liveTitle.trim()) || null;
     let archives = normalizeArchives(base.archives);
     let source = "radio.json";
+    let hlsUrl = null;
+    let studioLive = false;
 
     try {
       const remote = await fetchStatusApi(statusApi);
       if (remote && remote.ok !== false) {
         source = remote.source || "status-api";
-        if (remote.live && remote.liveVideoId) {
+        if (remote.studioLive && remote.hlsUrl) {
+          live = true;
+          liveVideoId = null;
+          liveTitle =
+            (typeof remote.liveTitle === "string" && remote.liveTitle.trim()) ||
+            "Live studio Hakou";
+          hlsUrl = String(remote.hlsUrl).trim();
+          studioLive = true;
+        } else if (remote.live && remote.liveVideoId) {
           live = true;
           liveVideoId = String(remote.liveVideoId).trim();
           liveTitle =
             (typeof remote.liveTitle === "string" && remote.liveTitle.trim()) ||
             "Mix en direct";
+          hlsUrl = null;
+          studioLive = false;
         } else {
           live = false;
           liveVideoId = null;
           liveTitle = null;
+          hlsUrl = null;
+          studioLive = false;
         }
         const remoteArchives = normalizeArchives(remote.archives);
         if (remoteArchives.length) archives = remoteArchives;
@@ -232,6 +316,8 @@
       live,
       liveVideoId,
       liveTitle,
+      hlsUrl,
+      studioLive,
       archives,
       source,
     };
@@ -246,24 +332,39 @@
 
     const key = configKey(data);
     const archives = normalizeArchives(data.archives);
-    const live =
+    const hlsUrl =
+      typeof data.hlsUrl === "string" && data.hlsUrl.trim()
+        ? data.hlsUrl.trim()
+        : null;
+    const studioLive = Boolean(data.studioLive) && Boolean(hlsUrl);
+    const ytLive =
+      !studioLive &&
       Boolean(data.live) &&
       typeof data.liveVideoId === "string" &&
       data.liveVideoId.trim().length > 0;
-    const liveId = live ? data.liveVideoId.trim() : null;
+    const liveId = ytLive ? data.liveVideoId.trim() : null;
     const liveTitle =
       (typeof data.liveTitle === "string" && data.liveTitle.trim()) ||
-      "Mix en direct";
+      (studioLive ? "Live studio Hakou" : "Mix en direct");
 
-    // Évite de recharger l’iframe si rien n’a changé (poll)
-    if (key === lastAppliedKey && frame.querySelector("iframe")) {
+    // Évite de recharger le player si rien n’a changé (poll)
+    if (
+      key === lastAppliedKey &&
+      (frame.querySelector("iframe") || frame.querySelector("video.radio-hls"))
+    ) {
       return;
     }
     lastAppliedKey = key;
 
     let activeId = null;
 
-    if (liveId) {
+    if (studioLive) {
+      setStatus("live", liveTitle);
+      playHls(frame, emptyEl, hlsUrl, liveTitle).catch((err) => {
+        console.warn(LOG, "HLS", err);
+        showEmpty(frame, emptyEl, "Flux studio indisponible pour le moment.");
+      });
+    } else if (liveId) {
       activeId = liveId;
       setStatus("live", liveTitle);
       playVideo(frame, emptyEl, liveId, liveTitle);
@@ -297,10 +398,18 @@
       channelLink.textContent = `youtube.com/@${handle}`;
     }
 
-    console.info(LOG, liveId ? `live ${liveId}` : `${archives.length} archive(s)`, {
-      source: data.source || "local",
-      watch: activeId ? WATCH_URL(activeId) : null,
-    });
+    console.info(
+      LOG,
+      studioLive
+        ? `studio HLS ${hlsUrl}`
+        : liveId
+          ? `live ${liveId}`
+          : `${archives.length} archive(s)`,
+      {
+        source: data.source || "local",
+        watch: activeId ? WATCH_URL(activeId) : null,
+      }
+    );
   }
 
   async function refresh() {
