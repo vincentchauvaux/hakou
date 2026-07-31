@@ -227,9 +227,10 @@ app.get("/api/radio/status", async (_req, res) => {
 });
 
 /**
- * Public — challenge captcha arithmétique (HMAC, usage unique).
+ * Public — challenge anti-spam arithmétique (HMAC, usage unique).
+ * Chemin volontairement sans « captcha » (souvent filtré par bloqueurs pub).
  */
-app.get("/api/contact/captcha", (req, res) => {
+function sendContactChallenge(req, res) {
   const ip = getClientIp(req);
   if (
     !checkRateLimit(ip, {
@@ -238,7 +239,7 @@ app.get("/api/contact/captcha", (req, res) => {
       key: "captcha",
     })
   ) {
-    res.status(429).json({ ok: false, error: "Trop de captchas demandés." });
+    res.status(429).json({ ok: false, error: "Trop de demandes. Réessaie plus tard." });
     return;
   }
   const challenge = createCaptchaChallenge(CONTACT_CAPTCHA_SECRET);
@@ -250,7 +251,11 @@ app.get("/api/contact/captcha", (req, res) => {
     expiresInSec: challenge.expiresInSec,
     recaptchaSiteKey: CONTACT_RECAPTCHA_SITE_KEY || null,
   });
-});
+}
+
+app.get("/api/contact/challenge", sendContactChallenge);
+/** Alias rétrocompat */
+app.get("/api/contact/captcha", sendContactChallenge);
 
 /**
  * Public — formulaire Contact (honeypot + captcha + filtres + rate-limit).

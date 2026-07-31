@@ -1,6 +1,6 @@
 {
   "contactApi": "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/contact",
-  "captchaApi": "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/contact/captcha",
+  "challengeApi": "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/contact/challenge",
   "emailUser": "vincent.chauvaux",
   "emailDomain": "gmail.com"
 }

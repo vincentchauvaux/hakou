@@ -1024,6 +1024,80 @@ p {
   border: none;
 }
 
+.contact-form__challenge {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-card-border, rgba(200, 184, 152, 0.28));
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.contact-form__challenge-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.contact-form__challenge-q {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--panel-text, #f3efe6);
+}
+
+.contact-form__challenge-q[data-state="loading"] {
+  opacity: 0.65;
+  font-weight: 500;
+}
+
+.contact-form__challenge-q[data-state="error"] {
+  color: #ffb4a8;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.contact-form__challenge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.contact-form__field--grow {
+  flex: 1 1 8rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.contact-form__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.contact-form__challenge-refresh {
+  flex: 0 0 auto;
+  align-self: stretch;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.contact-form__challenge-refresh:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .contact-form__captcha-row {
   display: flex;
   gap: 8px;

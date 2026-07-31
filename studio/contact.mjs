@@ -110,7 +110,7 @@ export function createCaptchaChallenge(secret, { ttlMs = 10 * 60 * 1000 } = {}) 
   const body = b64url(JSON.stringify({ a, b, n: nonce, exp }));
   const sig = hmacSign(secret, body);
   const token = `${body}.${sig}`;
-  const question = `Combien font ${a} + ${b} ?`;
+  const question = `${a} + ${b} = ?`;
   return { token, question, expiresInSec: Math.floor(ttlMs / 1000) };
 }
 

@@ -575,11 +575,15 @@
                 placeholder="Parle-moi du projet…"
               ></textarea>
             </label>
-            <div class="contact-form__captcha">
+            <div class="contact-form__challenge">
               <input type="hidden" name="captchaToken" id="contact-captcha-token" value="" />
-              <label class="contact-form__field">
-                <span id="contact-captcha-question">Chargement du captcha…</span>
-                <div class="contact-form__captcha-row">
+              <p class="contact-form__challenge-title">Vérification anti-spam</p>
+              <p id="contact-captcha-question" class="contact-form__challenge-q">
+                Préparation de la question…
+              </p>
+              <div class="contact-form__challenge-row">
+                <label class="contact-form__field contact-form__field--grow">
+                  <span class="contact-form__sr">Réponse numérique</span>
                   <input
                     type="text"
                     name="captchaAnswer"
@@ -588,18 +592,17 @@
                     inputmode="numeric"
                     autocomplete="off"
                     maxlength="8"
-                    placeholder="Réponse"
+                    placeholder="Ta réponse"
                   />
-                  <button
-                    type="button"
-                    id="contact-captcha-refresh"
-                    class="panel-btn panel-btn--secondary contact-form__captcha-refresh"
-                    aria-label="Nouveau captcha"
-                  >
-                    ↻
-                  </button>
-                </div>
-              </label>
+                </label>
+                <button
+                  type="button"
+                  id="contact-captcha-refresh"
+                  class="panel-btn panel-btn--secondary contact-form__challenge-refresh"
+                >
+                  Autre question
+                </button>
+              </div>
               <div
                 id="contact-recaptcha"
                 class="contact-form__recaptcha"
