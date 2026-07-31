@@ -1,10 +1,10 @@
 import * as THREE from "three";
 
-const SECTION_COUNT = 8;
+const SECTION_COUNT = 9;
 const STAR_COUNT = 2800;
 const SUN_BASE_RADIUS = 2.2;
-/** Chaleur Soleil 3D / UI : 0 avant §5, 1 à Contact (§7). */
-const SUN_HEAT_START = 4.85;
+/** Chaleur Soleil 3D / UI : 0 avant §6 (Sites), 1 à Contact (§8). */
+const SUN_HEAT_START = 5.85;
 const SUN_HEAT_SPAN = 2.15;
 /** Échelle orbitale globale (~+20 %). */
 const ORBIT_SCALE = 1.2;
@@ -12,6 +12,7 @@ const ORBIT_SCALE = 1.2;
 const zoneAccent = [
   0x6d93ff,
   0xc9b896,
+  0xb898d0,
   0xff9a5c,
   0x66d8e8,
   0xff6b6b,
@@ -24,6 +25,7 @@ const zoneAccent = [
 const JOURNEY_ARC = [
   { lift: 0.13, side: 0.08 },
   { lift: 0.11, side: -0.07 },
+  { lift: 0.105, side: 0.065 },
   { lift: 0.1, side: 0.06 },
   { lift: 0.09, side: -0.05 },
   { lift: 0.085, side: 0.045 },
@@ -61,7 +63,7 @@ const GLIDE_RADIAL_Y_BREATHE = 0.004;
 /** Demi-angle max du disque Soleil (rad) — évite le Soleil plein écran hors Contact. */
 /** Plafond angulaire Soleil (rad) — plus élevé en orbites intérieures pour ne pas repousser la caméra hors limite. */
 const SUN_MAX_ANGULAR_BY_SECTION = [
-  0.042, 0.042, 0.044, 0.046, 0.072, 0.14, 0.18, 0.22,
+  0.042, 0.042, 0.043, 0.044, 0.046, 0.072, 0.14, 0.18, 0.22,
 ];
 /** Rotation propre planète sur son axe (× spinSpeed × axialScale) — distincte de REST_ORBIT_DRIFT */
 const PLANET_SPIN_SCALE = 0.025;
@@ -145,6 +147,25 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
+    /* §2 Radio / Pluton */
+    planetSide: 1,
+    distScale: 1.04,
+    tangentMul: 1.02,
+    compositionSlide: 1.14,
+    elevation: 0.21,
+    limbElevation: 0.1,
+    horizonLimbOut: 0.96,
+    horizonSkyLift: 0.145,
+    horizonSunBias: 0.33,
+    sunFrameBias: 0.42,
+    orbitSunLift: 0.075,
+    dutch: -0.012,
+    textAlign: "left",
+    panelOffset: "left",
+    safeSide: "west",
+  },
+  {
+    /* §3 Video / Jupiter */
     planetSide: 1,
     distScale: 0.97,
     tangentMul: 1.0,
@@ -162,6 +183,7 @@ const SECTION_FRAMING = [
     safeSide: "west",
   },
   {
+    /* §4 Visuel / Uranus */
     planetSide: -1,
     distScale: 1.0,
     tangentMul: 0.96,
@@ -179,6 +201,7 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
+    /* §5 3D / Mars */
     planetSide: -1,
     distScale: 1.07,
     tangentMul: 0.94,
@@ -196,6 +219,7 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
+    /* §6 Sites / Vénus */
     planetSide: 1,
     distScale: 0.9,
     tangentMul: 0.92,
@@ -213,6 +237,7 @@ const SECTION_FRAMING = [
     safeSide: "west",
   },
   {
+    /* §7 Plugin / Terre */
     planetSide: -1,
     distScale: 0.86,
     tangentMul: 0.88,
@@ -230,6 +255,7 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
+    /* §8 Contact / Mercure */
     planetSide: 1,
     distScale: 0.81,
     tangentMul: 0.72,
@@ -250,7 +276,7 @@ const SECTION_FRAMING = [
 ];
 
 /** Focale repos (mm) — télé modérée loin ; plus longue près du Soleil = disque contenu. */
-const FOCAL_REST_MM = [42, 22, 32, 36, 42, 46, 50, 52];
+const FOCAL_REST_MM = [42, 22, 28, 32, 36, 42, 46, 50, 52];
 const SENSOR_HEIGHT_MM = 24;
 /** Lissage exponentiel FOV — constant pour éviter un saut quand le glide s'arrête. */
 const FOV_LERP_ALPHA = 0.12;
@@ -281,19 +307,19 @@ function getSunVisualRadius(sectionIndex) {
   return SUN_BASE_RADIUS * sunScale;
 }
 
-/** Biais regard vers le Soleil — renforcé §0–6 pour disque à l'horizon (ISS). */
+/** Biais regard vers le Soleil — renforcé §0–7 pour disque à l'horizon (ISS). */
 function getHeroSunBiasScale(sectionIndex) {
-  if (sectionIndex >= 7) return 1;
-  if (sectionIndex >= 5) return 0.72 + (sectionIndex - 5) * 0.14;
-  if (sectionIndex === 4) return 0.52;
+  if (sectionIndex >= 8) return 1;
+  if (sectionIndex >= 6) return 0.72 + (sectionIndex - 6) * 0.14;
+  if (sectionIndex === 5) return 0.52;
   return 0.58;
 }
 
 /** Lerp lookAt → Soleil pour garder le disque dans le FOV (sans viser le centre). */
 function getHeroLookSunLerp(sectionIndex) {
-  if (sectionIndex >= 7) return 0.14;
-  if (sectionIndex >= 5) return 0.11 + (sectionIndex - 5) * 0.025;
-  if (sectionIndex === 4) return 0.13;
+  if (sectionIndex >= 8) return 0.14;
+  if (sectionIndex >= 6) return 0.11 + (sectionIndex - 6) * 0.025;
+  if (sectionIndex === 5) return 0.13;
   return 0.09 + sectionIndex * 0.012;
 }
 
@@ -371,6 +397,26 @@ const PLANETS = [
     ringView: true,
   },
   {
+    name: "Pluto", // panel UI §2 : Radio
+    orbitRadius: scaledOrbit(36),
+    size: 0.28,
+    color: 0x9080a8,
+    emissive: 0x201828,
+    accentColor: 0xc8b8d8,
+    atmosphereColor: 0xa090b8,
+    roughness: 0.88,
+    noiseScale: 7.2,
+    orbitSpeed: 0.18,
+    spinSpeed: 0.28,
+    axialScale: 0.82,
+    heroAngle: 2.78,
+    startAngle: 2.78,
+    section: 2,
+    camDistMul: 1.18,
+    camLift: 0.08,
+    camTangent: 0.48,
+  },
+  {
     name: "Jupiter",
     orbitRadius: scaledOrbit(28),
     size: 1.18,
@@ -385,7 +431,7 @@ const PLANETS = [
     axialScale: 0.55,
     heroAngle: 3.42,
     startAngle: 3.42,
-    section: 2,
+    section: 3,
     camDistMul: 1.22,
     camLift: 0.1,
     camTangent: 0.5,
@@ -405,7 +451,7 @@ const PLANETS = [
     axialScale: 0.7,
     heroAngle: 4.1,
     startAngle: 4.1,
-    section: 3,
+    section: 4,
     camDistMul: 1.09,
     camLift: 0.09,
     camTangent: 0.45,
@@ -425,13 +471,13 @@ const PLANETS = [
     axialScale: 0.9,
     heroAngle: 4.8,
     startAngle: 4.8,
-    section: 4,
+    section: 5,
     camDistMul: 1.21,
     camLift: 0.08,
     camTangent: 0.4,
   },
   {
-    name: "Venus", // panel UI §5 : Sites (corps 3D inchangé)
+    name: "Venus", // panel UI §6 : Sites (corps 3D inchangé)
     orbitRadius: scaledOrbit(10.2),
     size: 0.54,
     color: 0xe8d8a8,
@@ -445,13 +491,13 @@ const PLANETS = [
     axialScale: 0.9,
     heroAngle: 5.42,
     startAngle: 1.85,
-    section: 5,
+    section: 6,
     camDistMul: 1.05,
     camLift: 0.06,
     camTangent: 0.38,
   },
   {
-    name: "Earth", // panel UI §6 : Plugin (planète Terre décorative 3D inchangée)
+    name: "Earth", // panel UI §7 : Plugin (planète Terre décorative 3D inchangée)
     orbitRadius: scaledOrbit(7.6),
     size: 0.46,
     color: 0x286858,
@@ -465,7 +511,7 @@ const PLANETS = [
     axialScale: 0.92,
     heroAngle: 5.78,
     startAngle: 4.65,
-    section: 6,
+    section: 7,
     camDistMul: 1.0,
     camLift: 0.05,
     camTangent: 0.35,
@@ -485,7 +531,7 @@ const PLANETS = [
     axialScale: 0.95,
     heroAngle: 6.02,
     startAngle: 6.02,
-    section: 7,
+    section: 8,
     camDistMul: 0.87,
     camLift: 0.04,
     camTangent: 0.3,
@@ -921,23 +967,23 @@ function getSunPushExtraMargin(fromIndex, toIndex, displaySection) {
   let extra = 0;
   const effTo = toIndex ?? clamp(Math.round(displaySection), 0, SECTION_COUNT - 1);
   const effFrom = fromIndex ?? effTo;
-  if (effTo >= 4 || effFrom >= 4) {
+  if (effTo >= 5 || effFrom >= 5) {
     extra += SUN_INNER_TRANSIT_EXTRA;
   }
-  if (effTo >= 6) {
+  if (effTo >= 7) {
     extra += SUN_BASE_RADIUS * 0.38;
   }
-  if (effTo >= 7) {
+  if (effTo >= 8) {
     extra += SUN_BASE_RADIUS * 0.22;
   }
-  if (effFrom <= 2 && effTo >= 4) {
+  if (effFrom <= 2 && effTo >= 5) {
     extra += SUN_INNER_TRANSIT_EXTRA * 0.45;
   }
   if (Math.abs(effTo - effFrom) >= 4) {
     extra += SUN_BASE_RADIUS * 0.28;
   }
-  if (displaySection >= 5.2) {
-    extra += SUN_BASE_RADIUS * 0.22 * clamp((displaySection - 5.2) / 2.4, 0, 1);
+  if (displaySection >= 6.2) {
+    extra += SUN_BASE_RADIUS * 0.22 * clamp((displaySection - 6.2) / 2.4, 0, 1);
   }
   return extra;
 }
@@ -2000,7 +2046,7 @@ function addPlanetEntry(data) {
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.size, 40, 40), mat);
   scene.add(mesh);
 
-  const atmIntensity = data.section === 7 ? 1.4 : data.section == null ? 0.75 : 1.0;
+  const atmIntensity = data.section === 8 ? 1.4 : data.section == null ? 0.75 : 1.0;
   const { mesh: atmMesh, mat: atmMat } = createAtmosphereShell(
     data.size,
     data.atmosphereColor,
@@ -2158,7 +2204,7 @@ function updatePlanets(elapsed, displaySection, glideState) {
   const horizonBoost = sunHeat < 0.12 ? 1.22 : 1;
   const sunScale = (coreScale + sunHeat * 0.35) * horizonBoost;
   const pulse = 1 + Math.sin(elapsed * 1.1 * SCENE_AMBIENT_MOTION_MUL) * 0.035;
-  /** Halos quasi éteints avant §5 — évite le voile crème sur 3D / orbites extérieures. */
+  /** Halos quasi éteints avant §6 — évite le voile crème sur 3D / orbites extérieures. */
   const haloPresence = sunHeat * sunHeat;
   const coreEmissive =
     SUN_REST_CORE_EMISSIVE + sunHeat * (2.82 - SUN_REST_CORE_EMISSIVE);

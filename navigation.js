@@ -5,8 +5,8 @@ import {
   resetRestOrbitOffsets,
 } from "./scene3d.js";
 
-let sectionCount = 8;
-let scaleSectionMax = 5;
+let sectionCount = 9;
+let scaleSectionMax = 8;
 const TRANSITION_MS = 3200;
 const LONG_JUMP_MS_PER_STEP = 900;
 const GATE_WHEEL_TOTAL = 140;
@@ -24,7 +24,7 @@ const MOBILE_EDGE_CHARGE_WHEEL_TOTAL = 220;
 const MOBILE_EDGE_CHARGE_TOUCH_TOTAL = 108;
 /** Pulse feedGate après une charge bord complète (~2,4 pulses pour gateProgress ≥ 1). */
 const MOBILE_EDGE_GATE_PULSE = GATE_WHEEL_TOTAL * 0.42;
-const SECTION_THEMES = ["dark", "light", "mid", "mid", "mid", "mid", "mid", "mercury"];
+const SECTION_THEMES = ["dark", "light", "mid", "mid", "mid", "mid", "mid", "mid", "mercury"];
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -60,12 +60,13 @@ let solarScaleGauge = null;
 const SCALE_MARKER_COLORS = [
   "#3060b0", /* 0 Neptune */
   "#d4b878", /* 1 Saturne */
-  "#c87848", /* 2 Jupiter */
-  "#60c8b8", /* 3 Uranus */
-  "#c86048", /* 4 Mars */
-  "#e8d8a8", /* 5 Vénus */
-  "#48a878", /* 6 Plugin (orbite Terre décorative) */
-  "#a0a098", /* 7 Mercure */
+  "#a090b8", /* 2 Pluton (Radio) */
+  "#c87848", /* 3 Jupiter */
+  "#60c8b8", /* 4 Uranus */
+  "#c86048", /* 5 Mars */
+  "#e8d8a8", /* 6 Vénus */
+  "#48a878", /* 7 Plugin (orbite Terre décorative) */
+  "#a0a098", /* 8 Mercure */
 ];
 let panels = [];
 let navLinks = [];
@@ -502,7 +503,7 @@ function getUiSectionIndex() {
 function syncTheme() {
   const activeIndex = getUiSectionIndex();
   document.body.dataset.theme = SECTION_THEMES[activeIndex] ?? "dark";
-  const warm = clamp((displaySection - 5) / 2, 0, 1);
+  const warm = clamp((displaySection - 6) / 2, 0, 1);
   const r = Math.round(lerp(5, 16, warm));
   const g = Math.round(lerp(7, 12, warm));
   const b = Math.round(lerp(13, 8, warm));
@@ -801,7 +802,7 @@ function onTouchMove(event) {
 }
 
 const EMBED_SCROLL_HOST_SELECTOR =
-  ".soundcloud-embed, .instagram-embed-panel__scroll";
+  ".soundcloud-embed, .instagram-embed-panel__scroll, .radio-player__frame";
 const EMBED_TOUCH_LAYER_CLASS = "embed-touch-layer";
 const EMBED_SCROLL_LOCK_PX = 8;
 const EMBED_TAP_MAX_MOVE_PX = 12;
