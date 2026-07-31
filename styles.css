@@ -535,6 +535,15 @@ body {
 .panel.is-active {
   opacity: 1;
   transform: translateY(0) translateX(0);
+  /* Scroll interne possible (mobile / laptop compact) sans barre visible */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panel.is-active::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .panel.panel--frame-right .panel-lead,
