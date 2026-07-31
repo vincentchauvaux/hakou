@@ -1092,6 +1092,10 @@ export function getGlideState() {
   };
 }
 
+export function goToSectionIndex(index) {
+  goToSection(index);
+}
+
 /** Bloque molette / clavier / touch / menu (intro gate). */
 export function setNavigationLocked(locked) {
   navigationLocked = Boolean(locked);

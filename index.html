@@ -42,6 +42,27 @@
       <p id="intro-hint" class="intro-hint">Cliquer le logo pour entrer</p>
     </div>
 
+    <button
+      type="button"
+      id="intro-replay"
+      class="intro-replay"
+      aria-label="Revoir la présentation"
+      title="Revoir la présentation"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.25"/>
+        <path d="M12 3.5v2.2"/>
+        <path d="M12 18.3v2.2"/>
+        <path d="M3.5 12h2.2"/>
+        <path d="M18.3 12h2.2"/>
+        <path d="M6.1 6.1l1.55 1.55"/>
+        <path d="M16.35 16.35l1.55 1.55"/>
+        <path d="M17.9 6.1l-1.55 1.55"/>
+        <path d="M7.65 16.35l-1.55 1.55"/>
+      </svg>
+      <span class="intro-replay__label">Intro</span>
+    </button>
+
     <div id="solar-scale" class="solar-scale" aria-hidden="true">
       <div class="solar-scale-track">
         <div class="solar-scale-rail"></div>
@@ -283,8 +304,42 @@
             outils et vitrines.
           </p>
         </div>
-        <div class="sites-grid">
-          <div class="panel-card site-card">
+        <div class="sites-grid" role="list">
+          <article class="panel-card site-card site-card--tall" role="listitem">
+            <p class="site-card__kicker">VPS OVH</p>
+            <p class="card-title">StreamTV</p>
+            <p>
+              Lecteur IPTV moderne — playlists M3U, guide TV et sync. Accueil
+              du serveur Hakou.
+            </p>
+            <div class="panel-cta-row">
+              <a
+                href="https://vps-e09ed6db.vps.ovh.net/"
+                class="panel-btn panel-btn--primary"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Ouvrir StreamTV
+              </a>
+            </div>
+          </article>
+          <article class="panel-card site-card" role="listitem">
+            <p class="card-title">Hirakana</p>
+            <p>
+              Application web Hirakana — experience interactive du projet Hakou.
+            </p>
+            <div class="panel-cta-row">
+              <a
+                href="https://vps-e09ed6db.vps.ovh.net/hirakana/"
+                class="panel-btn panel-btn--primary"
+                target="_blank"
+                rel="noopener"
+              >
+                Ouvrir Hirakana
+              </a>
+            </div>
+          </article>
+          <article class="panel-card site-card site-card--tall" role="listitem">
             <p class="card-title">RPG CR</p>
             <p>
               Jeu de role narratif dans l'univers Hakou, guide par un modele de
@@ -308,31 +363,13 @@
                 LM Studio
               </a>
             </div>
-          </div>
-          <div class="panel-card site-card">
-            <p class="card-title">Hirakana</p>
+          </article>
+          <article class="panel-card site-card site-card--feature" role="listitem">
+            <p class="site-card__kicker">Pour ma maman</p>
+            <p class="card-title">Canopée</p>
             <p>
-              Application web Hirakana — experience interactive du projet Hakou.
+              Vitrine personnelle sur canopée.be — site créé pour elle.
             </p>
-            <div class="panel-cta-row">
-              <a
-                href="https://vps-e09ed6db.vps.ovh.net/hirakana/"
-                class="panel-btn panel-btn--primary"
-                target="_blank"
-                rel="noopener"
-              >
-                Ouvrir Hirakana
-              </a>
-            </div>
-          </div>
-          <div class="panel-card site-card site-card--feature">
-            <div class="site-card__body">
-              <p class="site-card__kicker">Pour ma maman</p>
-              <p class="card-title">Canopée</p>
-              <p>
-                Vitrine personnelle sur canopée.be — site créé pour elle.
-              </p>
-            </div>
             <div class="panel-cta-row">
               <a
                 href="https://xn--canope-fva.be/"
@@ -343,7 +380,7 @@
                 Visiter canopée.be
               </a>
             </div>
-          </div>
+          </article>
         </div>
       </section>
 
