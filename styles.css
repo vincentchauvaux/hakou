@@ -1195,7 +1195,8 @@ audio {
 /* Couche scroll synthétique (mobile + laptop compact) — voir navigation.js initEmbedPanelScroll */
 @media (max-width: 680px), (min-width: 681px) and (max-height: 820px) {
   .soundcloud-embed,
-  .instagram-embed-panel__scroll {
+  .instagram-embed-panel__scroll,
+  .radio-player__frame {
     position: relative;
   }
 

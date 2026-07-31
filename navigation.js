@@ -721,6 +721,30 @@ function feedGate(dir, amount) {
   }
 }
 
+/**
+ * Direction de section pour la molette.
+ * Sans scroll interne (ou panel sans débordement) : modèle spatial inversé
+ * (molette haut → suivant). Avec débordement panel : chaîne alignée sur le
+ * contenu (continuer vers le bas en bas de page → section suivante) — évite
+ * le blocage Radio / Son / etc. après un scroll contenu vers le bas.
+ */
+function sectionDirFromWheelDelta(deltaY) {
+  if (Math.abs(deltaY) < 0.5) return 0;
+  if (isMobilePanelScroll()) {
+    const panel = getActivePanel();
+    if (panel && panelHasVerticalOverflow(panel)) {
+      return deltaY > 0 ? 1 : -1;
+    }
+  }
+  return deltaY < 0 ? 1 : deltaY > 0 ? -1 : 0;
+}
+
+function activePanelHasOverflow() {
+  if (!isMobilePanelScroll()) return false;
+  const panel = getActivePanel();
+  return Boolean(panel && panelHasVerticalOverflow(panel));
+}
+
 function onWheel(event) {
   if (navigationLocked) {
     event.preventDefault();
@@ -734,10 +758,7 @@ function onWheel(event) {
   }
 
   const delta = event.deltaY;
-  if (Math.abs(delta) < 0.5) return;
-
-  // Scroll vers le haut (deltaY < 0) = avancer vers le Soleil (index++).
-  const dir = delta < 0 ? 1 : delta > 0 ? -1 : 0;
+  const dir = sectionDirFromWheelDelta(delta);
   if (!dir || !canMove(dir)) {
     if (!isMobilePanelScroll()) event.preventDefault();
     return;
@@ -754,11 +775,12 @@ function onWheel(event) {
 function onKeyDown(event) {
   if (navigationLocked || solarScaleDragActive || isAnimating) return;
 
+  const contentAlign = activePanelHasOverflow();
   let dir = 0;
   if (["ArrowUp", "PageUp"].includes(event.key)) {
-    dir = 1;
+    dir = contentAlign ? -1 : 1;
   } else if (["ArrowDown", "PageDown", " "].includes(event.key)) {
-    dir = -1;
+    dir = contentAlign ? 1 : -1;
   }
 
   if (!dir) return;
@@ -923,7 +945,12 @@ function bindEmbedTouchLayer(layer) {
       }
       if (gestureMode !== "scroll" || Math.abs(stepDy) < 0.5) return;
 
-      if (!panelCanScrollBy(panel, stepDy)) return;
+      if (!panelCanScrollBy(panel, stepDy)) {
+        // Bord atteint : laisser buller vers onTouchMove (gating section).
+        updateTouchScrollStall(panel, stepDy > 0 ? 1 : stepDy < 0 ? -1 : 0);
+        lastY = touch.clientY;
+        return;
+      }
 
       event.preventDefault();
       event.stopPropagation();
@@ -998,6 +1025,21 @@ function initEmbedPanelScroll(root) {
   window
     .matchMedia(PANEL_INTERNAL_SCROLL_MQ)
     .addEventListener("change", () => syncEmbedTouchLayers(root));
+
+  // Player Radio (iframe / HLS) injecté après coup — resync couche tactile.
+  const radioFrame = root.querySelector("#radio-player-frame");
+  if (radioFrame && typeof MutationObserver !== "undefined") {
+    let scheduled = false;
+    const observer = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        syncEmbedTouchLayers(root);
+      });
+    });
+    observer.observe(radioFrame, { childList: true, subtree: true });
+  }
 }
 
 export function initNavigation(root) {

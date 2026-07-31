@@ -2426,19 +2426,13 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
   }
 }
 
-/* —— Intro gate (logo plan + nébuleuses + zoom caméra) —— */
+/* —— Intro gate (logo vectoriel + zoom caméra) —— */
 const INTRO_GATE_MS = 3400;
 const INTRO_LOGO_URL = "./assets/logo-hakou.svg";
-const INTRO_NEBULA_URLS = [
-  "./assets/nebula/nebula-a.png",
-  "./assets/nebula/nebula-b.png",
-  "./assets/nebula/nebula-c.png",
-];
 
 let introGateActive = false;
 let introGateGroup = null;
 let introLogoMesh = null;
-let introNebulaMeshes = [];
 let introGateZooming = false;
 let introGateZoomStartMs = 0;
 let introGateOnComplete = null;
@@ -2584,12 +2578,6 @@ function setUniverseVisible(visible) {
   });
 }
 
-function setIntroNebulaeVisible(visible) {
-  introNebulaMeshes.forEach((mesh) => {
-    mesh.visible = Boolean(visible);
-  });
-}
-
 function buildIntroGate() {
   if (!scene || introGateGroup) return;
   introGateGroup = new THREE.Group();
@@ -2610,42 +2598,11 @@ function buildIntroGate() {
     undefined,
     (err) => console.warn("[Hakou Intro] logo SVG introuvable", err)
   );
-
-  const loader = new THREE.TextureLoader();
-  INTRO_NEBULA_URLS.forEach((url, i) => {
-    loader.load(
-      url,
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        const size = 18 + i * 4;
-        const geo = new THREE.PlaneGeometry(size, size);
-        const mat = new THREE.MeshBasicMaterial({
-          map: tex,
-          transparent: true,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-          opacity: 0.42 - i * 0.06,
-          side: THREE.DoubleSide,
-          toneMapped: false,
-        });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.renderOrder = 5 + i;
-        mesh.userData.nebulaIndex = i;
-        mesh.userData.baseOpacity = mat.opacity;
-        mesh.visible = false;
-        introNebulaMeshes.push(mesh);
-        introGateGroup.add(mesh);
-        layoutIntroGate();
-      },
-      undefined,
-      () => {}
-    );
-  });
 }
 
-function layoutIntroGate() {
+function layoutIntroGate(elapsed = 0) {
   if (!introGateGroup || !camera) return;
-  refreshSectionCameras(0, 0);
+  refreshSectionCameras(elapsed, 0);
   const home = sectionCameras[0];
   if (!home) return;
 
@@ -2663,22 +2620,6 @@ function layoutIntroGate() {
     introLogoMesh.lookAt(camStart);
   }
 
-  introNebulaMeshes.forEach((mesh, i) => {
-    const side = i % 2 === 0 ? 1 : -1;
-    const lift = (i - 1) * 1.8;
-    mesh.position
-      .copy(logoPos)
-      .addScaledVector(introGateTmp, -1.2 - i * 1.4)
-      .add(new THREE.Vector3(side * (3.5 + i), lift, side * -1.2));
-    mesh.lookAt(camStart);
-    mesh.userData.restPosition = mesh.position.clone();
-    mesh.userData.partOffset = new THREE.Vector3(
-      side * (10 + i * 3),
-      lift * 1.4 + (i === 1 ? 6 : -2),
-      -4 - i
-    );
-  });
-
   if (introGateActive && !introGateZooming) {
     camera.position.copy(camStart);
     camera.lookAt(introGateLookStart);
@@ -2686,6 +2627,30 @@ function layoutIntroGate() {
     camera.updateProjectionMatrix();
     smoothedCamPos.copy(camStart);
   }
+}
+
+function syncIntroZoomDestination(elapsed) {
+  refreshSectionCameras(elapsed, 0);
+  const home = sectionCameras[0];
+  if (!home) return null;
+  introGateCamEnd.copy(home.position);
+  introGateLookEnd.copy(home.lookAt);
+  return home;
+}
+
+function finishIntroZoomToLive(elapsed) {
+  const home = syncIntroZoomDestination(elapsed) || sectionCameras[0];
+  const endFov = focalMmToFov(FOCAL_REST_MM[0]);
+  if (home) {
+    camera.position.copy(home.position);
+    camera.lookAt(home.lookAt);
+    smoothedCamPos.copy(home.position);
+  }
+  camera.fov = endFov;
+  camera.updateProjectionMatrix();
+  camSmoothReady = true;
+  introSnapFrames = INTRO_SNAP_FRAMES;
+  resetRestOrbitOffsets(0);
 }
 
 function updateIntroGate(elapsed) {
@@ -2705,18 +2670,22 @@ function updateIntroGate(elapsed) {
 
   const t = clamp((performance.now() - introGateZoomStartMs) / INTRO_GATE_MS, 0, 1);
   const e = easeInOutCubicLocal(t);
+  const endFov = focalMmToFov(FOCAL_REST_MM[0]);
+
+  // Destination = cadrage §0 **live** (planètes qui tournent) — pas un snapshot elapsed=0
+  syncIntroZoomDestination(elapsed);
 
   camera.position.lerpVectors(introGateCamStart, introGateCamEnd, e);
   introGateTmp.lerpVectors(introGateLookStart, introGateLookEnd, e);
   camera.lookAt(introGateTmp);
-  camera.fov = THREE.MathUtils.lerp(38, FOCAL_REST_MM[0] ? focalMmToFov(FOCAL_REST_MM[0]) : 42, e);
+  camera.fov = THREE.MathUtils.lerp(38, endFov, e);
   camera.updateProjectionMatrix();
   smoothedCamPos.copy(camera.position);
 
-  // Fond / brouillard : du noir opaque vers l’univers
+  // Fond noir pendant tout le zoom ; brouillard qui s’éclaircit (pas de wash couleur)
   const reveal = easeInOutCubicLocal(clamp((t - 0.05) / 0.7, 0, 1));
   if (scene?.background?.isColor) {
-    scene.background.setRGB(0, 0, 0);
+    scene.background.setHex(INTRO_SCENE_BG);
   }
   if (fog) {
     fog.color.setHex(INTRO_SCENE_BG);
@@ -2732,28 +2701,14 @@ function updateIntroGate(elapsed) {
     setIntroLogoOpacity(1 - clamp((t - 0.42) / 0.48, 0, 1));
   }
 
-  // Nébuleuses apparaissent puis s’écartent
-  const part = clamp((t - 0.12) / 0.78, 0, 1);
-  const partE = easeInOutCubicLocal(part);
-  introNebulaMeshes.forEach((mesh) => {
-    const rest = mesh.userData.restPosition;
-    const off = mesh.userData.partOffset;
-    if (!rest || !off) return;
-    mesh.position.copy(rest).addScaledVector(off, partE);
-    const base = mesh.userData.baseOpacity ?? 0.4;
-    mesh.material.opacity = base * (1 - partE) * clamp(t / 0.2, 0, 1);
-  });
-
   if (t >= 1) {
+    finishIntroZoomToLive(elapsed);
     introGateZooming = false;
     introGateActive = false;
     setUniverseVisible(true);
-    setIntroNebulaeVisible(false);
     applyIntroSceneBackground(false);
     if (fog) fog.density = 0.005;
     if (introGateGroup) introGateGroup.visible = false;
-    introSnapFrames = 0;
-    camSmoothReady = false;
     const cb = introGateOnComplete;
     introGateOnComplete = null;
     if (typeof cb === "function") cb();
@@ -2779,14 +2734,13 @@ export function setIntroGateActive(active) {
     introLogoMesh.scale.setScalar(introGateLogoBaseScale);
     introLogoMesh.rotation.z = 0;
   }
+  const elapsed = clock?.getElapsedTime() ?? 0;
   if (introGateActive) {
     setUniverseVisible(false);
-    setIntroNebulaeVisible(false);
     applyIntroSceneBackground(true);
-    layoutIntroGate();
+    layoutIntroGate(elapsed);
   } else {
     setUniverseVisible(true);
-    setIntroNebulaeVisible(false);
     applyIntroSceneBackground(false);
   }
   return true;
@@ -2795,13 +2749,12 @@ export function setIntroGateActive(active) {
 /** Lance le zoom à travers le logo. `onComplete` quand l’accueil est révélé. */
 export function startIntroGateZoom(onComplete) {
   if (!introGateActive || introGateZooming) return false;
-  layoutIntroGate();
+  const elapsed = clock?.getElapsedTime() ?? 0;
+  layoutIntroGate(elapsed);
   setUniverseVisible(true);
-  setIntroNebulaeVisible(true);
-  introNebulaMeshes.forEach((mesh) => {
-    mesh.material.opacity = 0;
-    if (mesh.userData.restPosition) mesh.position.copy(mesh.userData.restPosition);
-  });
+  // Départ figé ; l’arrivée suit §0 live pendant tout le zoom
+  introGateCamStart.copy(camera.position);
+  syncIntroZoomDestination(elapsed);
   introGateZooming = true;
   introGateZoomStartMs = performance.now();
   introGateOnComplete = onComplete ?? null;
@@ -2815,16 +2768,10 @@ function disposeIntroGate() {
   applyIntroSceneBackground(false);
   setUniverseVisible(true);
   disposeIntroLogo();
-  introNebulaMeshes.forEach((mesh) => {
-    mesh.geometry?.dispose();
-    mesh.material?.map?.dispose();
-    mesh.material?.dispose();
-  });
   if (introGateGroup) {
     scene?.remove(introGateGroup);
   }
   introGateGroup = null;
-  introNebulaMeshes = [];
 }
 
 export function getSectionFraming(sectionIndex) {

@@ -154,7 +154,7 @@ function bindIntroUi() {
 }
 
 /**
- * Intro gate : logo 3D cliquable + nébuleuses + login Google (Étape 2).
+ * Intro gate : logo 3D cliquable + login Google (Étape 2).
  * @returns {Promise<boolean>} true si l’intro tourne / a été lancée
  */
 export async function initIntroGate() {
