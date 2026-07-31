@@ -2427,7 +2427,7 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 
 /* —— Intro gate (logo plan + nébuleuses + zoom caméra) —— */
 const INTRO_GATE_MS = 3400;
-const INTRO_LOGO_URL = "./assets/logo-hakou.png";
+const INTRO_LOGO_URL = "./assets/logo-hakou.svg";
 const INTRO_NEBULA_URLS = [
   "./assets/nebula/nebula-a.png",
   "./assets/nebula/nebula-b.png",
@@ -2466,7 +2466,7 @@ function buildIntroGate() {
     (tex) => {
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() ?? 4);
-      const aspect = (tex.image?.width || 267) / (tex.image?.height || 150);
+      const aspect = (tex.image?.width || 390) / (tex.image?.height || 340);
       const h = 3.4;
       const w = h * aspect;
       const geo = new THREE.PlaneGeometry(w, h);
