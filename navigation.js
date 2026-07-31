@@ -541,18 +541,37 @@ function getPanelZone(panel) {
   return Number(panel.dataset.zone);
 }
 
+const MOBILE_NAV_SCROLL_MQ = "(max-width: 680px)";
+let lastMobileNavScrollZone = null;
+
+function scrollMobileNavLinkIntoView(link, zone) {
+  if (!link || !window.matchMedia(MOBILE_NAV_SCROLL_MQ).matches) return;
+  if (zone === lastMobileNavScrollZone) return;
+  lastMobileNavScrollZone = zone;
+  const nav = link.closest(".side-nav");
+  if (!nav || nav.scrollWidth <= nav.clientWidth + 1) return;
+  link.scrollIntoView({
+    behavior: "smooth",
+    inline: "center",
+    block: "nearest",
+  });
+}
+
 function syncNavLinks({ ariaIndex, highlightZones }) {
   const highlight = new Set(highlightZones);
+  let ariaLink = null;
   navLinks.forEach((link) => {
     const zone = Number(link.dataset.zoneLink);
     const active = highlight.has(zone);
     link.classList.toggle("is-active", active);
     if (zone === ariaIndex) {
       link.setAttribute("aria-current", "page");
+      ariaLink = link;
     } else {
       link.removeAttribute("aria-current");
     }
   });
+  scrollMobileNavLinkIntoView(ariaLink, ariaIndex);
 }
 
 function syncLongJumpPanels(t) {
@@ -748,6 +767,7 @@ function onKeyDown(event) {
 
 function onTouchStart(event) {
   if (event.target?.closest?.("#solar-scale")) return;
+  if (event.target?.closest?.(".side-nav")) return;
 
   touchStartY = event.touches[0]?.clientY ?? 0;
   touchGateAcc = 0;
@@ -758,6 +778,8 @@ function onTouchStart(event) {
 }
 
 function onTouchMove(event) {
+  if (event.target?.closest?.(".side-nav")) return;
+
   if (solarScaleDragActive) {
     event.preventDefault();
     return;
