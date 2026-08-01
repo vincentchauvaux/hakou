@@ -30,11 +30,15 @@ sudo nginx -t && sudo systemctl reload nginx
 3. **Client ID** (public) → `studio/.env` (`GOOGLE_CLIENT_ID`) **et** [`content/auth-config.json`](../content/auth-config.json).
 4. **Client secret** → uniquement `studio/.env` sur le VPS (`GOOGLE_CLIENT_SECRET`), jamais GitHub Pages.
 
-Allowlist défaut : `vincent.chauvaux@gmail.com` (`ALLOWED_EMAILS`).
+Allowlist défaut : `vincent.chauvaux@gmail.com`, `anais.motquin@gmail.com` (`ALLOWED_EMAILS`).
+
+Console Google (OAuth) :
+- Identifiants : https://console.cloud.google.com/apis/credentials
+- Écran de consentement (+ utilisateurs de test si app en mode Testing) : https://console.cloud.google.com/apis/credentials/consent
 
 ## Statut Radio public
 
-`GET /api/radio/status` — **sans auth**, CORS vers hakou.be. Priorité : **studio MediaMTX** (`hlsUrl` + `whepUrl`) → live YouTube Public → archives RSS.
+`GET /api/radio/status` — **sans auth**, CORS vers hakou.be. Priorité : **studio MediaMTX** (HLS) → live YouTube Public → archives RSS.
 
 ## Étape 3 — Live studio (WHIP → HLS)
 
