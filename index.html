@@ -229,33 +229,35 @@
             ></ul>
             <div class="radio-chat__log" id="radio-chat-log" role="log" aria-live="polite"></div>
             <form class="radio-chat__form" id="radio-chat-form">
-              <button
-                type="button"
-                class="radio-chat__nick"
-                id="radio-chat-nick"
-                title="Cliquer pour changer de pseudo"
-              >
-                …
-              </button>
-              <label class="radio-chat__nick-edit" id="radio-chat-nick-edit" hidden>
-                <span class="visually-hidden">Pseudo</span>
-                <input
-                  type="text"
-                  id="radio-chat-nick-input"
-                  maxlength="24"
-                  autocomplete="nickname"
-                  spellcheck="false"
-                />
-              </label>
-              <input
-                type="text"
+              <div class="radio-chat__identity">
+                <button
+                  type="button"
+                  class="radio-chat__nick"
+                  id="radio-chat-nick"
+                  title="Cliquer pour changer de pseudo"
+                >
+                  …
+                </button>
+                <label class="radio-chat__nick-edit" id="radio-chat-nick-edit" hidden>
+                  <span class="visually-hidden">Pseudo</span>
+                  <input
+                    type="text"
+                    id="radio-chat-nick-input"
+                    maxlength="24"
+                    autocomplete="nickname"
+                    spellcheck="false"
+                  />
+                </label>
+              </div>
+              <textarea
                 class="radio-chat__input"
                 id="radio-chat-input"
                 maxlength="280"
-                placeholder="Message…"
+                rows="3"
+                placeholder="Écrire un message…"
                 autocomplete="off"
                 enterkeyhint="send"
-              />
+              ></textarea>
               <button type="submit" class="radio-chat__send" id="radio-chat-send">
                 Envoyer
               </button>

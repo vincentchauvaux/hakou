@@ -1247,11 +1247,11 @@ audio {
 
 .radio-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(240px, 0.85fr);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
   gap: var(--panel-block-gap, 1.25rem);
   align-items: stretch;
   width: 100%;
-  max-width: min(1100px, 100%);
+  max-width: min(1180px, 100%);
 }
 
 .radio-layout .radio-card {
@@ -1262,12 +1262,13 @@ audio {
 .radio-chat {
   display: flex;
   flex-direction: column;
-  min-height: 280px;
-  max-height: min(520px, 70vh);
-  padding: 0.85rem 0.9rem;
+  min-height: 420px;
+  height: 100%;
+  max-height: none;
+  padding: 0.75rem 0.8rem 0.85rem;
   border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.28));
   border-radius: 10px;
-  background: var(--panel-card-bg, rgba(9, 13, 24, 0.65));
+  background: var(--panel-card-bg, rgba(9, 13, 24, 0.72));
   color: var(--panel-text, var(--text));
 }
 
@@ -1276,7 +1277,10 @@ audio {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.55rem;
+  flex: 0 0 auto;
+  margin-bottom: 0.45rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .radio-chat__title {
@@ -1308,12 +1312,13 @@ audio {
 .radio-chat__members {
   list-style: none;
   margin: 0 0 0.55rem;
-  padding: 0.4rem 0.5rem;
-  max-height: 7rem;
+  padding: 0.45rem 0.55rem;
+  max-height: 8rem;
   overflow: auto;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(0, 0, 0, 0.28);
   font-size: 0.82rem;
+  flex: 0 0 auto;
 }
 
 .radio-chat__members li {
@@ -1328,16 +1333,16 @@ audio {
 
 .radio-chat__log {
   flex: 1 1 auto;
-  min-height: 8rem;
+  min-height: 12rem;
   overflow: auto;
-  margin-bottom: 0.55rem;
-  padding-right: 0.2rem;
-  font-size: 0.88rem;
-  line-height: 1.4;
+  margin-bottom: 0.65rem;
+  padding: 0.15rem 0.15rem 0.35rem 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .radio-chat__msg {
-  margin: 0 0 0.45rem;
+  margin: 0 0 0.5rem;
   word-break: break-word;
 }
 
@@ -1351,53 +1356,97 @@ audio {
 }
 
 .radio-chat__form {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.4rem;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 0 0 auto;
 }
 
-.radio-chat__nick,
-.radio-chat__send {
-  margin: 0;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.35));
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.25);
-  color: inherit;
-  font: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
+.radio-chat__identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .radio-chat__nick {
-  max-width: 7.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--panel-link, var(--accent));
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  text-align: left;
+}
+
+.radio-chat__nick:hover,
+.radio-chat__nick:focus-visible {
+  text-decoration: underline;
+  outline: none;
 }
 
 .radio-chat__nick-edit {
-  grid-column: 1;
+  display: block;
+  width: 100%;
 }
 
-.radio-chat__nick-edit input,
-.radio-chat__input {
+.radio-chat__nick-edit input {
   width: 100%;
   margin: 0;
-  padding: 0.4rem 0.55rem;
+  padding: 0.45rem 0.6rem;
   border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.35));
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.35);
   color: inherit;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+}
+
+.radio-chat__input {
+  display: block;
+  width: 100%;
+  min-height: 4.75rem;
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.4));
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.38);
+  color: inherit;
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  resize: vertical;
 }
 
 .radio-chat__nick-edit input:focus,
 .radio-chat__input:focus {
   outline: 1px solid var(--panel-link, var(--accent));
   outline-offset: 1px;
+}
+
+.radio-chat__send {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--panel-link, var(--accent)) 55%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-link, var(--accent)) 22%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.radio-chat__send:hover,
+.radio-chat__send:focus-visible {
+  background: color-mix(in srgb, var(--panel-link, var(--accent)) 34%, transparent);
+  outline: none;
 }
 
 .radio-chat__status {
@@ -1425,7 +1474,8 @@ audio {
   }
 
   .radio-chat {
-    max-height: min(420px, 55vh);
+    min-height: 360px;
+    max-height: min(520px, 60vh);
   }
 }
 

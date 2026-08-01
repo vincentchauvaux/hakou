@@ -247,6 +247,13 @@
       setStatus("");
     });
 
+    $("radio-chat-input")?.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        $("radio-chat-form")?.requestSubmit?.();
+      }
+    });
+
     const url = await resolveWsUrl();
     connect(url);
   }
