@@ -30,7 +30,7 @@ sudo nginx -t && sudo systemctl reload nginx
 3. **Client ID** (public) → `studio/.env` (`GOOGLE_CLIENT_ID`) **et** [`content/auth-config.json`](../content/auth-config.json).
 4. **Client secret** → uniquement `studio/.env` sur le VPS (`GOOGLE_CLIENT_SECRET`), jamais GitHub Pages.
 
-Allowlist défaut : `vincent.chauvaux@gmail.com`, `anais.motquin@gmail.com` (`ALLOWED_EMAILS`).
+Allowlist défaut : `vincent.chauvaux@gmail.com`, `anaismotquin@gmail.com` (`ALLOWED_EMAILS`).
 
 Console Google (OAuth) :
 - Identifiants : https://console.cloud.google.com/apis/credentials
