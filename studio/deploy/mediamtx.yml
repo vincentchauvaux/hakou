@@ -50,9 +50,10 @@ hlsAddress: 127.0.0.1:8888
 hlsEncryption: false
 hlsAllowOrigins: []
 hlsAlwaysRemux: true
-hlsVariant: fmp4
+# mpegts = max compat Safari (native HLS). lowLatency / parts = Chromium surtout.
+hlsVariant: mpegts
 hlsSegmentDuration: 2s
-hlsPartDuration: 400ms
+hlsPartDuration: 0s
 hlsSegmentCount: 7
 hlsMuxerCloseAfter: 30s
 
