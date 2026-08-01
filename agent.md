@@ -328,7 +328,7 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Ne
   - Setup détaillé : [`studio/README.md`](studio/README.md).
 - **Live studio (Étape 3)** :
   - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.
-  - Nginx : `/hakou-live/whip/` → WHIP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **Important** : `proxy_redirect /hakou/ → /hakou-live/hls/hakou/` (MediaMTX `cookieCheck` 302) + CORS credentials (pas `*`) pour les cookies HLS.
+  - Nginx : `/hakou-live/whip/` → WHIP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **Safari** : `proxy_set_header Cookie cookieCheck=1` (pas de cookies navigateur / ITP) ; `proxy_hide_header Access-Control-*` + un seul `Allow-Origin *` ; `proxy_redirect /hakou/ → /hakou-live/hls/hakou/`. MediaMTX `hlsAllowOrigins: []` (CORS géré par nginx).
   - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP avec **préférence codec H264** (`setCodecPreferences`) — MediaMTX HLS **ignore VP8** (sinon audio seul).
   - Spectateurs : [`radio.js`](radio.js) si `studioLive` + `hlsUrl` → player HLS (`hls.js`, `withCredentials`) **sans login**. `detectStudioLive` sonde le m3u8 local + codecs HLS-compatibles. Priorité studio > YouTube live > archives.
   - Install : [`studio/deploy/install-mediamtx.sh`](studio/deploy/install-mediamtx.sh) + secrets `MEDIAMTX_PUBLISH_PASS` / `MEDIAMTX_API_PASS` dans `/opt/hakou-studio/.env` et `mediamtx.yml`.

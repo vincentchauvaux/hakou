@@ -86,7 +86,8 @@
     // Autoplay navigateur : muet d’abord (l’utilisateur peut réactiver le son).
     video.muted = true;
     video.setAttribute("playsinline", "");
-    video.crossOrigin = "use-credentials";
+    // Pas de crossOrigin/credentials : nginx injecte cookieCheck côté serveur
+    // (évite le blocage Safari ITP + CORS « multiple values »).
     video.title = title || "Hakou Radio Live";
     frame.appendChild(video);
 
@@ -133,9 +134,6 @@
     hlsPlayer = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
-      xhrSetup: (xhr) => {
-        xhr.withCredentials = true;
-      },
     });
     hlsPlayer.loadSource(hlsUrl);
     hlsPlayer.attachMedia(video);
