@@ -228,13 +228,12 @@ async function detectStudioLive(opts = {}) {
 
     const tracks = Array.isArray(data.tracks) ? data.tracks : [];
     const trackStr = tracks.join(" ");
-    // MediaMTX HLS fmp4 : H264 (+ Opus). Safari lit plutôt via WHEP.
+    // MediaMTX HLS : pas de remux VP8 — il faut H264 (vidéo) et/ou Opus (audio).
     const hlsVideo = /\b(H264|H265|AV1|VP9)\b/i.test(trackStr);
     const hlsAudio = /\b(Opus|MPEG-4 Audio|AAC)\b/i.test(trackStr);
     if (!hlsVideo && !hlsAudio) return null;
 
-    // Sonde HLS (Chrome) — soft : WHEP peut rester dispo si le muxer démarre lentement.
-    let hlsReady = false;
+    // Sonde locale (cookieCheck MediaMTX) — évite un badge LIVE si le muxer HLS est mort.
     try {
       const probe = await fetch(
         `http://127.0.0.1:8888/${encodeURIComponent(pathName)}/index.m3u8?cookieCheck=1`,
@@ -244,18 +243,14 @@ async function detectStudioLive(opts = {}) {
         }
       );
       const text = await probe.text();
-      hlsReady = probe.ok && text.includes("#EXTM3U");
+      if (!probe.ok || !text.includes("#EXTM3U")) return null;
     } catch {
-      hlsReady = false;
+      return null;
     }
-
-    // Exige au moins HLS ou WHEP (WHEP = path ready).
-    if (!hlsReady && !whepUrl) return null;
 
     return {
       hlsUrl,
       whepUrl,
-      hlsReady,
       title: hlsVideo ? "Live studio Hakou" : "Live studio Hakou (audio)",
       audioOnly: !hlsVideo,
     };
@@ -327,8 +322,7 @@ export async function getRadioStatus(opts = {}) {
       liveVideoId: null,
       liveTitle: studio.title,
       hlsUrl: studio.hlsUrl,
-      whepUrl: studio.whepUrl,
-      hlsReady: studio.hlsReady,
+      whepUrl: studio.whepUrl || null,
       archives: yt.archives || [],
       updatedAt: new Date().toISOString(),
       source: "studio",
@@ -346,7 +340,6 @@ export async function getRadioStatus(opts = {}) {
     liveTitle: yt.liveTitle || null,
     hlsUrl: null,
     whepUrl: null,
-    hlsReady: false,
     archives: yt.archives || [],
     updatedAt: new Date().toISOString(),
     source: yt.source,

@@ -149,9 +149,9 @@
 
 | `scene3d.js` | Three.js, caméra, planètes (9 sections) ; mode **intro gate** (logo SVG vectoriel + zoom, sans nébuleuses) |
 
-| `youtube-videos.js` | Zone Video : liste récente (~8) via status API VPS / RSS + repli HTML, cartes `.video-card` + modal |
+| `youtube-videos.js` | Zone Video : RSS (pool ~12) → **2 aléatoires** / visite + repli HTML, modal |
 
-| `radio.js` | Zone Radio : status API — **Chrome → HLS hls.js**, **Safari → WHEP** ; hors antenne = message vide ; poll ~20 s |
+| `radio.js` | Zone Radio : `content/radio.json` + **API publique** VPS `/api/radio/status` — priorité **studio** → live YouTube → archives RSS ; poll ~20 s ; Chrome/Firefox : `hls.js` ; **Safari / iOS** : **WHEP/WebRTC** (`whepUrl`, repli HLS) |
 
 | `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |
 
@@ -163,11 +163,11 @@
 
 | `scripts/refresh-instagram-posts.mjs` | Pipeline `--refresh` (Graph API / scrape / sources → JSON + thumbs) ; `--playwright` (dev local, Chromium) ; `--touch-updated`, `--download-thumbs` |
 | `scripts/refresh-radio-status.mjs` | YouTube Data API (`YOUTUBE_API_KEY`) → `content/radio.json` (live + archives) |
-| `content/radio.json` | Statut live + `statusApi` (éditable à la main ou via refresh script) |
+| `content/radio.json` | Statut live + liste d’archives Radio (éditable à la main ou via refresh script) |
 | `content/instagram-sources.txt` | Permaliens manuels (1/ligne) si Meta bloque le scrape |
 | `scripts/verify-instagram-shortcodes.mjs` | Vérifie les shortcodes listés (endpoint `…/media/?size=l` → 404 = post retiré) |
 
-| `styles.css` | Thèmes panels (dont `theme-mercury` Contact), crossfade, `#solar-scale` 9 ticks, menu latéral (desktop **fit-content** + liens non étirés ; mobile barre bas 9 items + échelle haut + masques chrome ; **laptop compact** masque haut + scroll panel / nav si besoin) ; chrome UI `--chrome-z` 20 / masques `--chrome-mask-z` 2 ; `#three-canvas` `pointer-events: none` global, composition `.panel-lead` / grilles, **`.radio-*`** (player 16:9, badge LIVE), **`.video-grid` / `.video-card`** : desktop / laptop **2 col.** ; **mobile `≤680px`** **1 col.** ; titres sous vignettes ; clic → modal ; **`.instagram-grid--has-posts`** : grille **3×2** carrée uniforme (`aspect-ratio: 1`, gap uniforme, `min-height: auto`) ; embed repli iframe **~480–520px** desktop (**400–480** laptop, **360–420** mobile), sans offset négatif ni scale ; liens contenu `--panel-link`, **`.sites-grid` masonry** (`columns: 2` / mobile `1`, `.site-card` `break-inside: avoid`) + StreamTV / RPG / Hirakana / Canopée, cube 3D preview |
+| `styles.css` | Thèmes panels (dont `theme-mercury` Contact), crossfade, `#solar-scale` 9 ticks, menu latéral (desktop **fit-content** + liens non étirés ; mobile barre bas 9 items + échelle haut + masques chrome ; **laptop compact** masque haut + scroll panel / nav si besoin) ; chrome UI `--chrome-z` 20 / masques `--chrome-mask-z` 2 ; `#three-canvas` `pointer-events: none` global, composition `.panel-lead` / grilles, **`.radio-*`** (player 16:9, badge LIVE, archives), **`.video-grid`** : desktop / laptop **2 col.** `minmax(0,1fr)` ; **mobile `≤680px`** **1 col.** ; **↗ vignettes** masquées — clic → modal ; **`.instagram-grid--has-posts`** : grille **3×2** carrée uniforme (`aspect-ratio: 1`, gap uniforme, `min-height: auto`) ; embed repli iframe **~480–520px** desktop (**400–480** laptop, **360–420** mobile), sans offset négatif ni scale ; liens contenu `--panel-link`, **`.sites-grid` masonry** (`columns: 2` / mobile `1`, `.site-card` `break-inside: avoid`) + StreamTV / RPG / Hirakana / Canopée, cube 3D preview |
 
 
 
@@ -244,9 +244,9 @@ Site statique sans backend dédié : SoundCloud / modales Instagram / Radio YouT
 
 | **Son** (`#son`) | [soundcloud.com/hakou](https://soundcloud.com/hakou) | Lecteur iframe via oEmbed SoundCloud — user API `4170372`, hauteur 450 (mode visuel). |
 
-| **Radio** (`#radio`, `data-zone="2"`) | Studio HLS / [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `radio.js` : badge **LIVE** / Hors antenne ; player 16:9 (HLS studio ou embed YouTube Live). **Pas d’archives** ici — hors antenne = message « Aucun flux pour le moment. ». **Live public** : API VPS `GET /hakou-studio/api/radio/status` (sans auth) — studio MediaMTX prioritaire, sinon live YouTube **Public**. Orbite 3D : **Pluton**. **Workflow** : Rekordbox → OBS → studio WHIP (H264) ou YouTube Live Public → poll ~20 s. |
+| **Radio** (`#radio`, `data-zone="2"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `radio.js` : badge **LIVE** / Hors antenne ; embed YouTube 16:9 ; archives. **Live public** : l’API VPS `GET /hakou-studio/api/radio/status` (sans auth) détecte un live YouTube **Public** et alimente tous les visiteurs — **pas** lié au login Google intro/studio. Repli : `content/radio.json` + RSS chaîne. **Important** : un live YouTube **privé / non répertorié** n’est visible que pour toi connecté à YouTube — le passer en **Public** pour hakou.be. Orbite 3D : **Pluton**. **Droits** : Spotify Famille dans Rekordbox ≠ licence diffusion publique. **Workflow** : Rekordbox → OBS → YouTube Live **Public** → la page Radio se met à jour seule (poll ~90 s) ; VOD récentes via RSS en archives. |
 
-| **Video** (`#video`, `data-zone="3"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : grille **jusqu’à 8** vidéos récentes (ex-archives Radio) via status API VPS (`archives`) puis RSS / repli HTML. Cartes `.video-card` (vignette + titre), modal `#youtube-video-modal`. Logs `[Hakou YouTube]`. |
+| **Video** (`#video`, `data-zone="3"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : au load, **repli immédiat** des `[data-video-id]` dans `index.html`, puis sync **flux RSS** `…/feeds/videos.xml?channel_id=UCmm1lsi4IS7RzwFFhIax3ug` — parse **12** entrées récentes, **shuffle → 2** affichées (chaque visite peut différer). CORS : proxy `api.allorigins.win` ; échec → HTML inchangé (`.video-grid--syncing`, opacité ~0,97, pas de flash). Logs `[Hakou YouTube]`. Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, modal `#youtube-video-modal`. |
 
 | **Visuel** (`#visuel`, `data-zone="4"`) | [@hakoulik](https://www.instagram.com/hakoulik/) | **Build / MAJ** : `node scripts/refresh-instagram-posts.mjs` — Graph API (`.env`), scrape Node, `content/instagram-sources.txt`, thumbs `assets/instagram/thumb-*.jpg` → `content/instagram-posts.json`. **UI** : grille native **3×2 simple** (carrés uniformes, 3 colonnes) — miniatures `media/?size=l` ou `assets/instagram/` ; iframe **masquée** si grille native. **Navigateur** : JSON frais → grille immédiate ; sinon **3 s** découverte ; **≥ 1 shortcode** ; sinon repli iframe embed standard (~**480–520px** desktop, **400–480** laptop, **360–420** mobile). Modales post inchangées. Logs `[Hakou Instagram]`. Voir **Pourquoi pas 6 images auto**. |
 
@@ -291,9 +291,9 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 
 
 
-- **YouTube (dynamique)** : zone **Video** — jusqu’à **8** vidéos récentes via status API VPS (`archives`) puis RSS chaîne `UCmm1lsi4IS7RzwFFhIax3ug` ; repli HTML si fetch échoue. **CORS** : status API OK depuis hakou.be ; RSS direct souvent bloqué, proxy `api.allorigins.win` en secours. `data-video-id` dans `index.html` = filet hors-ligne. Zone **Radio** n’affiche plus ces VOD.
+- **YouTube (dynamique)** : RSS chaîne `UCmm1lsi4IS7RzwFFhIax3ug`, pool **12** récentes, **2 aléatoires** par chargement (Fisher-Yates). Repli HTML si fetch/proxy échoue. **CORS** : flux direct souvent OK ; sinon proxy `api.allorigins.win` (tiers, sans clé, timeouts possibles). Pas de quota API YouTube Data. `data-video-id` dans `index.html` = filet de sécurité hors-ligne.
 
-- **Radio** : sync live **publique** via VPS `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/radio/status` (scrape `/live` + RSS, cache ~45 s ; option `YOUTUBE_API_KEY` sur le VPS). `content/radio.json` porte `statusApi` + repli. Pas de gate login sur la page Radio. Mobile / laptop : `.embed-touch-layer` sur `.radio-player__frame`.
+- **Radio** : sync live **publique** via VPS `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/radio/status` (scrape `/live` + RSS, cache ~45 s ; option `YOUTUBE_API_KEY` sur le VPS). Studio live : **HLS** (Chrome) / **WHEP** (Safari). `content/radio.json` porte `statusApi` + repli. Pas de gate login sur la page Radio. Mobile / laptop : `.embed-touch-layer` sur `.radio-player__frame`.
 
 - **SoundCloud** : embed officiel ; couleur accent `%237f9dff` dans l’URL du player. Mobile / laptop compact : `.embed-touch-layer` sur `.soundcloud-embed` — swipe vertical scroll le panel ; tap court tente play via click synthétique sur l’iframe ; repli lien profil sous le lecteur.
 
@@ -328,16 +328,17 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Ne
   - Setup détaillé : [`studio/README.md`](studio/README.md).
 - **Live studio (Étape 3)** :
   - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.
-  - Nginx : `/hakou-live/whip/` → WHIP **et WHEP**, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **Safari** HLS : `proxy_set_header Cookie cookieCheck=1` ; CORS unique `*` ; `proxy_redirect`. MediaMTX `hlsAllowOrigins: []` ; **`hlsVariant: fmp4`** + parts LL (`hlsPartDuration: 400ms`) pour Chrome/`hls.js` (Opus OK ; `mpegts` refuse Opus).
-  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP **H264** (`setCodecPreferences`).
-  - Spectateurs **adaptatifs** ([`radio.js`](radio.js)) : **Chrome / Firefox / Edge** → HLS `hls.js` (fMP4 LL) ; **Safari / iOS** → **WHEP WebRTC** (mêmes codecs Opus+H264, contourne HLS natif). Status API expose `hlsUrl` + `whepUrl`. Priorité studio > YouTube live ; hors antenne = message vide (VOD → zone Video).
+  - Nginx : `/hakou-live/whip/` → WHIP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **Important** : `proxy_redirect /hakou/ → /hakou-live/hls/hakou/` (MediaMTX `cookieCheck` 302) + CORS credentials (pas `*`) pour les cookies HLS.
+  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP avec **préférence codec H264** (`setCodecPreferences`) — MediaMTX HLS **ignore VP8** (sinon audio seul).
+  - Spectateurs : [`radio.js`](radio.js) si `studioLive` + `hlsUrl` **sans login**. **Chrome / Firefox** : HLS (`hls.js`, `withCredentials`). **Safari / iOS (WebKit)** : lecture **WHEP** (`POST` SDP → `/hakou-live/whip/hakou/whep`) car HLS natif gère mal Opus + cookies cross-origin ; repli HLS si WHEP échoue. API statut expose `whepUrl` (`WHEP_PUBLIC_URL`). `detectStudioLive` sonde m3u8 + codecs HLS-compatibles. Priorité studio > YouTube live > archives.
+  - Nginx WHIP/WHEP : CORS origines hakou.be (+ localhost / VPS), headers `Content-Type` / `Accept` pour SDP ; ICE UDP **8189** ouvert (média WebRTC hors nginx).
   - Install : [`studio/deploy/install-mediamtx.sh`](studio/deploy/install-mediamtx.sh) + secrets `MEDIAMTX_PUBLISH_PASS` / `MEDIAMTX_API_PASS` dans `/opt/hakou-studio/.env` et `mediamtx.yml`.
 
 ## Déploiement (juillet 2026)
 
 - **Prod** : [hakou.be](https://hakou.be) est servi par **GitHub Pages** (`CNAME` → `hakou.be`, DNS `185.199.x.x`). Pas de déploiement VPS pour ce site statique.
 - **Publish** : `git push git@github.com:vincentchauvaux/hakou.git main` (SSH ; le remote HTTPS `origin` peut échouer sans token). Déploiement Pages automatique après push sur `main` (délai cache ~1–10 min).
-- **Build optionnel** : `node scripts/refresh-instagram-posts.mjs --refresh` — met à jour `content/instagram-posts.json` + `assets/instagram/thumb-*.jpg` ; `node scripts/refresh-radio-status.mjs` — live + liste VOD (status / `radio.json`). Pas de bundler / compile JS.
+- **Build optionnel** : `node scripts/refresh-instagram-posts.mjs --refresh` — met à jour `content/instagram-posts.json` + `assets/instagram/thumb-*.jpg` ; `node scripts/refresh-radio-status.mjs` — live + archives Radio. Pas de bundler / compile JS.
 - **Dev local** : `npx serve .` (pas `file://`).
 - **VPS OVH Hakou** : `vps-e09ed6db.vps.ovh.net` → `51.178.44.114` (SSH `root`, nginx + pm2). Services sous préfixe : `/hirakana/`, `/rpg-cr/`, **`/hakou-studio/`**. Ne pas confondre avec **djgoons / nexroof** (`54.76.151.62`, autres projets ; SSH parfois timeout depuis l’agent).
 
