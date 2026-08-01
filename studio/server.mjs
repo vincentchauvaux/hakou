@@ -8,10 +8,12 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import { OAuth2Client } from "google-auth-library";
 import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
+import { createServer } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRadioStatus } from "./radio-status.mjs";
+import { attachRadioChat } from "./radio-chat.mjs";
 import {
   appendContactInbox,
   checkRateLimit,
@@ -384,7 +386,6 @@ app.get("/api/studio/ingest", (req, res) => {
   res.json({
     path: MEDIAMTX_PATH,
     whipUrl: WHIP_PUBLIC_URL,
-    whepUrl: WHEP_PUBLIC_URL,
     hlsUrl: HLS_PUBLIC_URL,
     authorization: `Basic ${basic}`,
     // Alternative OBS / certains clients WHIP
@@ -504,7 +505,10 @@ app.get("/", requireAuthPage, (_req, res) => {
   res.sendFile(join(__dirname, "public", "index.html"));
 });
 
-app.listen(PORT, () => {
+const httpServer = createServer(app);
+attachRadioChat(httpServer, { corsOrigins: CORS_ORIGINS });
+
+httpServer.listen(PORT, () => {
   console.log(
     `[Hakou Studio] http://127.0.0.1:${PORT} — Google=${
       GOOGLE_CLIENT_ID ? "ok" : "MISSING"

@@ -184,28 +184,84 @@
             >.
           </p>
         </div>
-        <div class="panel-card radio-card">
-          <div class="radio-status" id="radio-status" data-state="offline">
-            <span class="radio-status__badge" id="radio-status-badge">Hors antenne</span>
-            <p class="radio-status__title" id="radio-status-title">
-              Prochain set à venir
-            </p>
-          </div>
-          <div class="radio-player" id="radio-player">
-            <div class="radio-player__frame" id="radio-player-frame">
-              <p class="radio-player__empty" id="radio-player-empty">
-                Playlist Hakou Mix — ou live dès qu’un mix est en cours.
+        <div class="radio-layout">
+          <div class="panel-card radio-card">
+            <div class="radio-status" id="radio-status" data-state="offline">
+              <span class="radio-status__badge" id="radio-status-badge">Hors antenne</span>
+              <p class="radio-status__title" id="radio-status-title">
+                Prochain set à venir
               </p>
             </div>
+            <div class="radio-player" id="radio-player">
+              <div class="radio-player__frame" id="radio-player-frame">
+                <p class="radio-player__empty" id="radio-player-empty">
+                  Playlist Hakou Mix — ou live dès qu’un mix est en cours.
+                </p>
+              </div>
+            </div>
+            <p class="embed-source">
+              <a
+                href="https://www.youtube.com/@MrEtibaliomecus"
+                target="_blank"
+                rel="noopener noreferrer"
+                >youtube.com/@MrEtibaliomecus</a
+              >
+            </p>
           </div>
-          <p class="embed-source">
-            <a
-              href="https://www.youtube.com/@MrEtibaliomecus"
-              target="_blank"
-              rel="noopener noreferrer"
-              >youtube.com/@MrEtibaliomecus</a
-            >
-          </p>
+
+          <aside class="radio-chat" id="radio-chat" aria-label="Chat Radio">
+            <header class="radio-chat__header">
+              <p class="radio-chat__title">Chat</p>
+              <button
+                type="button"
+                class="radio-chat__presence-btn"
+                id="radio-chat-presence-btn"
+                aria-expanded="false"
+                aria-controls="radio-chat-members"
+              >
+                <span id="radio-chat-count">0</span> en ligne
+              </button>
+            </header>
+            <ul
+              class="radio-chat__members"
+              id="radio-chat-members"
+              hidden
+            ></ul>
+            <div class="radio-chat__log" id="radio-chat-log" role="log" aria-live="polite"></div>
+            <form class="radio-chat__form" id="radio-chat-form">
+              <button
+                type="button"
+                class="radio-chat__nick"
+                id="radio-chat-nick"
+                title="Cliquer pour changer de pseudo"
+              >
+                …
+              </button>
+              <label class="radio-chat__nick-edit" id="radio-chat-nick-edit" hidden>
+                <span class="visually-hidden">Pseudo</span>
+                <input
+                  type="text"
+                  id="radio-chat-nick-input"
+                  maxlength="24"
+                  autocomplete="nickname"
+                  spellcheck="false"
+                />
+              </label>
+              <input
+                type="text"
+                class="radio-chat__input"
+                id="radio-chat-input"
+                maxlength="280"
+                placeholder="Message…"
+                autocomplete="off"
+                enterkeyhint="send"
+              />
+              <button type="submit" class="radio-chat__send" id="radio-chat-send">
+                Envoyer
+              </button>
+            </form>
+            <p class="radio-chat__status" id="radio-chat-status" role="status"></p>
+          </aside>
         </div>
       </section>
 
@@ -768,6 +824,7 @@
 
     <script src="./youtube-videos.js" defer></script>
     <script src="./radio.js" defer></script>
+    <script src="./radio-chat.js" defer></script>
     <script src="./instagram-gallery.js" defer></script>
     <script src="./contact.js" defer></script>
     <script type="module" src="./main.js"></script>

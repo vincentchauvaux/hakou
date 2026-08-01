@@ -152,6 +152,7 @@
 | `youtube-videos.js` | Zone Video : RSS (pool ~12) → **2 aléatoires** / visite + repli HTML, modal |
 
 | `radio.js` | Zone Radio : priorité **studio** → live YouTube → **playlist Hakou Mix** (`playlistId` dans `radio.json`) ; poll ~20 s ; Chrome/Firefox : `hls.js` ; **Safari / iOS** : **WHEP** |
+| `radio-chat.js` | Chat public Radio (WebSocket VPS) : pseudo `Visiteur-xxxx` dérivé IP (éditable), messages texte/emoji, présence |
 
 | `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |
 
@@ -244,7 +245,7 @@ Site statique sans backend dédié : SoundCloud / modales Instagram / Radio YouT
 
 | **Son** (`#son`) | [soundcloud.com/hakou](https://soundcloud.com/hakou) | Lecteur iframe via oEmbed SoundCloud — user API `4170372`, hauteur 450 (mode visuel). |
 
-| **Radio** (`#radio`, `data-zone="2"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) / [Hakou Mix](https://www.youtube.com/playlist?list=PLGIvCy1w5T6Y) | `radio.js` : badge **LIVE** / Hors antenne ; player 16:9. Priorité : **studio** → live YouTube Public → **playlist Hakou Mix** (`PLGIvCy1w5T6Y`). Pas de grille archives sous le player. API VPS `GET /hakou-studio/api/radio/status`. Orbite 3D : **Pluton**. |
+| **Radio** (`#radio`, `data-zone="2"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) / [Hakou Mix](https://www.youtube.com/playlist?list=PLGIvCy1w5T6Y) | `radio.js` : badge **LIVE** / Hors antenne ; player 16:9. Priorité : **studio** → live YouTube Public → **playlist Hakou Mix**. Chat public à droite (`radio-chat.js` → WSS `/hakou-studio/api/radio/chat`) : pseudo dérivé IP, liste connectés. API statut VPS. Orbite 3D : **Pluton**. |
 
 | **Video** (`#video`, `data-zone="3"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : au load, **repli immédiat** des `[data-video-id]` dans `index.html`, puis sync **flux RSS** `…/feeds/videos.xml?channel_id=UCmm1lsi4IS7RzwFFhIax3ug` — parse **12** entrées récentes, **shuffle → 2** affichées (chaque visite peut différer). CORS : proxy `api.allorigins.win` ; échec → HTML inchangé (`.video-grid--syncing`, opacité ~0,97, pas de flash). Logs `[Hakou YouTube]`. Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, modal `#youtube-video-modal`. |
 
@@ -293,7 +294,7 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 
 - **YouTube (dynamique)** : RSS chaîne `UCmm1lsi4IS7RzwFFhIax3ug`, pool **12** récentes, **2 aléatoires** par chargement (Fisher-Yates). Repli HTML si fetch/proxy échoue. **CORS** : flux direct souvent OK ; sinon proxy `api.allorigins.win` (tiers, sans clé, timeouts possibles). Pas de quota API YouTube Data. `data-video-id` dans `index.html` = filet de sécurité hors-ligne.
 
-- **Radio** : sync live **publique** via VPS `…/api/radio/status`. Hors live : embed playlist **Hakou Mix** (`playlistId` / `playlistTitle` dans `content/radio.json`). Studio : **HLS** (Chrome) / **WHEP** (Safari). Pas de gate login. Mobile / laptop : `.embed-touch-layer` sur `.radio-player__frame`.
+- **Radio** : sync live **publique** via VPS `…/api/radio/status`. Hors live : embed playlist **Hakou Mix**. Chat WebSocket `chatWsUrl` dans `content/radio.json`. Studio : **HLS** (Chrome) / **WHEP** (Safari). Pas de gate login. Mobile / laptop : `.embed-touch-layer` sur `.radio-player__frame`.
 
 - **SoundCloud** : embed officiel ; couleur accent `%237f9dff` dans l’URL du player. Mobile / laptop compact : `.embed-touch-layer` sur `.soundcloud-embed` — swipe vertical scroll le panel ; tap court tente play via click synthétique sur l’iframe ; repli lien profil sous le lecteur.
 
@@ -321,7 +322,7 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Ne
 - **État** : `body[data-intro="pending"|"playing"|"done"]` masque nav / échelle / overlay pendant pending+playing. `sessionStorage` clé `hakou-intro-done` : skip au refresh de session. `setNavigationLocked(true)` bloque molette / clavier / touch / menu. **Menu latéral** : scrollbar masquée aussi en laptop compact (`scrollbar-width: none` / `::-webkit-scrollbar`).
 - **Auth Google (Étape 2)** :
   - Client : [`auth-client.js`](auth-client.js) + GIS ; config publique [`content/auth-config.json`](content/auth-config.json) — **Client ID** renseigné (`245439358451-…apps.googleusercontent.com`), `authApiBase` / `studioUrl` → `https://vps-e09ed6db.vps.ovh.net/hakou-studio`, allowlist `vincent.chauvaux@gmail.com` + `anaismotquin@gmail.com`.
-  - Serveur VPS : `/opt/hakou-studio` (code + `pm2` `hakou-studio` :8787). `POST /api/auth/google` vérifie l’ID token GIS, cookie HttpOnly `SameSite=None; Secure` path `/hakou-studio`.
+  - Serveur VPS : `/opt/hakou-studio` (code + `pm2` `hakou-studio` :8787). `POST /api/auth/google` vérifie l’ID token GIS, cookie HttpOnly `SameSite=None; Secure` path `/hakou-studio`. Chat public : [`studio/radio-chat.mjs`](studio/radio-chat.mjs) WebSocket `/api/radio/chat` (présence + historique RAM).
   - **Secrets** : `GOOGLE_CLIENT_SECRET` + `SESSION_SECRET` uniquement dans `/opt/hakou-studio/.env` (`chmod 600`, hors git). Le JSON `client_secret_*.json` Google ne doit **jamais** être committer (`.gitignore`).
   - Nginx : snippet `/etc/nginx/snippets/hakou-studio.conf` (`location /hakou-studio/` → `127.0.0.1:8787`), `include` dans le vhost HTTPS `streamtv` (`vps-e09ed6db.vps.ovh.net`). Exemple repo : [`studio/deploy/nginx-hakou-studio.conf.example`](studio/deploy/nginx-hakou-studio.conf.example).
   - Après login OK : zoom intro puis **redirect** vers le studio. Sans session → 401 sur `/hakou-studio/`.

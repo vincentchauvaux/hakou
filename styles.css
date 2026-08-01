@@ -1245,6 +1245,190 @@ audio {
   gap: var(--panel-block-gap, 1.25rem);
 }
 
+.radio-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(240px, 0.85fr);
+  gap: var(--panel-block-gap, 1.25rem);
+  align-items: stretch;
+  width: 100%;
+  max-width: min(1100px, 100%);
+}
+
+.radio-layout .radio-card {
+  max-width: none;
+  min-width: 0;
+}
+
+.radio-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+  max-height: min(520px, 70vh);
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.28));
+  border-radius: 10px;
+  background: var(--panel-card-bg, rgba(9, 13, 24, 0.65));
+  color: var(--panel-text, var(--text));
+}
+
+.radio-chat__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.radio-chat__title {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--panel-muted, var(--muted));
+}
+
+.radio-chat__presence-btn {
+  margin: 0;
+  padding: 0.2rem 0.45rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--panel-link, var(--accent));
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.radio-chat__presence-btn:hover,
+.radio-chat__presence-btn:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.radio-chat__members {
+  list-style: none;
+  margin: 0 0 0.55rem;
+  padding: 0.4rem 0.5rem;
+  max-height: 7rem;
+  overflow: auto;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 0.82rem;
+}
+
+.radio-chat__members li {
+  padding: 0.15rem 0;
+  color: var(--panel-muted, var(--muted));
+}
+
+.radio-chat__members li.is-me {
+  color: var(--panel-text, var(--text));
+  font-weight: 600;
+}
+
+.radio-chat__log {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  overflow: auto;
+  margin-bottom: 0.55rem;
+  padding-right: 0.2rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.radio-chat__msg {
+  margin: 0 0 0.45rem;
+  word-break: break-word;
+}
+
+.radio-chat__msg-nick {
+  font-weight: 650;
+  color: var(--panel-link, var(--accent));
+}
+
+.radio-chat__msg-nick::after {
+  content: ":";
+}
+
+.radio-chat__form {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.radio-chat__nick,
+.radio-chat__send {
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.35));
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.radio-chat__nick {
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.radio-chat__nick-edit {
+  grid-column: 1;
+}
+
+.radio-chat__nick-edit input,
+.radio-chat__input {
+  width: 100%;
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.35));
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.28);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.radio-chat__nick-edit input:focus,
+.radio-chat__input:focus {
+  outline: 1px solid var(--panel-link, var(--accent));
+  outline-offset: 1px;
+}
+
+.radio-chat__status {
+  margin: 0.35rem 0 0;
+  min-height: 1.1em;
+  font-size: 0.75rem;
+  color: var(--panel-muted, var(--muted));
+}
+
+.radio-chat .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 920px) {
+  .radio-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .radio-chat {
+    max-height: min(420px, 55vh);
+  }
+}
+
 .radio-status {
   display: flex;
   flex-wrap: wrap;

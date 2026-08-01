@@ -40,6 +40,10 @@ Console Google (OAuth) :
 
 `GET /api/radio/status` — **sans auth**, CORS vers hakou.be. Priorité : **studio MediaMTX** (HLS) → live YouTube Public → archives RSS.
 
+## Chat Radio public
+
+WebSocket `wss://…/hakou-studio/api/radio/chat` (`studio/radio-chat.mjs`) — sans auth. Pseudo défaut `Visiteur-xxxx` (hash IP), renommage client ; présence + ~80 messages en RAM.
+
 ## Étape 3 — Live studio (WHIP → HLS)
 
 1. Installer MediaMTX : `MEDIAMTX_PUBLISH_PASS=… MEDIAMTX_API_PASS=… sudo bash studio/deploy/install-mediamtx.sh`
