@@ -1,9 +1,9 @@
 (function () {
-  const RADIO_JSON_URL = "./content/radio.json";
   const YOUTUBE_CHANNEL_ID = "UCmm1lsi4IS7RzwFFhIax3ug";
   const RSS_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(YOUTUBE_CHANNEL_ID)}`;
   const YT_NS = "http://www.youtube.com/xml/schemas/2015";
-  const DISPLAY_MAX = 8;
+  const RSS_POOL_SIZE = 12;
+  const DISPLAY_COUNT = 2;
   const CORS_PROXY = "https://api.allorigins.win/raw?url=";
   const LOG_PREFIX = "[Hakou YouTube]";
 
@@ -15,26 +15,26 @@
 
   let openVideoModal = null;
 
-  function activateCard(card, event) {
+  function activateThumb(slot, event) {
     if (event.target.closest(".youtube-thumb-external")) return;
     event.preventDefault();
-    const videoId = card.dataset.videoId?.trim();
+    const videoId = slot.dataset.videoId?.trim();
     if (!videoId || !openVideoModal) return;
-    const title = card.dataset.videoTitle?.trim() || "Vidéo YouTube";
+    const title = slot.dataset.videoTitle?.trim() || "Vidéo YouTube";
     openVideoModal(videoId, title);
   }
 
   function bindGridInteraction(grid) {
     grid.addEventListener("click", (event) => {
-      const card = event.target.closest(".video-card[data-video-id]");
-      if (!card || !grid.contains(card)) return;
-      activateCard(card, event);
+      const slot = event.target.closest(".youtube-thumb[data-video-id]");
+      if (!slot || !grid.contains(slot)) return;
+      activateThumb(slot, event);
     });
     grid.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
-      const card = event.target.closest(".video-card[data-video-id]");
-      if (!card || !grid.contains(card)) return;
-      activateCard(card, event);
+      const slot = event.target.closest(".youtube-thumb[data-video-id]");
+      if (!slot || !grid.contains(slot)) return;
+      activateThumb(slot, event);
     });
   }
 
@@ -49,21 +49,19 @@
     return ext;
   }
 
-  function buildCard(video) {
-    const card = document.createElement("article");
-    card.className = "video-card";
-    card.dataset.videoId = video.id;
-    card.dataset.videoTitle = video.title;
-    card.setAttribute("role", "button");
-    card.tabIndex = 0;
-    card.setAttribute("aria-label", `Lire : ${video.title}`);
+  function enhanceSlot(slot) {
+    const videoId = slot.dataset.videoId?.trim();
+    if (!videoId) return;
 
-    const media = document.createElement("div");
-    media.className = "video-card__media youtube-thumb";
+    const title = slot.dataset.videoTitle?.trim() || "Vidéo YouTube";
+    slot.classList.add("youtube-thumb");
+    slot.setAttribute("role", "button");
+    if (!slot.hasAttribute("tabindex")) slot.tabIndex = 0;
+    slot.setAttribute("aria-label", `Lire : ${title}`);
 
     const img = document.createElement("img");
-    img.src = THUMB_URL(video.id);
-    img.alt = video.title;
+    img.src = THUMB_URL(videoId);
+    img.alt = title;
     img.loading = "lazy";
     img.decoding = "async";
     img.width = 480;
@@ -73,62 +71,35 @@
     play.className = "youtube-thumb-play";
     play.setAttribute("aria-hidden", "true");
 
-    media.replaceChildren(img, play, createExternalLink(video.id));
-
-    const label = document.createElement("p");
-    label.className = "video-card__label";
-    label.textContent = video.title;
-
-    card.replaceChildren(media, label);
-    return card;
+    slot.replaceChildren(img, play, createExternalLink(videoId));
   }
 
   function readFallbackVideos(grid) {
     return [...grid.querySelectorAll("[data-video-id]")]
-      .map((el) => ({
-        id: el.dataset.videoId?.trim() || "",
-        title: el.dataset.videoTitle?.trim() || "Vidéo YouTube",
+      .map((slot) => ({
+        id: slot.dataset.videoId?.trim() || "",
+        title: slot.dataset.videoTitle?.trim() || "Vidéo YouTube",
       }))
-      .filter((v) => v.id)
-      .slice(0, DISPLAY_MAX);
+      .filter((v) => v.id);
   }
 
-  function applyVideosToGrid(grid, videos) {
-    grid.replaceChildren();
-    videos.slice(0, DISPLAY_MAX).forEach((video) => {
-      grid.appendChild(buildCard(video));
-    });
+  function videoIdsKey(videos) {
+    return videos.map((v) => v.id).join(",");
   }
 
-  function normalizeVideos(list) {
-    if (!Array.isArray(list)) return [];
-    const seen = new Set();
-    const out = [];
-    for (const item of list) {
-      const id =
-        (typeof item?.id === "string" && item.id.trim()) ||
-        (typeof item?.videoId === "string" && item.videoId.trim()) ||
-        "";
-      if (!id || seen.has(id)) continue;
-      seen.add(id);
-      const title =
-        (typeof item?.title === "string" && item.title.trim()) || "Vidéo YouTube";
-      out.push({ id, title });
-      if (out.length >= DISPLAY_MAX) break;
+  function shuffleInPlace(list) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
     }
-    return out;
+    return list;
   }
 
-  async function fetchStatusArchives(statusApi) {
-    if (!statusApi) return [];
-    const url = String(statusApi).replace(/\/$/, "");
-    const res = await fetch(`${url}?t=${Date.now()}`, {
-      cache: "no-store",
-      mode: "cors",
-    });
-    if (!res.ok) throw new Error(`status API HTTP ${res.status}`);
-    const data = await res.json();
-    return normalizeVideos(data?.archives);
+  function pickRandomVideos(pool, count) {
+    if (!pool.length) return [];
+    const copy = pool.slice();
+    shuffleInPlace(copy);
+    return copy.slice(0, Math.min(count, copy.length));
   }
 
   async function fetchRssXml() {
@@ -165,51 +136,90 @@
       const title =
         entry.querySelector("title")?.textContent?.trim() || "Vidéo YouTube";
       videos.push({ id, title });
-      if (videos.length >= DISPLAY_MAX) break;
+      if (videos.length >= RSS_POOL_SIZE) break;
     }
 
     return videos;
   }
 
-  async function loadVideoList(fallbackVideos) {
-    try {
-      const cfgRes = await fetch(RADIO_JSON_URL, { cache: "no-store" });
-      if (cfgRes.ok) {
-        const cfg = await cfgRes.json();
-        const statusApi =
-          cfg.statusApi ||
-          "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/radio/status";
-        const fromApi = await fetchStatusArchives(statusApi);
-        if (fromApi.length) {
-          console.info(
-            `${LOG_PREFIX} ${fromApi.length} vidéo(s) via status API.`
-          );
-          return fromApi;
-        }
-      }
-    } catch (err) {
-      console.warn(`${LOG_PREFIX} status API indisponible`, err);
+  function ensureSlots(grid, count) {
+    let slots = [...grid.querySelectorAll("[data-video-id]")];
+    while (slots.length < count) {
+      const slot = document.createElement("div");
+      grid.appendChild(slot);
+      slots.push(slot);
     }
+    while (slots.length > count) {
+      slots.pop()?.remove();
+    }
+    return [...grid.querySelectorAll("[data-video-id]")];
+  }
 
+  function applyVideosToGrid(grid, videos) {
+    const slots = ensureSlots(grid, videos.length);
+    videos.forEach((video, index) => {
+      const slot = slots[index];
+      if (!slot) return;
+      const prevId = slot.dataset.videoId?.trim();
+      slot.dataset.videoId = video.id;
+      slot.dataset.videoTitle = video.title;
+      if (prevId !== video.id || !slot.classList.contains("youtube-thumb")) {
+        slot.replaceChildren();
+        slot.classList.remove("youtube-thumb");
+        slot.removeAttribute("role");
+        slot.removeAttribute("tabindex");
+        slot.removeAttribute("aria-label");
+        enhanceSlot(slot);
+      } else {
+        const img = slot.querySelector("img");
+        if (img) {
+          img.alt = video.title;
+          if (!img.src.includes(video.id)) img.src = THUMB_URL(video.id);
+        }
+        slot.setAttribute("aria-label", `Lire : ${video.title}`);
+      }
+    });
+  }
+
+  async function syncFromRss(grid, fallbackVideos) {
+    grid.classList.add("video-grid--syncing");
+    let pool = [];
     try {
       const xml = await fetchRssXml();
-      if (xml) {
-        const fromRss = parseRssPool(xml);
-        if (fromRss.length) {
-          console.info(
-            `${LOG_PREFIX} ${fromRss.length} vidéo(s) via flux RSS.`
-          );
-          return fromRss;
-        }
+      if (!xml) {
+        console.warn(
+          `${LOG_PREFIX} Flux RSS indisponible (CORS/réseau) — repli HTML (${fallbackVideos.length} vidéo(s)).`
+        );
+        return "fallback";
       }
-      console.warn(
-        `${LOG_PREFIX} Flux RSS indisponible (CORS/réseau) — repli HTML (${fallbackVideos.length} vidéo(s)).`
-      );
-    } catch (err) {
-      console.warn(`${LOG_PREFIX} Sync RSS interrompue — repli HTML.`, err);
-    }
 
-    return fallbackVideos;
+      pool = parseRssPool(xml);
+      if (!pool.length) {
+        console.warn(
+          `${LOG_PREFIX} Flux RSS vide ou illisible — repli HTML (${fallbackVideos.length} vidéo(s)).`
+        );
+        return "fallback";
+      }
+
+      const picked = pickRandomVideos(pool, DISPLAY_COUNT);
+      const fallbackKey = videoIdsKey(fallbackVideos);
+      const pickedKey = videoIdsKey(picked);
+
+      applyVideosToGrid(grid, picked);
+      console.info(
+        `${LOG_PREFIX} ${picked.length} vidéo(s) tirées au hasard parmi ${pool.length} récente(s) du flux RSS : ${picked.map((v) => v.id).join(", ")}.`
+      );
+
+      if (pickedKey === fallbackKey) {
+        console.info(
+          `${LOG_PREFIX} Même paire que le repli HTML cette fois — prochain chargement peut varier.`
+        );
+      }
+
+      return "rss";
+    } finally {
+      grid.classList.remove("video-grid--syncing");
+    }
   }
 
   function initVideoModal() {
@@ -262,7 +272,7 @@
     closeBtn?.addEventListener("click", closeModal);
   }
 
-  async function init() {
+  function init() {
     try {
       initVideoModal();
 
@@ -272,17 +282,14 @@
       bindGridInteraction(grid);
 
       const fallbackVideos = readFallbackVideos(grid);
-      if (fallbackVideos.length) {
-        applyVideosToGrid(grid, fallbackVideos);
-      }
+      fallbackVideos.forEach((_, i) => {
+        const slot = grid.querySelectorAll("[data-video-id]")[i];
+        if (slot) enhanceSlot(slot);
+      });
 
-      grid.classList.add("video-grid--syncing");
-      try {
-        const videos = await loadVideoList(fallbackVideos);
-        if (videos.length) applyVideosToGrid(grid, videos);
-      } finally {
-        grid.classList.remove("video-grid--syncing");
-      }
+      void syncFromRss(grid, fallbackVideos).catch((err) => {
+        console.warn(`${LOG_PREFIX} Sync RSS interrompue — repli HTML.`, err);
+      });
     } catch (err) {
       console.error(`${LOG_PREFIX} Échec init zone Video.`, err);
     }
