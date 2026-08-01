@@ -10,7 +10,7 @@
   let reconnectTimer = null;
   let myId = null;
   let myNick = "";
-  let membersOpen = false;
+  let editingNick = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -163,7 +163,8 @@
     const btn = $("radio-chat-nick");
     const wrap = $("radio-chat-nick-edit");
     const input = $("radio-chat-nick-input");
-    if (!btn || !wrap || !input) return;
+    if (!btn || !wrap || !input || editingNick) return;
+    editingNick = true;
     btn.hidden = true;
     wrap.hidden = false;
     input.value = myNick;
@@ -175,7 +176,8 @@
     const btn = $("radio-chat-nick");
     const wrap = $("radio-chat-nick-edit");
     const input = $("radio-chat-nick-input");
-    if (!btn || !wrap || !input) return;
+    if (!btn || !wrap || !input || !editingNick) return;
+    editingNick = false;
     wrap.hidden = true;
     btn.hidden = false;
     if (!save) return;
@@ -189,8 +191,8 @@
     } catch {
       /* ignore */
     }
+    setNickDisplay(nick);
     if (!sendJson({ type: "nick", nick })) {
-      setNickDisplay(nick);
       setStatus("Hors ligne — pseudo enregistré localement.");
     }
   }
@@ -224,14 +226,6 @@
     });
     $("radio-chat-nick-input")?.addEventListener("blur", () => {
       finishNickEdit(true);
-    });
-
-    $("radio-chat-presence-btn")?.addEventListener("click", () => {
-      membersOpen = !membersOpen;
-      const list = $("radio-chat-members");
-      const btn = $("radio-chat-presence-btn");
-      if (list) list.hidden = !membersOpen;
-      if (btn) btn.setAttribute("aria-expanded", membersOpen ? "true" : "false");
     });
 
     $("radio-chat-form")?.addEventListener("submit", (ev) => {

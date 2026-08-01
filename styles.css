@@ -1247,16 +1247,70 @@ audio {
 
 .radio-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
-  gap: var(--panel-block-gap, 1.25rem);
+  grid-template-columns: minmax(0, 4fr) minmax(220px, 1fr);
+  gap: clamp(0.85rem, 1.5vw, 1.35rem);
   align-items: stretch;
   width: 100%;
-  max-width: min(1180px, 100%);
+  max-width: none;
+}
+
+.radio-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
 }
 
 .radio-layout .radio-card {
   max-width: none;
+  width: 100%;
   min-width: 0;
+}
+
+.radio-online {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.28));
+  border-radius: 10px;
+  background: var(--panel-card-bg, rgba(9, 13, 24, 0.65));
+}
+
+.radio-online__title {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--panel-muted, var(--muted));
+}
+
+.radio-online__list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  margin: 0;
+  padding: 0;
+  font-size: 0.88rem;
+}
+
+.radio-online__list li {
+  color: var(--panel-muted, var(--muted));
+}
+
+.radio-online__list li.is-me {
+  color: var(--panel-link, var(--accent));
+  font-weight: 650;
+}
+
+.radio-online__list:empty::after {
+  content: "Personne pour le moment";
+  color: var(--panel-muted, var(--muted));
+  font-size: 0.85rem;
+}
+
+#radio.panel > .radio-layout {
+  max-width: none;
+  width: 100%;
+  align-self: stretch;
 }
 
 .radio-chat {
@@ -1289,46 +1343,6 @@ audio {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--panel-muted, var(--muted));
-}
-
-.radio-chat__presence-btn {
-  margin: 0;
-  padding: 0.2rem 0.45rem;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--panel-link, var(--accent));
-  font: inherit;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.radio-chat__presence-btn:hover,
-.radio-chat__presence-btn:focus-visible {
-  text-decoration: underline;
-  outline: none;
-}
-
-.radio-chat__members {
-  list-style: none;
-  margin: 0 0 0.55rem;
-  padding: 0.45rem 0.55rem;
-  max-height: 8rem;
-  overflow: auto;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.28);
-  font-size: 0.82rem;
-  flex: 0 0 auto;
-}
-
-.radio-chat__members li {
-  padding: 0.15rem 0;
-  color: var(--panel-muted, var(--muted));
-}
-
-.radio-chat__members li.is-me {
-  color: var(--panel-text, var(--text));
-  font-weight: 600;
 }
 
 .radio-chat__log {
@@ -1389,6 +1403,11 @@ audio {
 .radio-chat__nick:focus-visible {
   text-decoration: underline;
   outline: none;
+}
+
+.radio-chat__nick[hidden],
+.radio-chat__nick-edit[hidden] {
+  display: none !important;
 }
 
 .radio-chat__nick-edit {
