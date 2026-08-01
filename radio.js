@@ -101,7 +101,7 @@
   function clearFrame(frame) {
     destroyHls();
     destroyWhep();
-    frame.querySelectorAll("iframe, video.radio-hls").forEach((el) => {
+    frame.querySelectorAll("iframe, video.radio-hls, .radio-unmute").forEach((el) => {
       try {
         el.srcObject = null;
       } catch {
@@ -109,6 +109,53 @@
       }
       el.remove();
     });
+  }
+
+  /** Autoplay navigateur = muet : bouton pour activer le son (geste utilisateur). */
+  function attachUnmuteControl(frame, video) {
+    if (!frame || !video) return;
+    frame.querySelectorAll(".radio-unmute").forEach((el) => el.remove());
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "radio-unmute";
+    btn.textContent = "Activer le son";
+    btn.setAttribute("aria-label", "Activer le son du live");
+
+    const unmute = () => {
+      video.muted = false;
+      video.volume = 1;
+      video.play().catch(() => {});
+      btn.remove();
+    };
+
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      unmute();
+    });
+
+    video.addEventListener("volumechange", () => {
+      if (!video.muted && video.volume > 0) btn.remove();
+    });
+
+    frame.appendChild(btn);
+  }
+
+  function selectHlsAudioTrack(hls) {
+    try {
+      const tracks = hls?.audioTracks;
+      if (!Array.isArray(tracks) || !tracks.length) return;
+      const preferred =
+        tracks.find((t) => t.default) ||
+        tracks.find((t) => t.autoselect) ||
+        tracks[0];
+      if (preferred && typeof preferred.id === "number") {
+        hls.audioTrack = preferred.id;
+      }
+    } catch (err) {
+      console.warn(LOG, "audioTrack", err);
+    }
   }
 
   function showEmpty(frame, emptyEl, message) {
@@ -203,6 +250,7 @@
     const answer = await res.text();
     await pc.setRemoteDescription({ type: "answer", sdp: answer });
     console.info(LOG, "studio WHEP (Safari/WebKit)", whepUrl);
+    attachUnmuteControl(frame, video);
     try {
       await video.play();
     } catch {
@@ -269,7 +317,12 @@
     hlsPlayer.loadSource(sourceUrl);
     hlsPlayer.attachMedia(video);
     hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+      selectHlsAudioTrack(hlsPlayer);
+      attachUnmuteControl(frame, video);
       tryPlay();
+    });
+    hlsPlayer.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+      selectHlsAudioTrack(hlsPlayer);
     });
     hlsPlayer.on(Hls.Events.ERROR, (_event, data) => {
       if (!data?.fatal) return;

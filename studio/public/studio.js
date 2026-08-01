@@ -104,25 +104,23 @@ function preferH264Video(pc) {
 }
 
 /**
- * Capture écran. Safari : vidéo seule (pas de son système).
- * Chrome : tente audio (onglet), sinon vidéo seule + micro optionnel.
+ * Capture écran + son.
+ * Chrome (onglet) : « Partager l’audio » = son système/app.
+ * Safari / fenêtre / écran macOS : pas de son système → micro obligatoire.
  */
 async function acquireDisplayStream() {
   const safari = isAppleWebKit();
   const videoOnly = { video: true, audio: false };
   const withAudio = {
     video: true,
-    audio: {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    },
+    audio: true,
+    systemAudio: "include",
   };
 
   setStatus(
     safari
-      ? "Choisis une fenêtre / un écran (Safari : pas de son système — micro ensuite)…"
-      : "Choisis un onglet / une fenêtre (coche « Partager l’audio » si possible)…"
+      ? "Choisis une fenêtre / un écran… (ensuite : micro pour le son)"
+      : "Choisis un onglet Chrome et coche « Partager l’audio » (sinon micro ensuite)…"
   );
 
   let stream;
@@ -143,7 +141,6 @@ async function acquireDisplayStream() {
       if (err?.name === "NotAllowedError" || err?.name === "AbortError") {
         throw err;
       }
-      // NotReadableError / audio source : retry vidéo seule
       console.warn("[Hakou Studio] getDisplayMedia+audio → retry vidéo", err);
       setStatus("Relance sans son d’onglet…");
       stream = await withTimeout(
@@ -154,30 +151,58 @@ async function acquireDisplayStream() {
     }
   }
 
-  // Micro si aucun audio (Safari, ou partage fenêtre sans audio Chrome)
-  if (!stream.getAudioTracks().length && navigator.mediaDevices.getUserMedia) {
-    try {
-      setStatus("Autorise le micro (son du live)…");
-      const mic = await withTimeout(
-        navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
-          video: false,
-        }),
-        45_000,
-        "Micro non autorisé à temps — live vidéo seule."
-      );
-      for (const track of mic.getAudioTracks()) {
-        stream.addTrack(track);
-      }
-    } catch (err) {
-      console.warn("[Hakou Studio] micro optionnel", err);
-      setStatus("Live sans micro (vidéo seule)…");
-    }
+  const displayAudio = stream.getAudioTracks();
+  if (displayAudio.length) {
+    displayAudio.forEach((t) => {
+      t.enabled = true;
+    });
+    console.info(
+      "[Hakou Studio] audio display:",
+      displayAudio.map((t) => t.label || t.id).join(", ")
+    );
+    return stream;
   }
 
+  // Pas de son d’onglet/écran → micro (voix ou sortie virtuelle type BlackHole).
+  if (!navigator.mediaDevices.getUserMedia) {
+    throw new Error(
+      "Aucun son capturé. Sur Chrome, partage un onglet avec « Partager l’audio »."
+    );
+  }
+  setStatus(
+    "Aucun son d’écran — autorise le micro (ou une entrée virtuelle qui reprend Rekordbox / la table)…"
+  );
+  try {
+    const mic = await withTimeout(
+      navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+        video: false,
+      }),
+      60_000,
+      "Micro non autorisé — le live a besoin d’un son (onglet + audio, ou micro)."
+    );
+    for (const track of mic.getAudioTracks()) {
+      track.enabled = true;
+      stream.addTrack(track);
+    }
+  } catch (err) {
+    stream.getTracks().forEach((t) => t.stop());
+    if (err?.name === "NotAllowedError" || err?.name === "AbortError") {
+      throw new Error(
+        "Son refusé. Chrome : onglet + « Partager l’audio », ou autorise le micro."
+      );
+    }
+    throw err;
+  }
+
+  if (!stream.getAudioTracks().length) {
+    stream.getTracks().forEach((t) => t.stop());
+    throw new Error("Impossible de capturer le son pour le live.");
+  }
   return stream;
 }
 
@@ -270,9 +295,12 @@ async function startCapture() {
     const ingest = await fetchIngestConfig();
     const hlsUrl = await publishWhip(localStream, ingest);
     stopBtn.disabled = false;
-    const hasAudio = Boolean(localStream.getAudioTracks().length);
+    const audioLabels = localStream
+      .getAudioTracks()
+      .map((t) => t.label || "audio")
+      .join(", ");
     setStatus(
-      `En direct${hasAudio ? "" : " (vidéo seule)"} — Radio : HLS / Safari WHEP. ${hlsUrl}`
+      `En direct avec son (${audioLabels}) — sur Radio, clique « Activer le son ». ${hlsUrl}`
     );
   } catch (err) {
     console.warn("[Hakou Studio]", err);
