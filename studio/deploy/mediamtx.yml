@@ -51,10 +51,10 @@ hlsEncryption: false
 hlsAllowOrigins: []
 hlsAlwaysRemux: true
 # fmp4 : Opus (WebRTC) + H264. mpegts refuse Opus → muxer crash.
-# hlsPartDuration 0s : pas de LL-HLS / EXT-X-PART (meilleure compat Safari).
+# Parts LL pour Chrome/hls.js ; Safari lit via WHEP (pas le HLS).
 hlsVariant: fmp4
 hlsSegmentDuration: 2s
-hlsPartDuration: 0s
+hlsPartDuration: 400ms
 hlsSegmentCount: 7
 hlsMuxerCloseAfter: 30s
 

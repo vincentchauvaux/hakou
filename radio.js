@@ -1,6 +1,8 @@
 (() => {
   const RADIO_JSON_URL = "./content/radio.json";
   const POLL_MS = 20_000;
+  const DEFAULT_WHEP =
+    "https://vps-e09ed6db.vps.ovh.net/hakou-live/whip/hakou/whep";
 
   const EMBED_URL = (id) =>
     `https://www.youtube.com/embed/${encodeURIComponent(id)}?rel=0&modestbranding=1`;
@@ -14,9 +16,21 @@
   let lastAppliedKey = "";
   let hlsPlayer = null;
   let hlsScriptPromise = null;
+  let whepPc = null;
 
   function $(id) {
     return document.getElementById(id);
+  }
+
+  /** Safari / iOS : HLS natif gère mal Opus en fMP4 → WHEP. */
+  function isAppleSafari() {
+    const ua = navigator.userAgent || "";
+    const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const isSafari =
+      /Safari/i.test(ua) &&
+      !/Chrome|CriOS|Chromium|Edg|OPR|Firefox|FxiOS/i.test(ua);
+    return isIOS || isSafari;
   }
 
   function setStatus(state, title) {
@@ -41,9 +55,28 @@
     }
   }
 
+  function destroyWhep() {
+    if (whepPc) {
+      try {
+        whepPc.close();
+      } catch {
+        /* ignore */
+      }
+      whepPc = null;
+    }
+  }
+
   function clearFrame(frame) {
     destroyHls();
-    frame.querySelectorAll("iframe, video.radio-hls").forEach((el) => el.remove());
+    destroyWhep();
+    frame.querySelectorAll("iframe, video.radio-hls").forEach((el) => {
+      try {
+        el.srcObject = null;
+      } catch {
+        /* ignore */
+      }
+      el.remove();
+    });
   }
 
   function showEmpty(frame, emptyEl, message) {
@@ -51,6 +84,26 @@
     if (emptyEl) {
       emptyEl.hidden = false;
       if (message) emptyEl.textContent = message;
+    }
+  }
+
+  function makeVideo(title) {
+    const video = document.createElement("video");
+    video.className = "radio-hls";
+    video.controls = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    video.muted = true;
+    video.setAttribute("playsinline", "");
+    video.title = title || "Hakou Radio Live";
+    return video;
+  }
+
+  async function tryPlay(video) {
+    try {
+      await video.play();
+    } catch {
+      /* autoplay bloqué — controls OK */
     }
   }
 
@@ -82,43 +135,83 @@
     }
   }
 
-  async function playWithHlsJs(video, hlsUrl, tryPlay, onFatal) {
-    let Hls;
-    try {
-      Hls = await loadHlsScript();
-    } catch {
-      onFatal("Lecteur HLS indisponible.");
-      return;
-    }
-    if (!Hls?.isSupported()) {
-      onFatal("Lecture HLS non supportée sur ce navigateur.");
-      return;
-    }
-    hlsPlayer = new Hls({
-      enableWorker: true,
-      lowLatencyMode: false,
-    });
-    hlsPlayer.loadSource(hlsUrl);
-    hlsPlayer.attachMedia(video);
-    hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
-      tryPlay();
-    });
-    hlsPlayer.on(Hls.Events.ERROR, (_event, data) => {
-      if (!data?.fatal) return;
-      try {
-        hlsPlayer.destroy();
-      } catch {
-        /* ignore */
-      }
-      hlsPlayer = null;
-      onFatal(
-        data.type === Hls.ErrorTypes.NETWORK_ERROR
-          ? "Réseau : impossible de joindre le flux studio."
-          : "Erreur de lecture du flux studio."
-      );
+  function waitIceGathering(pc, timeoutMs = 4000) {
+    if (pc.iceGatheringState === "complete") return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        pc.removeEventListener("icegatheringstatechange", onChange);
+        resolve();
+      };
+      const onChange = () => {
+        if (pc.iceGatheringState === "complete") done();
+      };
+      pc.addEventListener("icegatheringstatechange", onChange);
+      window.setTimeout(done, timeoutMs);
     });
   }
 
+  /** Safari / iOS : lecture WebRTC WHEP (même codecs que le studio). */
+  async function playWhep(frame, emptyEl, whepUrl, title) {
+    if (!frame || !whepUrl || typeof RTCPeerConnection === "undefined") {
+      throw new Error("WHEP indisponible");
+    }
+    clearFrame(frame);
+    if (emptyEl) emptyEl.hidden = true;
+
+    const video = makeVideo(title);
+    frame.appendChild(video);
+
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+    whepPc = pc;
+
+    pc.addTransceiver("video", { direction: "recvonly" });
+    pc.addTransceiver("audio", { direction: "recvonly" });
+    pc.ontrack = (event) => {
+      const stream = event.streams?.[0];
+      if (stream && video.srcObject !== stream) {
+        video.srcObject = stream;
+        void tryPlay(video);
+      } else if (event.track) {
+        const fallback = new MediaStream([event.track]);
+        if (!video.srcObject) {
+          video.srcObject = fallback;
+          void tryPlay(video);
+        } else if (video.srcObject instanceof MediaStream) {
+          video.srcObject.addTrack(event.track);
+        }
+      }
+    };
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    await waitIceGathering(pc);
+
+    const sdp = pc.localDescription?.sdp;
+    if (!sdp) throw new Error("SDP offer vide");
+
+    const res = await fetch(whepUrl, {
+      method: "POST",
+      mode: "cors",
+      credentials: "omit",
+      headers: {
+        "Content-Type": "application/sdp",
+        Accept: "application/sdp",
+      },
+      body: sdp,
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`WHEP HTTP ${res.status} ${errText.slice(0, 120)}`);
+    }
+    const answer = await res.text();
+    await pc.setRemoteDescription({ type: "answer", sdp: answer });
+    await tryPlay(video);
+    console.info(LOG, "studio WHEP (Safari)", whepUrl);
+  }
+
+  /** Chrome / Firefox / Edge : hls.js sur fMP4 LL (comportement historique). */
   async function playHls(frame, emptyEl, hlsUrl, title) {
     if (!frame || !hlsUrl) return;
     clearFrame(frame);
@@ -134,25 +227,8 @@
       return;
     }
 
-    const video = document.createElement("video");
-    video.className = "radio-hls";
-    video.controls = true;
-    video.playsInline = true;
-    video.autoplay = true;
-    // Autoplay navigateur : muet d’abord (l’utilisateur peut réactiver le son).
-    video.muted = true;
-    video.setAttribute("playsinline", "");
-    // Pas de crossOrigin/credentials : nginx injecte cookieCheck côté serveur.
-    video.title = title || "Hakou Radio Live";
+    const video = makeVideo(title);
     frame.appendChild(video);
-
-    const tryPlay = async () => {
-      try {
-        await video.play();
-      } catch {
-        /* autoplay bloqué — controls OK */
-      }
-    };
 
     const onFatal = (message) => {
       console.warn(LOG, "HLS", message);
@@ -164,56 +240,95 @@
       );
     };
 
-    const preferNative = Boolean(
-      video.canPlayType("application/vnd.apple.mpegurl")
-    );
-
-    if (preferNative) {
-      let fellBack = false;
-      const failNative = async () => {
-        if (fellBack) return;
-        fellBack = true;
-        const code = video.error?.code;
-        console.warn(LOG, "HLS native error", code, video.error?.message || "");
-        // Safari : si MSE dispo, tenter hls.js ; sinon message clair.
-        destroyHls();
-        try {
-          const Hls = await loadHlsScript();
-          if (Hls?.isSupported()) {
-            if (emptyEl) emptyEl.hidden = true;
-            if (!frame.contains(video)) frame.appendChild(video);
-            await playWithHlsJs(video, hlsUrl, tryPlay, onFatal);
-            return;
-          }
-        } catch {
-          /* ignore */
-        }
-        onFatal(
-          "Impossible de lire le flux HLS (Safari). Relance le live en H264 depuis le studio."
+    let Hls;
+    try {
+      Hls = await loadHlsScript();
+    } catch {
+      onFatal("Lecteur HLS indisponible.");
+      return;
+    }
+    if (!Hls?.isSupported()) {
+      // Repli rare (vieux Safari sans WHEP) : HLS natif
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = hlsUrl;
+        video.addEventListener(
+          "error",
+          () => onFatal("Impossible de lire le flux HLS."),
+          { once: true }
         );
-      };
-
-      video.addEventListener("error", () => {
-        void failNative();
-      }, { once: true });
-      video.src = hlsUrl;
-      await tryPlay();
-      // Si le manifeste charge mais reste bloqué (stalled), timeout soft.
-      window.setTimeout(() => {
-        if (
-          !fellBack &&
-          video.readyState < 2 &&
-          frame.contains(video) &&
-          !video.error
-        ) {
-          console.warn(LOG, "HLS native stalled — tentative hls.js");
-          void failNative();
-        }
-      }, 8000);
+        await tryPlay(video);
+        return;
+      }
+      onFatal("Lecture HLS non supportée sur ce navigateur.");
       return;
     }
 
-    await playWithHlsJs(video, hlsUrl, tryPlay, onFatal);
+    hlsPlayer = new Hls({
+      enableWorker: true,
+      lowLatencyMode: true,
+    });
+    hlsPlayer.loadSource(hlsUrl);
+    hlsPlayer.attachMedia(video);
+    hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+      void tryPlay(video);
+    });
+    hlsPlayer.on(Hls.Events.ERROR, (_event, data) => {
+      if (!data?.fatal) return;
+      try {
+        hlsPlayer.destroy();
+      } catch {
+        /* ignore */
+      }
+      hlsPlayer = null;
+      onFatal(
+        data.type === Hls.ErrorTypes.NETWORK_ERROR
+          ? "Réseau : impossible de joindre le flux studio."
+          : "Erreur de lecture du flux studio."
+      );
+    });
+    console.info(LOG, "studio HLS (hls.js)", hlsUrl);
+  }
+
+  async function playStudioLive(frame, emptyEl, data, title) {
+    const hlsUrl =
+      typeof data.hlsUrl === "string" && data.hlsUrl.trim()
+        ? data.hlsUrl.trim()
+        : null;
+    const whepUrl =
+      (typeof data.whepUrl === "string" && data.whepUrl.trim()) ||
+      DEFAULT_WHEP;
+
+    if (isAppleSafari()) {
+      try {
+        await playWhep(frame, emptyEl, whepUrl, title);
+        return;
+      } catch (err) {
+        console.warn(LOG, "WHEP échoué, repli HLS", err);
+        if (hlsUrl) {
+          await playHls(frame, emptyEl, hlsUrl, title);
+          return;
+        }
+        showEmpty(
+          frame,
+          emptyEl,
+          "Flux studio indisponible (Safari). Relance le live depuis le studio."
+        );
+        return;
+      }
+    }
+
+    if (hlsUrl) {
+      await playHls(frame, emptyEl, hlsUrl, title);
+      return;
+    }
+
+    // Chrome sans HLS prêt : tenter WHEP en secours
+    try {
+      await playWhep(frame, emptyEl, whepUrl, title);
+    } catch (err) {
+      console.warn(LOG, "WHEP secours", err);
+      showEmpty(frame, emptyEl, "Flux studio indisponible pour le moment.");
+    }
   }
 
   function playVideo(frame, emptyEl, videoId, title) {
@@ -237,6 +352,7 @@
       data.live ? "1" : "0",
       data.studioLive ? "s" : "y",
       data.hlsUrl || "",
+      data.whepUrl || "",
       data.liveVideoId || "",
     ].join("|");
   }
@@ -272,19 +388,27 @@
       (typeof base.liveTitle === "string" && base.liveTitle.trim()) || null;
     let source = "radio.json";
     let hlsUrl = null;
+    let whepUrl = null;
     let studioLive = false;
 
     try {
       const remote = await fetchStatusApi(statusApi);
       if (remote && remote.ok !== false) {
         source = remote.source || "status-api";
-        if (remote.studioLive && remote.hlsUrl) {
+        if (remote.studioLive && (remote.hlsUrl || remote.whepUrl)) {
           live = true;
           liveVideoId = null;
           liveTitle =
             (typeof remote.liveTitle === "string" && remote.liveTitle.trim()) ||
             "Live studio Hakou";
-          hlsUrl = String(remote.hlsUrl).trim();
+          hlsUrl =
+            typeof remote.hlsUrl === "string" && remote.hlsUrl.trim()
+              ? remote.hlsUrl.trim()
+              : null;
+          whepUrl =
+            typeof remote.whepUrl === "string" && remote.whepUrl.trim()
+              ? remote.whepUrl.trim()
+              : DEFAULT_WHEP;
           studioLive = true;
         } else if (remote.live && remote.liveVideoId) {
           live = true;
@@ -293,12 +417,14 @@
             (typeof remote.liveTitle === "string" && remote.liveTitle.trim()) ||
             "Mix en direct";
           hlsUrl = null;
+          whepUrl = null;
           studioLive = false;
         } else {
           live = false;
           liveVideoId = null;
           liveTitle = null;
           hlsUrl = null;
+          whepUrl = null;
           studioLive = false;
         }
       }
@@ -313,6 +439,7 @@
       liveVideoId,
       liveTitle,
       hlsUrl,
+      whepUrl,
       studioLive,
       source,
     };
@@ -324,11 +451,8 @@
     if (!frame) return;
 
     const key = configKey(data);
-    const hlsUrl =
-      typeof data.hlsUrl === "string" && data.hlsUrl.trim()
-        ? data.hlsUrl.trim()
-        : null;
-    const studioLive = Boolean(data.studioLive) && Boolean(hlsUrl);
+    const studioLive = Boolean(data.studioLive) &&
+      Boolean(data.hlsUrl || data.whepUrl);
     const ytLive =
       !studioLive &&
       Boolean(data.live) &&
@@ -339,7 +463,6 @@
       (typeof data.liveTitle === "string" && data.liveTitle.trim()) ||
       (studioLive ? "Live studio Hakou" : "Mix en direct");
 
-    // Évite de recharger le player si rien n’a changé (poll)
     if (
       key === lastAppliedKey &&
       (frame.querySelector("iframe") || frame.querySelector("video.radio-hls"))
@@ -350,8 +473,8 @@
 
     if (studioLive) {
       setStatus("live", liveTitle);
-      playHls(frame, emptyEl, hlsUrl, liveTitle).catch((err) => {
-        console.warn(LOG, "HLS", err);
+      playStudioLive(frame, emptyEl, data, liveTitle).catch((err) => {
+        console.warn(LOG, "studio live", err);
         showEmpty(frame, emptyEl, "Flux studio indisponible pour le moment.");
       });
     } else if (liveId) {
@@ -359,11 +482,7 @@
       playVideo(frame, emptyEl, liveId, liveTitle);
     } else {
       setStatus("offline", "Prochain set à venir");
-      showEmpty(
-        frame,
-        emptyEl,
-        "Aucun flux pour le moment."
-      );
+      showEmpty(frame, emptyEl, "Aucun flux pour le moment.");
     }
 
     const channelLink = document.querySelector("#radio .embed-source a");
@@ -376,13 +495,16 @@
     console.info(
       LOG,
       studioLive
-        ? `studio HLS ${hlsUrl}`
+        ? isAppleSafari()
+          ? `studio WHEP ${data.whepUrl || DEFAULT_WHEP}`
+          : `studio HLS ${data.hlsUrl || ""}`
         : liveId
           ? `live ${liveId}`
           : "hors antenne",
       {
         source: data.source || "local",
         watch: liveId ? WATCH_URL(liveId) : null,
+        safari: isAppleSafari(),
       }
     );
   }

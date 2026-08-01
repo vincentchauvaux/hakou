@@ -40,7 +40,8 @@ location /hakou-live/hls/ {
     }
 }
 
-# WHIP / WebRTC signalling (publish studio)
+# WHIP (publish studio) + WHEP (lecture Safari / WebRTC)
+# ICE média reste en UDP :8189 (hors nginx).
 location /hakou-live/whip/ {
     proxy_pass http://127.0.0.1:8889/;
     proxy_http_version 1.1;
@@ -66,6 +67,13 @@ location /hakou-live/whip/ {
     add_header Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS" always;
     add_header Access-Control-Expose-Headers "Location, Link, ETag" always;
     if ($request_method = OPTIONS) {
+        add_header Access-Control-Allow-Origin $http_origin always;
+        add_header Access-Control-Allow-Credentials true always;
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type, If-Match" always;
+        add_header Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS" always;
+        add_header Access-Control-Expose-Headers "Location, Link, ETag" always;
+        add_header Content-Length 0;
+        add_header Content-Type text/plain;
         return 204;
     }
 }

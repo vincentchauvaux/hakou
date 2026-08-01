@@ -151,7 +151,7 @@
 
 | `youtube-videos.js` | Zone Video : liste récente (~8) via status API VPS / RSS + repli HTML, cartes `.video-card` + modal |
 
-| `radio.js` | Zone Radio : `content/radio.json` + **API publique** VPS `/api/radio/status` — priorité **studio HLS** (MediaMTX) → live YouTube ; **hors antenne = message vide** (pas d’archives) ; poll ~20 s ; player native HLS (Safari) / `hls.js` |
+| `radio.js` | Zone Radio : status API — **Chrome → HLS hls.js**, **Safari → WHEP** ; hors antenne = message vide ; poll ~20 s |
 
 | `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |
 
@@ -328,9 +328,9 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Ne
   - Setup détaillé : [`studio/README.md`](studio/README.md).
 - **Live studio (Étape 3)** :
   - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.
-  - Nginx : `/hakou-live/whip/` → WHIP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **Safari** : `proxy_set_header Cookie cookieCheck=1` (pas de cookies navigateur / ITP) ; `proxy_hide_header Access-Control-*` + un seul `Allow-Origin *` ; `proxy_redirect /hakou/ → /hakou-live/hls/hakou/`. MediaMTX `hlsAllowOrigins: []` (CORS géré par nginx) ; **`hlsVariant: fmp4`** (Opus WebRTC ; `mpegts` refuse Opus) + **`hlsPartDuration: 0s`** (pas de LL-HLS / parts — meilleure compat Safari).
-  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP avec **préférence codec H264** (`setCodecPreferences`) — MediaMTX HLS **ignore VP8** (sinon audio seul).
-  - Spectateurs : [`radio.js`](radio.js) si `studioLive` + `hlsUrl` → player HLS (native Safari / `hls.js`, sans credentials) **sans login**. `detectStudioLive` sonde le m3u8 local + codecs HLS-compatibles. Priorité studio > YouTube live ; hors antenne = message vide (archives → zone Video).
+  - Nginx : `/hakou-live/whip/` → WHIP **et WHEP**, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **Safari** HLS : `proxy_set_header Cookie cookieCheck=1` ; CORS unique `*` ; `proxy_redirect`. MediaMTX `hlsAllowOrigins: []` ; **`hlsVariant: fmp4`** + parts LL (`hlsPartDuration: 400ms`) pour Chrome/`hls.js` (Opus OK ; `mpegts` refuse Opus).
+  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP **H264** (`setCodecPreferences`).
+  - Spectateurs **adaptatifs** ([`radio.js`](radio.js)) : **Chrome / Firefox / Edge** → HLS `hls.js` (fMP4 LL) ; **Safari / iOS** → **WHEP WebRTC** (mêmes codecs Opus+H264, contourne HLS natif). Status API expose `hlsUrl` + `whepUrl`. Priorité studio > YouTube live ; hors antenne = message vide (VOD → zone Video).
   - Install : [`studio/deploy/install-mediamtx.sh`](studio/deploy/install-mediamtx.sh) + secrets `MEDIAMTX_PUBLISH_PASS` / `MEDIAMTX_API_PASS` dans `/opt/hakou-studio/.env` et `mediamtx.yml`.
 
 ## Déploiement (juillet 2026)

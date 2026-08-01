@@ -64,6 +64,9 @@ const MEDIAMTX_PUBLISH_PASS = env.MEDIAMTX_PUBLISH_PASS || "";
 const WHIP_PUBLIC_URL =
   env.WHIP_PUBLIC_URL ||
   `https://vps-e09ed6db.vps.ovh.net/hakou-live/whip/${MEDIAMTX_PATH}/whip`;
+const WHEP_PUBLIC_URL =
+  env.WHEP_PUBLIC_URL ||
+  `https://vps-e09ed6db.vps.ovh.net/hakou-live/whip/${MEDIAMTX_PATH}/whep`;
 const HLS_PUBLIC_URL =
   env.HLS_PUBLIC_URL ||
   `https://vps-e09ed6db.vps.ovh.net/hakou-live/hls/${MEDIAMTX_PATH}/index.m3u8`;
@@ -209,6 +212,7 @@ app.get("/api/radio/status", async (_req, res) => {
       mediamtxApiUser: MEDIAMTX_API_USER,
       mediamtxApiPass: MEDIAMTX_API_PASS || undefined,
       hlsPublicUrl: HLS_PUBLIC_URL,
+      whepPublicUrl: WHEP_PUBLIC_URL,
     });
     res.setHeader("Cache-Control", "public, max-age=15");
     res.json(status);
@@ -220,6 +224,7 @@ app.get("/api/radio/status", async (_req, res) => {
       liveVideoId: null,
       liveTitle: null,
       hlsUrl: null,
+      whepUrl: null,
       archives: [],
       error: "statut radio indisponible",
     });
@@ -379,6 +384,7 @@ app.get("/api/studio/ingest", (req, res) => {
   res.json({
     path: MEDIAMTX_PATH,
     whipUrl: WHIP_PUBLIC_URL,
+    whepUrl: WHEP_PUBLIC_URL,
     hlsUrl: HLS_PUBLIC_URL,
     authorization: `Basic ${basic}`,
     // Alternative OBS / certains clients WHIP

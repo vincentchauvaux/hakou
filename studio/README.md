@@ -34,7 +34,7 @@ Allowlist défaut : `vincent.chauvaux@gmail.com` (`ALLOWED_EMAILS`).
 
 ## Statut Radio public
 
-`GET /api/radio/status` — **sans auth**, CORS vers hakou.be. Priorité : **studio MediaMTX** (HLS) → live YouTube Public → archives RSS.
+`GET /api/radio/status` — **sans auth**, CORS vers hakou.be. Priorité : **studio MediaMTX** (`hlsUrl` + `whepUrl`) → live YouTube Public → archives RSS.
 
 ## Étape 3 — Live studio (WHIP → HLS)
 

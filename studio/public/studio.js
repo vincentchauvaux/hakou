@@ -162,7 +162,7 @@ async function startCapture() {
     const hlsUrl = await publishWhip(localStream, ingest);
     stopBtn.disabled = false;
     setStatus(
-      `En direct — visiteurs Radio : HLS (~2–5 s). Codec vidéo H264 requis (VP8 = audio seul). ${hlsUrl}`
+      `En direct — Chrome : HLS ; Safari : WHEP. Codec H264 requis (VP8 = audio seul). ${hlsUrl}`
     );
   } catch (err) {
     console.warn("[Hakou Studio]", err);
