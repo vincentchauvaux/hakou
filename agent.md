@@ -151,7 +151,7 @@
 
 | `youtube-videos.js` | Zone Video : RSS (pool ~12) → **2 aléatoires** / visite + repli HTML, modal |
 
-| `radio.js` | Zone Radio : `content/radio.json` + **API publique** VPS `/api/radio/status` — priorité **studio** → live YouTube → archives RSS ; poll ~20 s ; Chrome/Firefox : `hls.js` ; **Safari / iOS** : **WHEP/WebRTC** (`whepUrl`, repli HLS) |
+| `radio.js` | Zone Radio : priorité **studio** → live YouTube → **playlist Hakou Mix** (`playlistId` dans `radio.json`) ; poll ~20 s ; Chrome/Firefox : `hls.js` ; **Safari / iOS** : **WHEP** |
 
 | `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |
 
@@ -244,7 +244,7 @@ Site statique sans backend dédié : SoundCloud / modales Instagram / Radio YouT
 
 | **Son** (`#son`) | [soundcloud.com/hakou](https://soundcloud.com/hakou) | Lecteur iframe via oEmbed SoundCloud — user API `4170372`, hauteur 450 (mode visuel). |
 
-| **Radio** (`#radio`, `data-zone="2"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `radio.js` : badge **LIVE** / Hors antenne ; embed YouTube 16:9 ; archives. **Live public** : l’API VPS `GET /hakou-studio/api/radio/status` (sans auth) détecte un live YouTube **Public** et alimente tous les visiteurs — **pas** lié au login Google intro/studio. Repli : `content/radio.json` + RSS chaîne. **Important** : un live YouTube **privé / non répertorié** n’est visible que pour toi connecté à YouTube — le passer en **Public** pour hakou.be. Orbite 3D : **Pluton**. **Droits** : Spotify Famille dans Rekordbox ≠ licence diffusion publique. **Workflow** : Rekordbox → OBS → YouTube Live **Public** → la page Radio se met à jour seule (poll ~90 s) ; VOD récentes via RSS en archives. |
+| **Radio** (`#radio`, `data-zone="2"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) / [Hakou Mix](https://www.youtube.com/playlist?list=PLGIvCy1w5T6Y) | `radio.js` : badge **LIVE** / Hors antenne ; player 16:9. Priorité : **studio** → live YouTube Public → **playlist Hakou Mix** (`PLGIvCy1w5T6Y` via `content/radio.json`). API VPS `GET /hakou-studio/api/radio/status` sans auth. Orbite 3D : **Pluton**. |
 
 | **Video** (`#video`, `data-zone="3"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : au load, **repli immédiat** des `[data-video-id]` dans `index.html`, puis sync **flux RSS** `…/feeds/videos.xml?channel_id=UCmm1lsi4IS7RzwFFhIax3ug` — parse **12** entrées récentes, **shuffle → 2** affichées (chaque visite peut différer). CORS : proxy `api.allorigins.win` ; échec → HTML inchangé (`.video-grid--syncing`, opacité ~0,97, pas de flash). Logs `[Hakou YouTube]`. Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, modal `#youtube-video-modal`. |
 
@@ -293,7 +293,7 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 
 - **YouTube (dynamique)** : RSS chaîne `UCmm1lsi4IS7RzwFFhIax3ug`, pool **12** récentes, **2 aléatoires** par chargement (Fisher-Yates). Repli HTML si fetch/proxy échoue. **CORS** : flux direct souvent OK ; sinon proxy `api.allorigins.win` (tiers, sans clé, timeouts possibles). Pas de quota API YouTube Data. `data-video-id` dans `index.html` = filet de sécurité hors-ligne.
 
-- **Radio** : sync live **publique** via VPS `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/radio/status` (scrape `/live` + RSS, cache ~45 s ; option `YOUTUBE_API_KEY` sur le VPS). Studio live : **HLS** (Chrome) / **WHEP** (Safari). `content/radio.json` porte `statusApi` + repli. Pas de gate login sur la page Radio. Mobile / laptop : `.embed-touch-layer` sur `.radio-player__frame`.
+- **Radio** : sync live **publique** via VPS `…/api/radio/status`. Hors live : embed playlist **Hakou Mix** (`playlistId` / `playlistTitle` dans `content/radio.json`). Studio : **HLS** (Chrome) / **WHEP** (Safari). Pas de gate login. Mobile / laptop : `.embed-touch-layer` sur `.radio-player__frame`.
 
 - **SoundCloud** : embed officiel ; couleur accent `%237f9dff` dans l’URL du player. Mobile / laptop compact : `.embed-touch-layer` sur `.soundcloud-embed` — swipe vertical scroll le panel ; tap court tente play via click synthétique sur l’iframe ; repli lien profil sous le lecteur.
 
@@ -330,7 +330,7 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Ne
   - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.
   - Nginx : `/hakou-live/whip/` → WHIP/WHEP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **cookieCheck** : ne **pas** injecter `Cookie: cookieCheck=1` (sinon playlists sans `?session=` + 401 enfants si `Set-Cookie` masqué). Client : `?cookieCheck=1` → `?session=` dans les m3u8. CORS HLS `*` sans credentials (`hls.js` `withCredentials: false`).
   - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP **H264** (`setCodecPreferences`). **Son** : Chrome onglet + « Partager l’audio » (`systemAudio: include`) ; sinon **micro obligatoire** (Safari / fenêtre macOS). Spectateurs Radio : autoplay **muet** + bouton **Activer le son** ; piste audio HLS sélectionnée explicitement.
-  - Spectateurs : [`radio.js`](radio.js) si `studioLive` + `hlsUrl` **sans login**. **Chrome / Firefox** : HLS (`hls.js`, `withCredentials`). **Safari / iOS (WebKit)** : lecture **WHEP** (`POST` SDP → `/hakou-live/whip/hakou/whep`) car HLS natif gère mal Opus + cookies cross-origin ; repli HLS si WHEP échoue. API statut expose `whepUrl` (`WHEP_PUBLIC_URL`). `detectStudioLive` sonde m3u8 + codecs HLS-compatibles. Priorité studio > YouTube live > archives.
+  - Spectateurs : [`radio.js`](radio.js) si `studioLive` + `hlsUrl` **sans login**. **Chrome / Firefox** : HLS (`hls.js`). **Safari / iOS** : **WHEP**. Hors antenne : playlist YouTube **Hakou Mix**. Priorité studio > YouTube live > playlist.
   - Nginx WHIP/WHEP : CORS origines hakou.be (+ localhost / VPS), headers `Content-Type` / `Accept` pour SDP ; ICE UDP **8189** ouvert (média WebRTC hors nginx).
   - Install : [`studio/deploy/install-mediamtx.sh`](studio/deploy/install-mediamtx.sh) + secrets `MEDIAMTX_PUBLISH_PASS` / `MEDIAMTX_API_PASS` dans `/opt/hakou-studio/.env` et `mediamtx.yml`.
 

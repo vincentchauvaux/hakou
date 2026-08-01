@@ -14,6 +14,13 @@
 
   const LOG = "[Hakou Radio]";
   const HLS_CDN = "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js";
+  const DEFAULT_PLAYLIST_ID = "PLGIvCy1w5T6Y";
+  const DEFAULT_PLAYLIST_TITLE = "Hakou Mix";
+
+  const PLAYLIST_EMBED_URL = (listId) =>
+    `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(listId)}&rel=0&modestbranding=1`;
+  const PLAYLIST_WATCH_URL = (listId) =>
+    `https://www.youtube.com/playlist?list=${encodeURIComponent(listId)}`;
 
   let pollTimer = null;
   let lastAppliedKey = "";
@@ -371,6 +378,22 @@
     frame.appendChild(iframe);
   }
 
+  function playPlaylist(frame, emptyEl, playlistId, title) {
+    if (!frame || !playlistId) return;
+    clearFrame(frame);
+    if (emptyEl) emptyEl.hidden = true;
+
+    const iframe = document.createElement("iframe");
+    iframe.src = PLAYLIST_EMBED_URL(playlistId);
+    iframe.title = title || DEFAULT_PLAYLIST_TITLE;
+    iframe.allow =
+      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+    iframe.allowFullscreen = true;
+    iframe.loading = "lazy";
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
+    frame.appendChild(iframe);
+  }
+
   function renderArchives(grid, archivesWrap, archives, activeId, onSelect) {
     if (!grid || !archivesWrap) return;
 
@@ -432,6 +455,7 @@
       data.hlsUrl || "",
       data.whepUrl || "",
       data.liveVideoId || "",
+      data.playlistId || "",
       normalizeArchives(data.archives)
         .map((a) => a.id)
         .join(","),
@@ -570,6 +594,12 @@
       hlsUrl,
       whepUrl,
       studioLive,
+      playlistId:
+        (typeof base.playlistId === "string" && base.playlistId.trim()) ||
+        DEFAULT_PLAYLIST_ID,
+      playlistTitle:
+        (typeof base.playlistTitle === "string" && base.playlistTitle.trim()) ||
+        DEFAULT_PLAYLIST_TITLE,
       archives,
       source,
     };
@@ -602,6 +632,12 @@
     const liveTitle =
       (typeof data.liveTitle === "string" && data.liveTitle.trim()) ||
       (studioLive ? "Live studio Hakou" : "Mix en direct");
+    const playlistId =
+      (typeof data.playlistId === "string" && data.playlistId.trim()) ||
+      DEFAULT_PLAYLIST_ID;
+    const playlistTitle =
+      (typeof data.playlistTitle === "string" && data.playlistTitle.trim()) ||
+      DEFAULT_PLAYLIST_TITLE;
 
     // Évite de recharger le player si rien n’a changé (poll)
     if (
@@ -613,8 +649,10 @@
     lastAppliedKey = key;
 
     let activeId = null;
+    let mode = "empty";
 
     if (studioLive) {
+      mode = "studio";
       setStatus("live", liveTitle);
       playStudioLive(frame, emptyEl, { hlsUrl, whepUrl, title: liveTitle }).catch(
         (err) => {
@@ -623,10 +661,16 @@
         }
       );
     } else if (liveId) {
+      mode = "yt-live";
       activeId = liveId;
       setStatus("live", liveTitle);
       playVideo(frame, emptyEl, liveId, liveTitle);
+    } else if (playlistId) {
+      mode = "playlist";
+      setStatus("offline", playlistTitle);
+      playPlaylist(frame, emptyEl, playlistId, playlistTitle);
     } else if (archives.length) {
+      mode = "archive";
       const first = archives[0];
       activeId = first.id;
       setStatus("offline", first.title || "Dernier set archivé");
@@ -636,7 +680,7 @@
       showEmpty(
         frame,
         emptyEl,
-        "Aucun flux pour le moment — les archives s’afficheront ici dès qu’un set est publié."
+        "Aucun flux pour le moment — la playlist Hakou Mix s’affichera ici."
       );
     }
 
@@ -650,22 +694,34 @@
     });
 
     const channelLink = document.querySelector("#radio .embed-source a");
-    if (channelLink && data.channelHandle) {
-      const handle = String(data.channelHandle).replace(/^@/, "");
-      channelLink.href = `https://www.youtube.com/@${handle}`;
-      channelLink.textContent = `youtube.com/@${handle}`;
+    if (channelLink) {
+      if (mode === "playlist" && playlistId) {
+        channelLink.href = PLAYLIST_WATCH_URL(playlistId);
+        channelLink.textContent = playlistTitle;
+      } else if (data.channelHandle) {
+        const handle = String(data.channelHandle).replace(/^@/, "");
+        channelLink.href = `https://www.youtube.com/@${handle}`;
+        channelLink.textContent = `youtube.com/@${handle}`;
+      }
     }
 
     console.info(
       LOG,
-      studioLive
+      mode === "studio"
         ? `studio ${prefersStudioWebRtc() ? "WHEP" : "HLS"} ${prefersStudioWebRtc() ? whepUrl || hlsUrl : hlsUrl}`
-        : liveId
+        : mode === "yt-live"
           ? `live ${liveId}`
-          : `${archives.length} archive(s)`,
+          : mode === "playlist"
+            ? `playlist ${playlistId}`
+            : `${archives.length} archive(s)`,
       {
         source: data.source || "local",
-        watch: activeId ? WATCH_URL(activeId) : null,
+        watch:
+          mode === "playlist"
+            ? PLAYLIST_WATCH_URL(playlistId)
+            : activeId
+              ? WATCH_URL(activeId)
+              : null,
       }
     );
   }

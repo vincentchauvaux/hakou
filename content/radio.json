@@ -2,6 +2,8 @@
   "channelId": "UCmm1lsi4IS7RzwFFhIax3ug",
   "channelHandle": "@MrEtibaliomecus",
   "statusApi": "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/radio/status",
+  "playlistId": "PLGIvCy1w5T6Y",
+  "playlistTitle": "Hakou Mix",
   "live": false,
   "liveVideoId": null,
   "liveTitle": null,
