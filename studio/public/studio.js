@@ -10,9 +10,38 @@ let localStream = null;
 let peerConnection = null;
 let whipResourceUrl = null;
 let whipAuthHeader = null;
+let startInFlight = false;
+
+/** Safari / iOS : pas de son système via getDisplayMedia — audio:true peut bloquer la Promise. */
+function isAppleWebKit() {
+  const ua = navigator.userAgent || "";
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) {
+    return true;
+  }
+  return (
+    /Safari/i.test(ua) &&
+    !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FXIOS|Android/i.test(ua)
+  );
+}
 
 function setStatus(msg) {
   if (statusEl) statusEl.textContent = msg || "";
+}
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          label ||
+            `Délai dépassé (${Math.round(ms / 1000)} s) — annule le dialogue macOS / réessaie.`
+        )
+      );
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 async function loadMe() {
@@ -72,6 +101,84 @@ function preferH264Video(pc) {
       console.warn("[Hakou Studio] setCodecPreferences", err);
     }
   }
+}
+
+/**
+ * Capture écran. Safari : vidéo seule (pas de son système).
+ * Chrome : tente audio (onglet), sinon vidéo seule + micro optionnel.
+ */
+async function acquireDisplayStream() {
+  const safari = isAppleWebKit();
+  const videoOnly = { video: true, audio: false };
+  const withAudio = {
+    video: true,
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    },
+  };
+
+  setStatus(
+    safari
+      ? "Choisis une fenêtre / un écran (Safari : pas de son système — micro ensuite)…"
+      : "Choisis un onglet / une fenêtre (coche « Partager l’audio » si possible)…"
+  );
+
+  let stream;
+  if (safari) {
+    stream = await withTimeout(
+      navigator.mediaDevices.getDisplayMedia(videoOnly),
+      90_000,
+      "Partage d’écran trop long — ferme le dialogue macOS s’il est ouvert, puis réessaie."
+    );
+  } else {
+    try {
+      stream = await withTimeout(
+        navigator.mediaDevices.getDisplayMedia(withAudio),
+        90_000,
+        "Partage d’écran trop long — ferme le dialogue s’il est resté ouvert, puis réessaie."
+      );
+    } catch (err) {
+      if (err?.name === "NotAllowedError" || err?.name === "AbortError") {
+        throw err;
+      }
+      // NotReadableError / audio source : retry vidéo seule
+      console.warn("[Hakou Studio] getDisplayMedia+audio → retry vidéo", err);
+      setStatus("Relance sans son d’onglet…");
+      stream = await withTimeout(
+        navigator.mediaDevices.getDisplayMedia(videoOnly),
+        90_000,
+        "Partage d’écran trop long — réessaie."
+      );
+    }
+  }
+
+  // Micro si aucun audio (Safari, ou partage fenêtre sans audio Chrome)
+  if (!stream.getAudioTracks().length && navigator.mediaDevices.getUserMedia) {
+    try {
+      setStatus("Autorise le micro (son du live)…");
+      const mic = await withTimeout(
+        navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+          video: false,
+        }),
+        45_000,
+        "Micro non autorisé à temps — live vidéo seule."
+      );
+      for (const track of mic.getAudioTracks()) {
+        stream.addTrack(track);
+      }
+    } catch (err) {
+      console.warn("[Hakou Studio] micro optionnel", err);
+      setStatus("Live sans micro (vidéo seule)…");
+    }
+  }
+
+  return stream;
 }
 
 async function publishWhip(stream, ingest) {
@@ -140,29 +247,32 @@ async function stopWhip() {
 }
 
 async function startCapture() {
+  if (startInFlight) return;
   if (!navigator.mediaDevices?.getDisplayMedia) {
     setStatus("getDisplayMedia indisponible sur ce navigateur.");
     return;
   }
+  startInFlight = true;
   startBtn.disabled = true;
-  setStatus("Demande de partage d’écran…");
+  setStatus("Préparation du partage…");
   try {
-    localStream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 30 },
-      audio: true,
-    });
+    localStream = await acquireDisplayStream();
     if (preview) {
       preview.srcObject = localStream;
       previewWrap?.classList.add("is-live");
+      preview.play?.().catch(() => {});
     }
-    localStream.getVideoTracks()[0]?.addEventListener("ended", stopCapture);
+    localStream.getVideoTracks()[0]?.addEventListener("ended", () => {
+      stopCapture().catch(() => {});
+    });
 
     setStatus("Connexion WHIP au serveur…");
     const ingest = await fetchIngestConfig();
     const hlsUrl = await publishWhip(localStream, ingest);
     stopBtn.disabled = false;
+    const hasAudio = Boolean(localStream.getAudioTracks().length);
     setStatus(
-      `En direct — Chrome : HLS ; Safari : WHEP. Codec H264 requis (VP8 = audio seul). ${hlsUrl}`
+      `En direct${hasAudio ? "" : " (vidéo seule)"} — Radio : HLS / Safari WHEP. ${hlsUrl}`
     );
   } catch (err) {
     console.warn("[Hakou Studio]", err);
@@ -173,11 +283,18 @@ async function startCapture() {
     previewWrap?.classList.remove("is-live");
     startBtn.disabled = false;
     stopBtn.disabled = true;
-    setStatus(
-      err?.name === "NotAllowedError"
-        ? "Permission refusée — autorise écran / son."
-        : err?.message || "Impossible de démarrer le live."
-    );
+    const name = err?.name || "";
+    if (name === "NotAllowedError" || name === "AbortError") {
+      setStatus("Partage annulé ou refusé — réessaie « Passer en direct ».");
+    } else if (name === "NotReadableError") {
+      setStatus(
+        "Impossible de lire l’écran — vérifie Réglages macOS → Confidentialité → Enregistrement de l’écran (Safari/Chrome autorisé)."
+      );
+    } else {
+      setStatus(err?.message || "Impossible de démarrer le live.");
+    }
+  } finally {
+    startInFlight = false;
   }
 }
 
@@ -189,6 +306,7 @@ async function stopCapture() {
   previewWrap?.classList.remove("is-live");
   startBtn.disabled = false;
   stopBtn.disabled = true;
+  startInFlight = false;
   setStatus("Live arrêté.");
 }
 
@@ -201,8 +319,12 @@ logoutBtn?.addEventListener("click", async () => {
   window.location.href = "https://hakou.be/";
 });
 
-startBtn?.addEventListener("click", startCapture);
-stopBtn?.addEventListener("click", stopCapture);
+startBtn?.addEventListener("click", () => {
+  startCapture().catch((err) => console.warn("[Hakou Studio]", err));
+});
+stopBtn?.addEventListener("click", () => {
+  stopCapture().catch((err) => console.warn("[Hakou Studio]", err));
+});
 
 loadMe().catch((err) => {
   console.warn(err);
