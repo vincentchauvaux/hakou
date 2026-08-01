@@ -14,14 +14,6 @@
 
   const $ = (id) => document.getElementById(id);
 
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
   function setStatus(msg) {
     const el = $("radio-chat-status");
     if (el) el.textContent = msg || "";
@@ -35,38 +27,51 @@
 
   function appendMessage(msg) {
     const log = $("radio-chat-log");
-    if (!log || !msg) return;
+    if (!log || !msg || typeof msg !== "object") return;
+    const nickText = String(msg.nick || "?").slice(0, 24);
+    const bodyText = String(msg.text || "").slice(0, 280);
+    if (!bodyText) return;
+
     const row = document.createElement("p");
     row.className = "radio-chat__msg";
-    row.dataset.id = msg.id || "";
+    if (msg.id) row.dataset.id = String(msg.id).slice(0, 32);
     const nick = document.createElement("span");
     nick.className = "radio-chat__msg-nick";
-    nick.textContent = msg.nick || "?";
+    nick.textContent = nickText;
     const text = document.createElement("span");
     text.className = "radio-chat__msg-text";
-    text.textContent = msg.text || "";
+    text.textContent = bodyText;
     row.append(nick, document.createTextNode(" "), text);
     log.appendChild(row);
+
+    // Plafond DOM anti-saturation
+    while (log.childElementCount > 120) {
+      log.firstElementChild?.remove();
+    }
     log.scrollTop = log.scrollHeight;
   }
 
   function renderMembers(members) {
     const list = $("radio-chat-members");
     const count = $("radio-chat-count");
-    if (count) count.textContent = String(members?.length || 0);
+    const safe = Array.isArray(members) ? members.slice(0, 200) : [];
+    if (count) count.textContent = String(safe.length);
     if (!list) return;
     list.replaceChildren();
-    (members || []).forEach((m) => {
+    safe.forEach((m) => {
+      if (!m || typeof m !== "object") return;
       const li = document.createElement("li");
-      li.textContent = m.nick || m.id || "?";
-      if (m.id && m.id === myId) li.classList.add("is-me");
+      li.textContent = String(m.nick || m.id || "?").slice(0, 24);
+      if (m.id && String(m.id) === myId) li.classList.add("is-me");
       list.appendChild(li);
     });
   }
 
   function sendJson(payload) {
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-    ws.send(JSON.stringify(payload));
+    const body = JSON.stringify(payload);
+    if (body.length > 1800) return false;
+    ws.send(body);
     return true;
   }
 

@@ -42,7 +42,7 @@ Console Google (OAuth) :
 
 ## Chat Radio public
 
-WebSocket `wss://…/hakou-studio/api/radio/chat` (`studio/radio-chat.mjs`) — sans auth. Pseudo défaut `Visiteur-xxxx` (hash IP), renommage client ; présence + ~80 messages en RAM.
+WebSocket `wss://…/hakou-studio/api/radio/chat` (`studio/radio-chat.mjs`) — sans auth. Pseudo défaut `Visiteur-xxxx` (hash IP + `SESSION_SECRET`). **Sécurité** : origines CORS strictes, `maxPayload` 2 Ko, max 3 sockets / IP, 200 clients, rate-limit messages/pseudos, sanitisation Unicode (pas d’HTML), kick après abus. Client : `textContent` uniquement.
 
 ## Étape 3 — Live studio (WHIP → HLS)
 

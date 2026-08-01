@@ -1313,6 +1313,38 @@ audio {
   align-self: stretch;
 }
 
+/* Radio : toute la largeur utile (échelle → menu), pas le cadre 520px des autres panels */
+#radio.panel.panel--frame-left,
+#radio.panel.panel--frame-right {
+  width: calc(
+    100vw - var(--solar-scale-gutter) - var(--side-nav-gutter) -
+      clamp(16px, 2.2vw, 36px)
+  );
+  max-width: none;
+  margin-left: var(--solar-scale-gutter);
+  margin-right: var(--side-nav-gutter);
+  align-items: stretch;
+  text-align: left;
+}
+
+#radio.panel .panel-lead {
+  max-width: min(560px, 100%);
+  align-self: flex-start;
+}
+
+#radio.panel.panel--frame-right .panel-lead,
+#radio.panel.panel--frame-right .radio-layout,
+#radio.panel.panel--frame-right .radio-card {
+  align-self: stretch;
+  width: 100%;
+}
+
+#radio.panel.panel--frame-right h1,
+#radio.panel.panel--frame-right h2,
+#radio.panel.panel--frame-right p {
+  margin-left: 0;
+}
+
 .radio-chat {
   display: flex;
   flex-direction: column;
@@ -1495,6 +1527,15 @@ audio {
   .radio-chat {
     min-height: 360px;
     max-height: min(520px, 60vh);
+  }
+}
+
+@media (max-width: 680px) {
+  #radio.panel.panel--frame-left,
+  #radio.panel.panel--frame-right {
+    width: min(100%, 94vw);
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 

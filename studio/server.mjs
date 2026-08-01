@@ -506,7 +506,10 @@ app.get("/", requireAuthPage, (_req, res) => {
 });
 
 const httpServer = createServer(app);
-attachRadioChat(httpServer, { corsOrigins: CORS_ORIGINS });
+attachRadioChat(httpServer, {
+  corsOrigins: CORS_ORIGINS,
+  nickSalt: SESSION_SECRET,
+});
 
 httpServer.listen(PORT, () => {
   console.log(
