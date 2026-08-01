@@ -222,9 +222,33 @@ async function detectStudioLive(opts = {}) {
     if (!res.ok) return null;
     const data = await res.json();
     if (!data?.ready) return null;
+
+    const tracks = Array.isArray(data.tracks) ? data.tracks : [];
+    const trackStr = tracks.join(" ");
+    // MediaMTX HLS : pas de remux VP8 — il faut H264 (vidéo) et/ou Opus (audio).
+    const hlsVideo = /\b(H264|H265|AV1|VP9)\b/i.test(trackStr);
+    const hlsAudio = /\b(Opus|MPEG-4 Audio|AAC)\b/i.test(trackStr);
+    if (!hlsVideo && !hlsAudio) return null;
+
+    // Sonde locale (cookieCheck MediaMTX) — évite un badge LIVE si le muxer HLS est mort.
+    try {
+      const probe = await fetch(
+        `http://127.0.0.1:8888/${encodeURIComponent(pathName)}/index.m3u8?cookieCheck=1`,
+        {
+          headers: { Cookie: "cookieCheck=1" },
+          redirect: "follow",
+        }
+      );
+      const text = await probe.text();
+      if (!probe.ok || !text.includes("#EXTM3U")) return null;
+    } catch {
+      return null;
+    }
+
     return {
       hlsUrl,
-      title: "Live studio Hakou",
+      title: hlsVideo ? "Live studio Hakou" : "Live studio Hakou (audio)",
+      audioOnly: !hlsVideo,
     };
   } catch (err) {
     console.warn("[Hakou Radio] MediaMTX:", err.message || err);

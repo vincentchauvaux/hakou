@@ -83,32 +83,78 @@
     video.controls = true;
     video.playsInline = true;
     video.autoplay = true;
+    // Autoplay navigateur : muet d’abord (l’utilisateur peut réactiver le son).
+    video.muted = true;
+    video.setAttribute("playsinline", "");
+    video.crossOrigin = "use-credentials";
     video.title = title || "Hakou Radio Live";
     frame.appendChild(video);
 
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = hlsUrl;
+    const tryPlay = async () => {
       try {
         await video.play();
       } catch {
         /* autoplay bloqué — controls OK */
       }
+    };
+
+    const onFatal = (message) => {
+      console.warn(LOG, "HLS", message);
+      showEmpty(
+        frame,
+        emptyEl,
+        message ||
+          "Flux studio indisponible (HLS). Vérifie que le studio publie bien, puis recharge."
+      );
+    };
+
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = hlsUrl;
+      video.addEventListener(
+        "error",
+        () => onFatal("Impossible de lire le flux HLS (Safari)."),
+        { once: true }
+      );
+      await tryPlay();
       return;
     }
 
-    const Hls = await loadHlsScript();
+    let Hls;
+    try {
+      Hls = await loadHlsScript();
+    } catch (err) {
+      onFatal("Lecteur HLS indisponible.");
+      return;
+    }
     if (!Hls?.isSupported()) {
-      showEmpty(frame, emptyEl, "Lecture HLS non supportée sur ce navigateur.");
+      onFatal("Lecture HLS non supportée sur ce navigateur.");
       return;
     }
     hlsPlayer = new Hls({
       enableWorker: true,
       lowLatencyMode: true,
+      xhrSetup: (xhr) => {
+        xhr.withCredentials = true;
+      },
     });
     hlsPlayer.loadSource(hlsUrl);
     hlsPlayer.attachMedia(video);
     hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
-      video.play().catch(() => {});
+      tryPlay();
+    });
+    hlsPlayer.on(Hls.Events.ERROR, (_event, data) => {
+      if (!data?.fatal) return;
+      try {
+        hlsPlayer.destroy();
+      } catch {
+        /* ignore */
+      }
+      hlsPlayer = null;
+      onFatal(
+        data.type === Hls.ErrorTypes.NETWORK_ERROR
+          ? "Réseau : impossible de joindre le flux studio."
+          : "Erreur de lecture du flux studio."
+      );
     });
   }
 

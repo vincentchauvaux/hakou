@@ -3,6 +3,8 @@
 #   include snippets/hakou-live.conf;
 
 # HLS public
+# MediaMTX renvoie Location: /hakou/... (cookieCheck) — il faut réécrire
+# sous /hakou-live/hls/ sinon le navigateur tombe sur StreamTV (404).
 location /hakou-live/hls/ {
     proxy_pass http://127.0.0.1:8888/;
     proxy_http_version 1.1;
@@ -10,10 +12,26 @@ location /hakou-live/hls/ {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    add_header Access-Control-Allow-Origin * always;
+    proxy_redirect /hakou/ /hakou-live/hls/hakou/;
+    proxy_redirect http://127.0.0.1:8888/ /hakou-live/hls/;
+    proxy_redirect http://localhost:8888/ /hakou-live/hls/;
+    # Cookies HLS (cookieCheck) + CORS avec credentials depuis hakou.be
+    set $hls_cors "";
+    if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
+        set $hls_cors $http_origin;
+    }
+    add_header Access-Control-Allow-Origin $hls_cors always;
+    add_header Access-Control-Allow-Credentials true always;
     add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Range, Origin, Accept" always;
     add_header Access-Control-Expose-Headers "*" always;
     if ($request_method = OPTIONS) {
+        add_header Access-Control-Allow-Origin $hls_cors always;
+        add_header Access-Control-Allow-Credentials true always;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Range, Origin, Accept" always;
+        add_header Content-Length 0;
+        add_header Content-Type text/plain;
         return 204;
     }
 }

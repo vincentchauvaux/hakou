@@ -50,6 +50,30 @@ async function fetchIngestConfig() {
   return res.json();
 }
 
+function preferH264Video(pc) {
+  if (!pc || typeof RTCRtpSender === "undefined") return;
+  if (!RTCRtpSender.getCapabilities) return;
+  const caps = RTCRtpSender.getCapabilities("video");
+  if (!caps?.codecs?.length) return;
+  const h264 = caps.codecs.filter((c) => /H264/i.test(c.mimeType));
+  if (!h264.length) {
+    console.warn("[Hakou Studio] H264 indisponible — HLS n’aura pas de vidéo (VP8).");
+    return;
+  }
+  const rest = caps.codecs.filter(
+    (c) => !/H264/i.test(c.mimeType) && !/VP8|VP9/i.test(c.mimeType)
+  );
+  for (const t of pc.getTransceivers()) {
+    if (t.sender?.track?.kind !== "video") continue;
+    if (typeof t.setCodecPreferences !== "function") continue;
+    try {
+      t.setCodecPreferences([...h264, ...rest]);
+    } catch (err) {
+      console.warn("[Hakou Studio] setCodecPreferences", err);
+    }
+  }
+}
+
 async function publishWhip(stream, ingest) {
   const pc = new RTCPeerConnection({
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -59,6 +83,8 @@ async function publishWhip(stream, ingest) {
   for (const track of stream.getTracks()) {
     pc.addTrack(track, stream);
   }
+  // MediaMTX HLS ne remuxe pas VP8 — forcer H264 pour la vidéo spectateurs.
+  preferH264Video(pc);
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -136,7 +162,7 @@ async function startCapture() {
     const hlsUrl = await publishWhip(localStream, ingest);
     stopBtn.disabled = false;
     setStatus(
-      `En direct — les visiteurs Radio voient le flux HLS (~2–5 s). ${hlsUrl}`
+      `En direct — visiteurs Radio : HLS (~2–5 s). Codec vidéo H264 requis (VP8 = audio seul). ${hlsUrl}`
     );
   } catch (err) {
     console.warn("[Hakou Studio]", err);
