@@ -1,10 +1,14 @@
-# Hakou Live — HLS (spectateurs) + WHIP (studio)
+# Hakou Live — HLS (spectateurs) + WHIP/WHEP (studio + Safari)
 # Inclure dans le server HTTPS de vps-e09ed6db.vps.ovh.net :
 #   include snippets/hakou-live.conf;
+#
+# MediaMTX cookieCheck (critique) :
+# - NE PAS envoyer `Cookie: cookieCheck=1` côté proxy : MediaMTX passe en mode
+#   cookie (playlists SANS ?session=) puis 401 si Set-Cookie est masqué.
+# - Utiliser `?cookieCheck=1` (client radio.js) → playlists avec ?session=…
+#   compatibles CORS cross-origin sans cookies tiers.
 
 # HLS public
-# MediaMTX renvoie Location: /hakou/... (cookieCheck) — il faut réécrire
-# sous /hakou-live/hls/ sinon le navigateur tombe sur StreamTV (404).
 location /hakou-live/hls/ {
     proxy_pass http://127.0.0.1:8888/;
     proxy_http_version 1.1;
@@ -15,19 +19,19 @@ location /hakou-live/hls/ {
     proxy_redirect /hakou/ /hakou-live/hls/hakou/;
     proxy_redirect http://127.0.0.1:8888/ /hakou-live/hls/;
     proxy_redirect http://localhost:8888/ /hakou-live/hls/;
-    # Cookies HLS (cookieCheck) + CORS avec credentials depuis hakou.be
-    set $hls_cors "";
-    if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
-        set $hls_cors $http_origin;
-    }
-    add_header Access-Control-Allow-Origin $hls_cors always;
-    add_header Access-Control-Allow-Credentials true always;
+    proxy_hide_header Access-Control-Allow-Origin;
+    proxy_hide_header Access-Control-Allow-Credentials;
+    proxy_hide_header Access-Control-Allow-Methods;
+    proxy_hide_header Access-Control-Allow-Headers;
+    proxy_hide_header Access-Control-Expose-Headers;
+    proxy_hide_header Set-Cookie;
+    # Pas de credentials navigateur → * OK
+    add_header Access-Control-Allow-Origin * always;
     add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
     add_header Access-Control-Allow-Headers "Range, Origin, Accept" always;
     add_header Access-Control-Expose-Headers "*" always;
     if ($request_method = OPTIONS) {
-        add_header Access-Control-Allow-Origin $hls_cors always;
-        add_header Access-Control-Allow-Credentials true always;
+        add_header Access-Control-Allow-Origin * always;
         add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
         add_header Access-Control-Allow-Headers "Range, Origin, Accept" always;
         add_header Content-Length 0;
@@ -56,7 +60,6 @@ location /hakou-live/whip/ {
     proxy_hide_header Access-Control-Allow-Methods;
     proxy_hide_header Access-Control-Allow-Headers;
     proxy_hide_header Access-Control-Expose-Headers;
-    # WHEP anonyme (Safari) + WHIP auth (studio)
     set $whip_cors "";
     if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
         set $whip_cors $http_origin;

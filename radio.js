@@ -50,6 +50,21 @@
     return `${m[1]}/hakou-live/whip/${m[2]}/whep`;
   }
 
+  /** MediaMTX : ?cookieCheck=1 → playlists avec ?session= (sans cookies tiers). */
+  function hlsUrlWithSessionBootstrap(hlsUrl) {
+    try {
+      const u = new URL(hlsUrl);
+      if (!u.searchParams.has("session") && !u.searchParams.has("cookieCheck")) {
+        u.searchParams.set("cookieCheck", "1");
+      }
+      return u.href;
+    } catch {
+      return String(hlsUrl).includes("?")
+        ? `${hlsUrl}&cookieCheck=1`
+        : `${hlsUrl}?cookieCheck=1`;
+    }
+  }
+
   function setStatus(state, title) {
     const status = $("radio-status");
     const badge = $("radio-status-badge");
@@ -200,6 +215,8 @@
     clearFrame(frame);
     if (emptyEl) emptyEl.hidden = true;
 
+    const sourceUrl = hlsUrlWithSessionBootstrap(hlsUrl);
+
     const video = document.createElement("video");
     video.className = "radio-hls";
     video.controls = true;
@@ -208,7 +225,7 @@
     // Autoplay navigateur : muet d’abord (l’utilisateur peut réactiver le son).
     video.muted = true;
     video.setAttribute("playsinline", "");
-    video.crossOrigin = "use-credentials";
+    // CORS * côté nginx : pas de credentials (sinon le navigateur bloque).
     video.title = title || "Hakou Radio Live";
     frame.appendChild(video);
 
@@ -246,10 +263,10 @@
       enableWorker: true,
       lowLatencyMode: true,
       xhrSetup: (xhr) => {
-        xhr.withCredentials = true;
+        xhr.withCredentials = false;
       },
     });
-    hlsPlayer.loadSource(hlsUrl);
+    hlsPlayer.loadSource(sourceUrl);
     hlsPlayer.attachMedia(video);
     hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
       tryPlay();
