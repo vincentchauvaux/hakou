@@ -50,8 +50,9 @@ hlsAddress: 127.0.0.1:8888
 hlsEncryption: false
 hlsAllowOrigins: []
 hlsAlwaysRemux: true
-# mpegts = max compat Safari (native HLS). lowLatency / parts = Chromium surtout.
-hlsVariant: mpegts
+# fmp4 : Opus (WebRTC) + H264. mpegts refuse Opus → muxer crash.
+# hlsPartDuration 0s : pas de LL-HLS / EXT-X-PART (meilleure compat Safari).
+hlsVariant: fmp4
 hlsSegmentDuration: 2s
 hlsPartDuration: 0s
 hlsSegmentCount: 7
