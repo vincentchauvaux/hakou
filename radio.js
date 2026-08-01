@@ -1,12 +1,7 @@
 (() => {
   const RADIO_JSON_URL = "./content/radio.json";
-  const CORS_PROXY = "https://api.allorigins.win/raw?url=";
   const POLL_MS = 20_000;
-  const ARCHIVE_MAX = 8;
-  const YT_NS_HINT = "yt:videoId";
 
-  const THUMB_URL = (id) =>
-    `https://img.youtube.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`;
   const EMBED_URL = (id) =>
     `https://www.youtube.com/embed/${encodeURIComponent(id)}?rel=0&modestbranding=1`;
   const WATCH_URL = (id) =>
@@ -394,60 +389,6 @@
     frame.appendChild(iframe);
   }
 
-  function renderArchives(grid, archivesWrap, archives, activeId, onSelect) {
-    if (!grid || !archivesWrap) return;
-
-    grid.replaceChildren();
-    if (!archives.length) {
-      archivesWrap.hidden = true;
-      return;
-    }
-
-    archivesWrap.hidden = false;
-    archives.forEach((item) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "radio-archive";
-      btn.dataset.videoId = item.id;
-      if (item.id === activeId) btn.classList.add("is-active");
-
-      const thumb = document.createElement("div");
-      thumb.className = "radio-archive__thumb";
-      const img = document.createElement("img");
-      img.src = THUMB_URL(item.id);
-      img.alt = "";
-      img.loading = "lazy";
-      thumb.appendChild(img);
-
-      const label = document.createElement("p");
-      label.className = "radio-archive__label";
-      label.textContent = item.title || "Set archivé";
-
-      btn.append(thumb, label);
-      btn.addEventListener("click", () => onSelect(item));
-      grid.appendChild(btn);
-    });
-  }
-
-  function markActiveArchive(grid, videoId) {
-    if (!grid) return;
-    grid.querySelectorAll(".radio-archive").forEach((btn) => {
-      btn.classList.toggle("is-active", btn.dataset.videoId === videoId);
-    });
-  }
-
-  function normalizeArchives(list) {
-    if (!Array.isArray(list)) return [];
-    return list
-      .filter((a) => a && typeof a.id === "string" && a.id.trim())
-      .map((a) => ({
-        id: a.id.trim(),
-        title:
-          (typeof a.title === "string" && a.title.trim()) || "Set archivé",
-      }))
-      .slice(0, ARCHIVE_MAX);
-  }
-
   function configKey(data) {
     return [
       data.live ? "1" : "0",
@@ -456,9 +397,6 @@
       data.whepUrl || "",
       data.liveVideoId || "",
       data.playlistId || "",
-      normalizeArchives(data.archives)
-        .map((a) => a.id)
-        .join(","),
     ].join("|");
   }
 
@@ -481,41 +419,6 @@
     return res.json();
   }
 
-  async function fetchRssXml(channelId) {
-    const rss = `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
-    try {
-      const res = await fetch(rss, { cache: "no-store" });
-      if (res.ok) return await res.text();
-    } catch {
-      /* CORS */
-    }
-    try {
-      const res = await fetch(`${CORS_PROXY}${encodeURIComponent(rss)}`, {
-        cache: "no-store",
-      });
-      if (res.ok) return await res.text();
-    } catch {
-      /* ignore */
-    }
-    return null;
-  }
-
-  function parseRssArchives(xml, liveId) {
-    if (!xml || !xml.includes(YT_NS_HINT)) return [];
-    const out = [];
-    for (const part of xml.split("<entry>").slice(1)) {
-      const id = part.match(/<yt:videoId>([^<]+)<\/yt:videoId>/)?.[1]?.trim();
-      const title = part
-        .match(/<title>([^<]*)<\/title>/)?.[1]
-        ?.trim()
-        .replace(/&amp;/g, "&");
-      if (!id || id === liveId) continue;
-      out.push({ id, title: title || "Set archivé" });
-      if (out.length >= ARCHIVE_MAX) break;
-    }
-    return out;
-  }
-
   async function resolveRadioData(base) {
     const channelId = base.channelId || "UCmm1lsi4IS7RzwFFhIax3ug";
     const statusApi =
@@ -526,7 +429,6 @@
     let liveVideoId = live ? String(base.liveVideoId).trim() : null;
     let liveTitle =
       (typeof base.liveTitle === "string" && base.liveTitle.trim()) || null;
-    let archives = normalizeArchives(base.archives);
     let source = "radio.json";
     let hlsUrl = null;
     let whepUrl = null;
@@ -565,24 +467,9 @@
           whepUrl = null;
           studioLive = false;
         }
-        const remoteArchives = normalizeArchives(remote.archives);
-        if (remoteArchives.length) archives = remoteArchives;
       }
     } catch (err) {
-      console.warn(LOG, "status API indisponible — repli local/RSS", err);
-    }
-
-    if (!archives.length) {
-      try {
-        const xml = await fetchRssXml(channelId);
-        const fromRss = parseRssArchives(xml, liveVideoId);
-        if (fromRss.length) {
-          archives = fromRss;
-          if (source === "radio.json") source = "rss";
-        }
-      } catch (err) {
-        console.warn(LOG, "RSS archives", err);
-      }
+      console.warn(LOG, "status API indisponible — repli local", err);
     }
 
     return {
@@ -600,7 +487,6 @@
       playlistTitle:
         (typeof base.playlistTitle === "string" && base.playlistTitle.trim()) ||
         DEFAULT_PLAYLIST_TITLE,
-      archives,
       source,
     };
   }
@@ -608,12 +494,9 @@
   function applyConfig(data) {
     const frame = $("radio-player-frame");
     const emptyEl = $("radio-player-empty");
-    const archivesWrap = $("radio-archives");
-    const grid = $("radio-archives-grid");
     if (!frame) return;
 
     const key = configKey(data);
-    const archives = normalizeArchives(data.archives);
     const hlsUrl =
       typeof data.hlsUrl === "string" && data.hlsUrl.trim()
         ? data.hlsUrl.trim()
@@ -648,7 +531,6 @@
     }
     lastAppliedKey = key;
 
-    let activeId = null;
     let mode = "empty";
 
     if (studioLive) {
@@ -662,19 +544,12 @@
       );
     } else if (liveId) {
       mode = "yt-live";
-      activeId = liveId;
       setStatus("live", liveTitle);
       playVideo(frame, emptyEl, liveId, liveTitle);
     } else if (playlistId) {
       mode = "playlist";
       setStatus("offline", playlistTitle);
       playPlaylist(frame, emptyEl, playlistId, playlistTitle);
-    } else if (archives.length) {
-      mode = "archive";
-      const first = archives[0];
-      activeId = first.id;
-      setStatus("offline", first.title || "Dernier set archivé");
-      playVideo(frame, emptyEl, first.id, first.title);
     } else {
       setStatus("offline", "Prochain set à venir");
       showEmpty(
@@ -683,15 +558,6 @@
         "Aucun flux pour le moment — la playlist Hakou Mix s’affichera ici."
       );
     }
-
-    renderArchives(grid, archivesWrap, archives, activeId, (item) => {
-      setStatus(
-        liveId && item.id === liveId ? "live" : "offline",
-        item.title || (liveId && item.id === liveId ? liveTitle : "Set archivé")
-      );
-      playVideo(frame, emptyEl, item.id, item.title);
-      markActiveArchive(grid, item.id);
-    });
 
     const channelLink = document.querySelector("#radio .embed-source a");
     if (channelLink) {
@@ -713,14 +579,14 @@
           ? `live ${liveId}`
           : mode === "playlist"
             ? `playlist ${playlistId}`
-            : `${archives.length} archive(s)`,
+            : "empty",
       {
         source: data.source || "local",
         watch:
           mode === "playlist"
             ? PLAYLIST_WATCH_URL(playlistId)
-            : activeId
-              ? WATCH_URL(activeId)
+            : liveId
+              ? WATCH_URL(liveId)
               : null,
       }
     );

@@ -163,7 +163,7 @@
 
 | `scripts/refresh-instagram-posts.mjs` | Pipeline `--refresh` (Graph API / scrape / sources → JSON + thumbs) ; `--playwright` (dev local, Chromium) ; `--touch-updated`, `--download-thumbs` |
 | `scripts/refresh-radio-status.mjs` | YouTube Data API (`YOUTUBE_API_KEY`) → `content/radio.json` (live + archives) |
-| `content/radio.json` | Statut live + liste d’archives Radio (éditable à la main ou via refresh script) |
+| `content/radio.json` | Statut live + playlist Hakou Mix (`playlistId`) |
 | `content/instagram-sources.txt` | Permaliens manuels (1/ligne) si Meta bloque le scrape |
 | `scripts/verify-instagram-shortcodes.mjs` | Vérifie les shortcodes listés (endpoint `…/media/?size=l` → 404 = post retiré) |
 
@@ -244,7 +244,7 @@ Site statique sans backend dédié : SoundCloud / modales Instagram / Radio YouT
 
 | **Son** (`#son`) | [soundcloud.com/hakou](https://soundcloud.com/hakou) | Lecteur iframe via oEmbed SoundCloud — user API `4170372`, hauteur 450 (mode visuel). |
 
-| **Radio** (`#radio`, `data-zone="2"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) / [Hakou Mix](https://www.youtube.com/playlist?list=PLGIvCy1w5T6Y) | `radio.js` : badge **LIVE** / Hors antenne ; player 16:9. Priorité : **studio** → live YouTube Public → **playlist Hakou Mix** (`PLGIvCy1w5T6Y` via `content/radio.json`). API VPS `GET /hakou-studio/api/radio/status` sans auth. Orbite 3D : **Pluton**. |
+| **Radio** (`#radio`, `data-zone="2"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) / [Hakou Mix](https://www.youtube.com/playlist?list=PLGIvCy1w5T6Y) | `radio.js` : badge **LIVE** / Hors antenne ; player 16:9. Priorité : **studio** → live YouTube Public → **playlist Hakou Mix** (`PLGIvCy1w5T6Y`). Pas de grille archives sous le player. API VPS `GET /hakou-studio/api/radio/status`. Orbite 3D : **Pluton**. |
 
 | **Video** (`#video`, `data-zone="3"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : au load, **repli immédiat** des `[data-video-id]` dans `index.html`, puis sync **flux RSS** `…/feeds/videos.xml?channel_id=UCmm1lsi4IS7RzwFFhIax3ug` — parse **12** entrées récentes, **shuffle → 2** affichées (chaque visite peut différer). CORS : proxy `api.allorigins.win` ; échec → HTML inchangé (`.video-grid--syncing`, opacité ~0,97, pas de flash). Logs `[Hakou YouTube]`. Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, modal `#youtube-video-modal`. |
 
