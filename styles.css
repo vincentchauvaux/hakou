@@ -1351,6 +1351,8 @@ audio {
   min-height: 420px;
   height: 100%;
   max-height: none;
+  overflow: hidden;
+  box-sizing: border-box;
   padding: 0.75rem 0.8rem 0.85rem;
   border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.28));
   border-radius: 10px;
@@ -1379,7 +1381,8 @@ audio {
 
 .radio-chat__log {
   flex: 1 1 auto;
-  min-height: 12rem;
+  /* min-height: 0 → le log cède la place au formulaire (évite Envoyer hors cadre) */
+  min-height: 0;
   overflow: auto;
   margin-bottom: 0.65rem;
   padding: 0.15rem 0.15rem 0.35rem 0;
@@ -1406,6 +1409,7 @@ audio {
   flex-direction: column;
   gap: 0.5rem;
   flex: 0 0 auto;
+  min-width: 0;
 }
 
 .radio-chat__identity {
@@ -1501,6 +1505,7 @@ audio {
 }
 
 .radio-chat__status {
+  flex: 0 0 auto;
   margin: 0.35rem 0 0;
   min-height: 1.1em;
   font-size: 0.75rem;
@@ -1525,8 +1530,22 @@ audio {
   }
 
   .radio-chat {
-    min-height: 360px;
-    max-height: min(520px, 60vh);
+    min-height: 280px;
+    max-height: min(480px, 55vh);
+  }
+
+  .radio-chat__log {
+    min-height: 4.5rem;
+  }
+
+  .radio-chat__input {
+    min-height: 2.75rem;
+    max-height: 5.5rem;
+    resize: none;
+  }
+
+  .radio-chat__send {
+    padding: 0.55rem 0.75rem;
   }
 }
 

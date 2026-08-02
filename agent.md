@@ -152,7 +152,7 @@
 | `youtube-videos.js` | Zone Video : RSS (pool ~12) → **2 aléatoires** / visite + repli HTML, modal |
 
 | `radio.js` | Zone Radio : priorité **studio** → live YouTube → **playlist Hakou Mix** (`playlistId` dans `radio.json`) ; poll ~20 s ; Chrome/Firefox : `hls.js` ; **Safari / iOS** : **WHEP** |
-| `radio-chat.js` | Chat public Radio (WebSocket VPS) : pseudo `Visiteur-xxxx` dérivé IP (éditable), messages texte/emoji, présence |
+| `radio-chat.js` | Chat public Radio (WebSocket VPS) : pseudo `Visiteur-xxxx` dérivé IP (éditable), messages texte/emoji, présence ; mobile : log flex `min-height: 0` pour garder Envoyer dans le cadre |
 
 | `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |
 
