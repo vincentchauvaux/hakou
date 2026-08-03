@@ -17,6 +17,19 @@
 - Note : le chemin HLS MediaMTX `/hakou-live/` peut rester joignable si l’URL est connue — le verrou porte sur l’UI Stream + statut + chat.
 
 
+## Sécurité (août 2026)
+
+- **HLS / WHEP** : nginx `auth_request` → `GET /api/media/gate` ; cookie HttpOnly `hakou_media` (Path=`/`, TTL 4 h) posé au login / status / studio. Client [`radio.js`](radio.js) : `xhr.withCredentials = true` + WHEP `credentials: "include"`.
+- **Captcha contact** : jeton v2 sans `a`/`b` exposés ; preuve HMAC serveur ; secret = `CONTACT_CAPTCHA_SECRET` || `SESSION_SECRET` (refus boot si faible + `HAKOU_STUDIO_PROD=1`).
+- **Origin contact** : obligatoire (`CONTACT_REQUIRE_ORIGIN=0` pour désactiver en debug).
+- **IP** : `X-Real-IP` / `X-Forwarded-For $remote_addr` (nginx snippets) ; rate-limits auth / status / ingest / contact / chat.
+- **Headers** : nosniff, DENY frame, Referrer-Policy, Permissions-Policy, CSP studio ; `/api/health` minimal (`{ ok: true }`).
+- **Ingest** : plus de champ `bearer` en clair dupliqué ; `Cache-Control: no-store`.
+- **Inbox** : plafond `CONTACT_INBOX_MAX_BYTES` (défaut 5 Mo) + rétention.
+- Snippets : [`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example), [`studio/deploy/nginx-hakou-studio.conf.example`](studio/deploy/nginx-hakou-studio.conf.example).
+- Helpers : [`studio/security.mjs`](studio/security.mjs).
+
+
 ## Revue juridique (août 2026)
 
 - **Compte rendu** : canvas Cursor [`revue-juridique-hakou.canvas.tsx`](/Users/hakou/.cursor/projects/Users-hakou-hakou/canvases/revue-juridique-hakou.canvas.tsx) — **mise à jour 4 août 2026** (post plan d’action + Stream/Twitch ; pas un avis d’avocat).

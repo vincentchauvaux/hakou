@@ -7,7 +7,6 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import { OAuth2Client } from "google-auth-library";
-import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -25,6 +24,11 @@ import {
   verifyCaptchaChallenge,
   verifyRecaptcha,
 } from "./contact.mjs";
+import {
+  applySecurityHeaders,
+  createSessionHelpers,
+  requireStrongSecret,
+} from "./security.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = join(__dirname, ".env");
@@ -78,17 +82,32 @@ const WHEP_PUBLIC_URL =
 const HLS_PUBLIC_URL =
   env.HLS_PUBLIC_URL ||
   `https://vps-e09ed6db.vps.ovh.net/hakou-live/hls/${MEDIAMTX_PATH}/index.m3u8`;
-const SESSION_SECRET =
-  env.SESSION_SECRET || randomBytes(32).toString("hex");
+
+const SESSION_SECRET = requireStrongSecret(env, {
+  label: "SESSION_SECRET",
+  value: env.SESSION_SECRET,
+});
+const CONTACT_CAPTCHA_SECRET = requireStrongSecret(env, {
+  label: "CONTACT_CAPTCHA_SECRET",
+  value: env.CONTACT_CAPTCHA_SECRET || SESSION_SECRET,
+});
+
 const SESSION_COOKIE = env.SESSION_COOKIE_NAME || "hakou_studio_session";
 const SESSION_COOKIE_PATH = env.SESSION_COOKIE_PATH || "/hakou-studio";
 const SESSION_MAX_AGE_S = 60 * 60 * 24 * 7;
+const MEDIA_COOKIE = env.MEDIA_COOKIE_NAME || "hakou_media";
+const MEDIA_COOKIE_PATH = env.MEDIA_COOKIE_PATH || "/";
+const MEDIA_MAX_AGE_S = Number(env.MEDIA_MAX_AGE_S || 60 * 60 * 4);
 const ALLOWED_EMAILS = new Set(
-  String(env.ALLOWED_EMAILS || "vincent.chauvaux@gmail.com")
+  String(env.ALLOWED_EMAILS || "")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean)
 );
+if (ALLOWED_EMAILS.size === 0) {
+  console.error("[Hakou Studio] ALLOWED_EMAILS vide — refuse de démarrer.");
+  process.exit(1);
+}
 const CORS_ORIGINS = new Set(
   String(
     env.CORS_ORIGINS ||
@@ -98,79 +117,40 @@ const CORS_ORIGINS = new Set(
     .map((o) => o.trim())
     .filter(Boolean)
 );
-const CONTACT_TO = String(
-  env.CONTACT_TO || "vincent.chauvaux@gmail.com"
-).trim();
+const CONTACT_TO = String(env.CONTACT_TO || "").trim();
 const CONTACT_RATE_MAX = Number(env.CONTACT_RATE_MAX || 3);
 const CONTACT_RATE_WINDOW_MS = Number(
   env.CONTACT_RATE_WINDOW_MS || 60 * 60 * 1000
 );
-const CONTACT_CAPTCHA_SECRET =
-  env.CONTACT_CAPTCHA_SECRET || env.SESSION_SECRET || "hakou-contact-dev";
 const CONTACT_RECAPTCHA_SECRET = String(
   env.CONTACT_RECAPTCHA_SECRET || ""
 ).trim();
 const CONTACT_RECAPTCHA_SITE_KEY = String(
   env.CONTACT_RECAPTCHA_SITE_KEY || ""
 ).trim();
+const REQUIRE_CONTACT_ORIGIN = env.CONTACT_REQUIRE_ORIGIN !== "0";
+
+const {
+  verifySession,
+  verifyMediaAccess,
+  setSessionCookie,
+  clearSessionCookie,
+  setMediaCookie,
+  clearMediaCookie,
+} = createSessionHelpers({
+  secret: SESSION_SECRET,
+  sessionCookie: SESSION_COOKIE,
+  sessionCookiePath: SESSION_COOKIE_PATH,
+  sessionMaxAgeS: SESSION_MAX_AGE_S,
+  mediaCookie: MEDIA_COOKIE,
+  mediaCookiePath: MEDIA_COOKIE_PATH,
+  mediaMaxAgeS: MEDIA_MAX_AGE_S,
+  allowedEmails: ALLOWED_EMAILS,
+});
 
 const googleClient = GOOGLE_CLIENT_ID
   ? new OAuth2Client(GOOGLE_CLIENT_ID)
   : null;
-
-function b64url(buf) {
-  return Buffer.from(buf)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-function signSession(payload) {
-  const body = b64url(JSON.stringify(payload));
-  const sig = createHmac("sha256", SESSION_SECRET).update(body).digest("base64url");
-  return `${body}.${sig}`;
-}
-
-function verifySession(token) {
-  if (!token || typeof token !== "string" || !token.includes(".")) return null;
-  const [body, sig] = token.split(".");
-  if (!body || !sig) return null;
-  const expected = createHmac("sha256", SESSION_SECRET)
-    .update(body)
-    .digest("base64url");
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  try {
-    const json = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    if (!json?.email || !json?.exp || Date.now() > json.exp) return null;
-    if (!ALLOWED_EMAILS.has(String(json.email).toLowerCase())) return null;
-    return json;
-  } catch {
-    return null;
-  }
-}
-
-function setSessionCookie(res, payload) {
-  const token = signSession(payload);
-  res.cookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    maxAge: SESSION_MAX_AGE_S * 1000,
-    path: SESSION_COOKIE_PATH,
-  });
-}
-
-function clearSessionCookie(res) {
-  res.clearCookie(SESSION_COOKIE, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    path: SESSION_COOKIE_PATH,
-  });
-}
 
 function applyCors(req, res) {
   const origin = req.headers.origin;
@@ -188,6 +168,8 @@ function applyCors(req, res) {
 
 const app = express();
 app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use(applySecurityHeaders);
 app.use(cookieParser());
 app.use(express.json({ limit: "32kb" }));
 
@@ -201,15 +183,35 @@ app.use((req, res, next) => {
 });
 
 app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    googleConfigured: Boolean(GOOGLE_CLIENT_ID),
-    allowedCount: ALLOWED_EMAILS.size,
-  });
+  res.json({ ok: true });
+});
+
+/**
+ * Gate nginx auth_request pour HLS / WHEP.
+ * Cookie média (Path=/) ou session studio.
+ */
+app.get("/api/media/gate", (req, res) => {
+  const session = verifyMediaAccess(req);
+  if (!session) {
+    res.status(401).type("text/plain").send("unauthorized");
+    return;
+  }
+  res.status(204).end();
 });
 
 /** Stream status — allowlist Google uniquement. */
 async function sendStreamStatus(req, res) {
+  const ip = getClientIp(req);
+  if (
+    !checkRateLimit(ip, {
+      max: 120,
+      windowMs: 60 * 1000,
+      key: "stream-status",
+    })
+  ) {
+    res.status(429).json({ ok: false, error: "trop de requêtes" });
+    return;
+  }
   const session = verifySession(req.cookies?.[SESSION_COOKIE]);
   if (!session) {
     res.status(401).json({
@@ -219,6 +221,7 @@ async function sendStreamStatus(req, res) {
     });
     return;
   }
+  setMediaCookie(res, session);
   try {
     const status = await getRadioStatus({
       channelId: RADIO_CHANNEL_ID,
@@ -234,8 +237,8 @@ async function sendStreamStatus(req, res) {
       hlsPublicUrl: HLS_PUBLIC_URL,
       whepPublicUrl: WHEP_PUBLIC_URL,
     });
-    res.setHeader("Cache-Control", "private, max-age=15");
-    res.json({ ...status, authenticated: true, email: session.email });
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json({ ...status, authenticated: true });
   } catch (err) {
     console.error("[Hakou Studio] stream status", err.message || err);
     res.status(502).json({
@@ -255,6 +258,7 @@ async function sendStreamStatus(req, res) {
 
 app.get("/api/stream/status", sendStreamStatus);
 app.get("/api/radio/status", sendStreamStatus);
+
 /**
  * Public — challenge anti-spam arithmétique (HMAC, usage unique).
  * Chemin volontairement sans « captcha » (souvent filtré par bloqueurs pub).
@@ -263,7 +267,7 @@ function sendContactChallenge(req, res) {
   const ip = getClientIp(req);
   if (
     !checkRateLimit(ip, {
-      max: 30,
+      max: 20,
       windowMs: CONTACT_RATE_WINDOW_MS,
       key: "captcha",
     })
@@ -283,17 +287,19 @@ function sendContactChallenge(req, res) {
 }
 
 app.get("/api/contact/challenge", sendContactChallenge);
-/** Alias rétrocompat */
 app.get("/api/contact/captcha", sendContactChallenge);
 
 /**
  * Public — formulaire Contact (honeypot + captcha + filtres + rate-limit).
- * Honeypot / trop rapide : 200 silencieux (ne pas tipper les bots).
  */
 app.post("/api/contact", async (req, res) => {
   const ip = getClientIp(req);
   const origin = req.headers.origin;
-  if (!isAllowedContactOrigin(origin, CORS_ORIGINS)) {
+  if (
+    !isAllowedContactOrigin(origin, CORS_ORIGINS, {
+      requireOrigin: REQUIRE_CONTACT_ORIGIN,
+    })
+  ) {
     res.status(403).json({ ok: false, error: "Origine non autorisée." });
     return;
   }
@@ -366,7 +372,10 @@ app.post("/api/contact", async (req, res) => {
   }
 
   try {
-    const delivery = await deliverContactEmail(env, parsed.data);
+    const delivery = await deliverContactEmail(
+      { ...env, CONTACT_TO: CONTACT_TO || env.CONTACT_TO },
+      parsed.data
+    );
     if (delivery.sent) {
       res.json({ ok: true, delivered: true });
       return;
@@ -394,23 +403,35 @@ function requireSession(req, res) {
 
 /** Credentials WHIP pour le studio (allowlist uniquement). */
 app.get("/api/studio/ingest", (req, res) => {
-  if (!requireSession(req, res)) return;
+  const ip = getClientIp(req);
+  if (
+    !checkRateLimit(ip, {
+      max: 30,
+      windowMs: 60 * 1000,
+      key: "ingest",
+    })
+  ) {
+    res.status(429).json({ error: "trop de requêtes" });
+    return;
+  }
+  const session = requireSession(req, res);
+  if (!session) return;
   if (!MEDIAMTX_PUBLISH_PASS) {
     res.status(503).json({
       error: "ingest MediaMTX non configuré (MEDIAMTX_PUBLISH_PASS)",
     });
     return;
   }
+  setMediaCookie(res, session);
   const basic = Buffer.from(
     `${MEDIAMTX_PUBLISH_USER}:${MEDIAMTX_PUBLISH_PASS}`
   ).toString("base64");
+  res.setHeader("Cache-Control", "no-store");
   res.json({
     path: MEDIAMTX_PATH,
     whipUrl: WHIP_PUBLIC_URL,
     hlsUrl: HLS_PUBLIC_URL,
     authorization: `Basic ${basic}`,
-    // Alternative OBS / certains clients WHIP
-    bearer: `${MEDIAMTX_PUBLISH_USER}:${MEDIAMTX_PUBLISH_PASS}`,
   });
 });
 
@@ -427,6 +448,7 @@ app.get("/api/auth/me", (req, res) => {
     res.status(401).json({ authenticated: false });
     return;
   }
+  setMediaCookie(res, session);
   res.json({
     authenticated: true,
     email: session.email,
@@ -436,6 +458,17 @@ app.get("/api/auth/me", (req, res) => {
 });
 
 app.post("/api/auth/google", async (req, res) => {
+  const ip = getClientIp(req);
+  if (
+    !checkRateLimit(ip, {
+      max: 20,
+      windowMs: 15 * 60 * 1000,
+      key: "auth-google",
+    })
+  ) {
+    res.status(429).json({ error: "trop de tentatives" });
+    return;
+  }
   if (!googleClient || !GOOGLE_CLIENT_ID) {
     res.status(503).json({
       error: "GOOGLE_CLIENT_ID manquant sur le serveur studio",
@@ -462,9 +495,9 @@ app.post("/api/auth/google", async (req, res) => {
       return;
     }
     if (!ALLOWED_EMAILS.has(email)) {
+      console.warn("[Hakou Studio] auth refusée (hors allowlist)");
       res.status(403).json({
         error: "compte non autorisé",
-        email,
       });
       return;
     }
@@ -476,6 +509,7 @@ app.post("/api/auth/google", async (req, res) => {
       exp: Date.now() + SESSION_MAX_AGE_S * 1000,
     };
     setSessionCookie(res, session);
+    setMediaCookie(res, session);
     res.json({
       ok: true,
       email,
@@ -491,6 +525,7 @@ app.post("/api/auth/google", async (req, res) => {
 
 app.post("/api/auth/logout", (req, res) => {
   clearSessionCookie(res);
+  clearMediaCookie(res);
   res.json({ ok: true });
 });
 
@@ -512,12 +547,14 @@ function requireAuthPage(req, res, next) {
     return;
   }
   req.studioSession = session;
+  setMediaCookie(res, session);
   next();
 }
 
 app.get("/api/auth/session-check", (req, res) => {
   const session = verifySession(req.cookies?.[SESSION_COOKIE]);
-  res.json({ authenticated: Boolean(session), email: session?.email || null });
+  if (session) setMediaCookie(res, session);
+  res.json({ authenticated: Boolean(session) });
 });
 
 app.use(express.static(join(__dirname, "public"), { index: false }));
@@ -532,12 +569,13 @@ attachRadioChat(httpServer, {
   nickSalt: SESSION_SECRET,
   cookieName: SESSION_COOKIE,
   verifySession,
+  getClientIp,
 });
 
 httpServer.listen(PORT, () => {
   console.log(
     `[Hakou Studio] http://127.0.0.1:${PORT} — Google=${
       GOOGLE_CLIENT_ID ? "ok" : "MISSING"
-    } allow=${[...ALLOWED_EMAILS].join(",")}`
+    } allow=${ALLOWED_EMAILS.size} media-gate=on`
   );
 });

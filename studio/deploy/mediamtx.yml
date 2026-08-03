@@ -20,7 +20,8 @@ srt: false
 
 ###############################################
 # Auth interne
-# - lecture HLS : anonyme (spectateurs hakou.be)
+# - lecture HLS : anonyme en local (127.0.0.1) — le gate public est nginx
+#   auth_request → cookie hakou_media (allowlist Google)
 # - publish WHIP : user publisher + pass (studio authentifié)
 ###############################################
 

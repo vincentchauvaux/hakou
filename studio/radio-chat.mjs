@@ -191,6 +191,8 @@ export function attachRadioChat(httpServer, opts = {}) {
   const nickSalt = opts.nickSalt || "hakou-radio-chat";
   const cookieName = opts.cookieName || "hakou_studio_session";
   const verifySession = opts.verifySession;
+  const resolveIp =
+    typeof opts.getClientIp === "function" ? opts.getClientIp : clientIpFromReq;
 
   const wss = new WebSocketServer({
     server: httpServer,
@@ -223,7 +225,7 @@ export function attachRadioChat(httpServer, opts = {}) {
       return;
     }
 
-    const ip = clientIpFromReq(req);
+    const ip = resolveIp(req);
     if ((ipCounts.get(ip) || 0) >= MAX_PER_IP) {
       ws.close(1008, "ip-limit");
       return;

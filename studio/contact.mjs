@@ -2,15 +2,26 @@
  * Validation + anti-spam Contact (honeypot, captcha HMAC, filtres, rate-limit).
  */
 
-import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { createHmac, randomInt, timingSafeEqual, randomBytes } from "node:crypto";
+import {
+  appendFileSync,
+  mkdirSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  statSync,
+} from "node:fs";
+import { createHmac, randomInt, randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getClientIp, safeEqualStr } from "./security.mjs";
+
+export { getClientIp };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INBOX_DIR = join(__dirname, "data");
 const INBOX_FILE = join(INBOX_DIR, "contact-messages.jsonl");
 const DEFAULT_RETENTION_DAYS = 365;
+const MAX_INBOX_BYTES = Number(process.env.CONTACT_INBOX_MAX_BYTES || 5 * 1024 * 1024);
 
 const NAME_RE = /^[\p{L}\p{M}\s.''-]{2,80}$/u;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -56,14 +67,6 @@ function pruneMaps(now = Date.now()) {
   }
 }
 
-export function getClientIp(req) {
-  const xf = req.headers["x-forwarded-for"];
-  if (typeof xf === "string" && xf.trim()) {
-    return xf.split(",")[0].trim();
-  }
-  return req.ip || req.socket?.remoteAddress || "unknown";
-}
-
 export function checkRateLimit(
   ip,
   { max = 3, windowMs = 60 * 60 * 1000, key = "default" } = {}
@@ -92,27 +95,24 @@ function hmacSign(secret, payload) {
   return createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-function safeEqualStr(a, b) {
-  const ba = Buffer.from(String(a));
-  const bb = Buffer.from(String(b));
-  if (ba.length !== bb.length) return false;
-  return timingSafeEqual(ba, bb);
-}
-
 /**
- * Captcha arithmétique signé (HMAC) + nonce à usage unique.
- * Pas de dépendance externe ; secret = CONTACT_CAPTCHA_SECRET || SESSION_SECRET.
+ * Captcha arithmétique : la question est affichée, mais a/b ne sont PAS dans le jeton.
+ * Preuve = HMAC(secret, nonce|réponse|exp) — impossible à forger sans le secret serveur.
  */
 export function createCaptchaChallenge(secret, { ttlMs = 10 * 60 * 1000 } = {}) {
   const a = randomInt(2, 12);
   const b = randomInt(1, 10);
-  const nonce = randomBytes(12).toString("hex");
+  const nonce = randomBytes(16).toString("hex");
   const exp = Date.now() + ttlMs;
-  const body = b64url(JSON.stringify({ a, b, n: nonce, exp }));
+  const answer = a + b;
+  const proof = hmacSign(secret, `v2|${nonce}|${answer}|${exp}`);
+  const body = b64url(JSON.stringify({ v: 2, n: nonce, exp, p: proof }));
   const sig = hmacSign(secret, body);
-  const token = `${body}.${sig}`;
-  const question = `${a} + ${b} = ?`;
-  return { token, question, expiresInSec: Math.floor(ttlMs / 1000) };
+  return {
+    token: `${body}.${sig}`,
+    question: `${a} + ${b} = ?`,
+    expiresInSec: Math.floor(ttlMs / 1000),
+  };
 }
 
 export function verifyCaptchaChallenge(secret, token, answerRaw) {
@@ -136,11 +136,11 @@ export function verifyCaptchaChallenge(secret, token, answerRaw) {
     return { ok: false, error: "Captcha invalide. Rafraîchis-le." };
   }
 
-  const { a, b, n: nonce, exp } = payload || {};
+  const { v, n: nonce, exp, p: proof } = payload || {};
   if (
-    !Number.isInteger(a) ||
-    !Number.isInteger(b) ||
+    v !== 2 ||
     typeof nonce !== "string" ||
+    typeof proof !== "string" ||
     !Number.isFinite(exp)
   ) {
     return { ok: false, error: "Captcha invalide. Rafraîchis-le." };
@@ -153,7 +153,11 @@ export function verifyCaptchaChallenge(secret, token, answerRaw) {
   }
 
   const answer = Number(String(answerRaw ?? "").trim().replace(",", "."));
-  if (!Number.isFinite(answer) || answer !== a + b) {
+  if (!Number.isFinite(answer) || !Number.isInteger(answer)) {
+    return { ok: false, error: "Réponse captcha incorrecte." };
+  }
+  const expectedProof = hmacSign(secret, `v2|${nonce}|${answer}|${exp}`);
+  if (!safeEqualStr(proof, expectedProof)) {
     return { ok: false, error: "Réponse captcha incorrecte." };
   }
 
@@ -189,8 +193,14 @@ export async function verifyRecaptcha(secret, responseToken, ip) {
   return { ok: true };
 }
 
-export function isAllowedContactOrigin(origin, allowedOrigins) {
-  if (!origin) return true; // same-origin / curl sans Origin
+/**
+ * @param {string|undefined} origin
+ * @param {Set<string>} allowedOrigins
+ * @param {{ requireOrigin?: boolean }} [opts] — en prod, exiger Origin allowlistée
+ */
+export function isAllowedContactOrigin(origin, allowedOrigins, opts = {}) {
+  const requireOrigin = Boolean(opts.requireOrigin);
+  if (!origin) return !requireOrigin;
   return allowedOrigins.has(origin);
 }
 
@@ -279,6 +289,32 @@ export function purgeContactInbox({ maxAgeDays = DEFAULT_RETENTION_DAYS } = {}) 
 export function appendContactInbox(entry, { retentionDays } = {}) {
   if (!existsSync(INBOX_DIR)) {
     mkdirSync(INBOX_DIR, { recursive: true });
+  }
+  try {
+    if (existsSync(INBOX_FILE) && statSync(INBOX_FILE).size >= MAX_INBOX_BYTES) {
+      purgeContactInbox({
+        maxAgeDays:
+          retentionDays ??
+          Number(process.env.CONTACT_RETENTION_DAYS || DEFAULT_RETENTION_DAYS),
+      });
+      if (existsSync(INBOX_FILE) && statSync(INBOX_FILE).size >= MAX_INBOX_BYTES) {
+        // Cap disque : on tronque aux 200 dernières lignes
+        const lines = readFileSync(INBOX_FILE, "utf8")
+          .split("\n")
+          .filter((l) => l.trim());
+        const kept = lines.slice(-200);
+        writeFileSync(
+          INBOX_FILE,
+          kept.length ? `${kept.join("\n")}\n` : "",
+          "utf8"
+        );
+        console.warn(
+          "[Hakou Contact] inbox plafonnée (MAX_INBOX_BYTES) — anciennes lignes coupées"
+        );
+      }
+    }
+  } catch (err) {
+    console.warn("[Hakou Contact] inbox size check", err?.message || err);
   }
   appendFileSync(INBOX_FILE, `${JSON.stringify(entry)}\n`, "utf8");
   try {

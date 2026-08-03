@@ -270,6 +270,7 @@
 
     const res = await fetch(whepUrl, {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/sdp",
         Accept: "application/sdp",
@@ -308,7 +309,8 @@
     // Autoplay navigateur : muet d’abord (l’utilisateur peut réactiver le son).
     video.muted = true;
     video.setAttribute("playsinline", "");
-    // CORS * côté nginx : pas de credentials (sinon le navigateur bloque).
+    // Cookie média (auth nginx) : credentials cross-origin vers le VPS.
+    video.crossOrigin = "use-credentials";
     video.title = title || "Hakou Radio Live";
     frame.appendChild(video);
 
@@ -346,7 +348,7 @@
       enableWorker: true,
       lowLatencyMode: true,
       xhrSetup: (xhr) => {
-        xhr.withCredentials = false;
+        xhr.withCredentials = true;
       },
     });
     hlsPlayer.loadSource(sourceUrl);

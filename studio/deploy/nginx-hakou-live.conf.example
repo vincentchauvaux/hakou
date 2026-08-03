@@ -1,20 +1,64 @@
-# Hakou Live — HLS (spectateurs) + WHIP/WHEP (studio + Safari)
+# Hakou Live — HLS (spectateurs allowlist) + WHIP/WHEP (studio)
 # Inclure dans le server HTTPS de vps-e09ed6db.vps.ovh.net :
 #   include snippets/hakou-live.conf;
 #
-# MediaMTX cookieCheck (critique) :
-# - NE PAS envoyer `Cookie: cookieCheck=1` côté proxy : MediaMTX passe en mode
-#   cookie (playlists SANS ?session=) puis 401 si Set-Cookie est masqué.
-# - Utiliser `?cookieCheck=1` (client radio.js) → playlists avec ?session=…
-#   compatibles CORS cross-origin sans cookies tiers.
+# Sécurité (août 2026) :
+# - HLS / WHIP/WHEP : auth_request → cookie hakou_media (posé au login / status).
+# - X-Forwarded-For = $remote_addr (anti spoof rate-limit).
+# - CORS credentials + origines allowlist (plus de *).
+#
+# MediaMTX cookieCheck :
+# - NE PAS envoyer `Cookie: cookieCheck=1` côté proxy.
+# - Utiliser `?cookieCheck=1` (client radio.js).
 
-# HLS public
+location = /internal-hakou-media-auth {
+    internal;
+    proxy_pass http://127.0.0.1:8787/api/media/gate;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header Cookie $http_cookie;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location @hakou_media_denied {
+    set $hakou_cors "";
+    if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
+        set $hakou_cors $http_origin;
+    }
+    add_header Access-Control-Allow-Origin $hakou_cors always;
+    add_header Access-Control-Allow-Credentials true always;
+    add_header Content-Type text/plain always;
+    return 401 "unauthorized";
+}
+
+# HLS — lecture réservée
 location /hakou-live/hls/ {
+    set $hakou_cors "";
+    if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
+        set $hakou_cors $http_origin;
+    }
+
+    if ($request_method = OPTIONS) {
+        add_header Access-Control-Allow-Origin $hakou_cors always;
+        add_header Access-Control-Allow-Credentials true always;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Range, Origin, Accept" always;
+        add_header Access-Control-Max-Age 600 always;
+        add_header Content-Length 0;
+        add_header Content-Type text/plain;
+        return 204;
+    }
+
+    auth_request /internal-hakou-media-auth;
+    error_page 401 = @hakou_media_denied;
+
     proxy_pass http://127.0.0.1:8888/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_redirect /hakou/ /hakou-live/hls/hakou/;
     proxy_redirect http://127.0.0.1:8888/ /hakou-live/hls/;
@@ -25,28 +69,40 @@ location /hakou-live/hls/ {
     proxy_hide_header Access-Control-Allow-Headers;
     proxy_hide_header Access-Control-Expose-Headers;
     proxy_hide_header Set-Cookie;
-    # Pas de credentials navigateur → * OK
-    add_header Access-Control-Allow-Origin * always;
+    add_header Access-Control-Allow-Origin $hakou_cors always;
+    add_header Access-Control-Allow-Credentials true always;
     add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
     add_header Access-Control-Allow-Headers "Range, Origin, Accept" always;
     add_header Access-Control-Expose-Headers "*" always;
+    add_header X-Content-Type-Options nosniff always;
+}
+
+# WHIP (publish) + WHEP (lecture) — cookie média obligatoire
+location /hakou-live/whip/ {
+    set $whip_cors "";
+    if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
+        set $whip_cors $http_origin;
+    }
+
     if ($request_method = OPTIONS) {
-        add_header Access-Control-Allow-Origin * always;
-        add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Range, Origin, Accept" always;
+        add_header Access-Control-Allow-Origin $whip_cors always;
+        add_header Access-Control-Allow-Credentials true always;
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, If-Match" always;
+        add_header Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS" always;
+        add_header Access-Control-Expose-Headers "Location, Link, ETag" always;
         add_header Content-Length 0;
         add_header Content-Type text/plain;
         return 204;
     }
-}
 
-# WHIP (publish studio) + WHEP (lecture Safari / WebKit depuis hakou.be)
-location /hakou-live/whip/ {
+    auth_request /internal-hakou-media-auth;
+    error_page 401 = @hakou_media_denied;
+
     proxy_pass http://127.0.0.1:8889/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-For $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Authorization $http_authorization;
     proxy_buffering off;
@@ -60,23 +116,9 @@ location /hakou-live/whip/ {
     proxy_hide_header Access-Control-Allow-Methods;
     proxy_hide_header Access-Control-Allow-Headers;
     proxy_hide_header Access-Control-Expose-Headers;
-    set $whip_cors "";
-    if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
-        set $whip_cors $http_origin;
-    }
     add_header Access-Control-Allow-Origin $whip_cors always;
     add_header Access-Control-Allow-Credentials true always;
     add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, If-Match" always;
     add_header Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS" always;
     add_header Access-Control-Expose-Headers "Location, Link, ETag" always;
-    if ($request_method = OPTIONS) {
-        add_header Access-Control-Allow-Origin $whip_cors always;
-        add_header Access-Control-Allow-Credentials true always;
-        add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, If-Match" always;
-        add_header Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS" always;
-        add_header Access-Control-Expose-Headers "Location, Link, ETag" always;
-        add_header Content-Length 0;
-        add_header Content-Type text/plain;
-        return 204;
-    }
 }

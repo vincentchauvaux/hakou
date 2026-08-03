@@ -1,23 +1,32 @@
 # Hakou Studio (VPS)
 
-Service Node : auth Google (allowlist) + page studio (stub étape 3).
+Service Node : auth Google (allowlist) + studio live + APIs Stream / Contact / chat.
+
+## Sécurité (août 2026)
+
+- **Stream status + chat** : session Google allowlist obligatoire.
+- **HLS / WHEP** : nginx `auth_request` → `GET /api/media/gate` (cookie `hakou_media`).
+- **Captcha contact** : preuve HMAC sans `a`/`b` dans le jeton ; `SESSION_SECRET` fort requis en prod.
+- **IP** : nginx pose `X-Forwarded-For $remote_addr` (pas d’append spoofable).
+- **Ingest WHIP** : credentials publish uniquement pour session allowlist (`Cache-Control: no-store`).
 
 ## Déploiement rapide (VPS OVH)
 
 ```bash
-# Sur le VPS — ne jamais committer .env ni le JSON client_secret Google
 sudo mkdir -p /opt/hakou-studio
-# rsync du dossier studio/ (sans node_modules / .env)
 cd /opt/hakou-studio
 cp .env.example .env
 chmod 600 .env
-# Éditer : GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET (openssl rand -hex 32)
+# Éditer : GOOGLE_CLIENT_ID, SESSION_SECRET (openssl rand -hex 32),
+#          ALLOWED_EMAILS, HAKOU_STUDIO_PROD=1, MEDIAMTX_*_PASS
 npm install --omit=dev
 pm2 start server.mjs --name hakou-studio
 pm2 save
 ```
 
-Nginx : snippet [`deploy/nginx-hakou-studio.conf.example`](deploy/nginx-hakou-studio.conf.example) → `/etc/nginx/snippets/hakou-studio.conf`, puis `include` dans le vhost `vps-e09ed6db.vps.ovh.net` (comme hirakana / rpg-cr).
+Nginx :
+- [`deploy/nginx-hakou-studio.conf.example`](deploy/nginx-hakou-studio.conf.example) → `/etc/nginx/snippets/hakou-studio.conf`
+- [`deploy/nginx-hakou-live.conf.example`](deploy/nginx-hakou-live.conf.example) → `/etc/nginx/snippets/hakou-live.conf`
 
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
@@ -26,31 +35,27 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Google Cloud
 
 1. Client OAuth **Application Web**.
-2. Origines JavaScript : `https://hakou.be`, `https://vps-e09ed6db.vps.ovh.net`, `http://localhost:3000`.
-3. **Client ID** (public) → `studio/.env` (`GOOGLE_CLIENT_ID`) **et** [`content/auth-config.json`](../content/auth-config.json).
-4. **Client secret** → uniquement `studio/.env` sur le VPS (`GOOGLE_CLIENT_SECRET`), jamais GitHub Pages.
+2. Origines JS : `https://hakou.be`, `https://vps-e09ed6db.vps.ovh.net`, `http://localhost:3000`.
+3. **Client ID** → `studio/.env` + [`content/auth-config.json`](../content/auth-config.json).
+4. **Client secret** → uniquement VPS.
 
-Allowlist défaut : `vincent.chauvaux@gmail.com`, `anaismotquin@gmail.com` (`ALLOWED_EMAILS`).
+Allowlist : `ALLOWED_EMAILS` (obligatoire, pas de défaut).
 
-Console Google (OAuth) :
-- Identifiants : https://console.cloud.google.com/apis/credentials
-- Écran de consentement (+ utilisateurs de test si app en mode Testing) : https://console.cloud.google.com/apis/credentials/consent
+## Stream status (auth)
 
-## Statut Radio public
+`GET /api/stream/status` (alias `/api/radio/status`) — **cookie session requis**.  
+Priorité : studio MediaMTX → Twitch → YouTube. Pose aussi le cookie média HLS.
 
-`GET /api/stream/status` (alias `/api/radio/status`) — **sans auth**, CORS vers hakou.be. Priorité : **studio MediaMTX** (HLS) → **Twitch live** (Helix) → live YouTube Public → archives / playlist.
+Twitch : `TWITCH_LOGIN` + `TWITCH_CLIENT_ID` + `TWITCH_CLIENT_SECRET`.
 
-Twitch : `TWITCH_LOGIN` + `TWITCH_CLIENT_ID` + `TWITCH_CLIENT_SECRET` dans `.env` (app Twitch → client credentials). Sans secret, Twitch est ignoré.
+## Chat Stream (auth)
 
-## Chat Stream public
+WebSocket `wss://…/hakou-studio/api/radio/chat` — session Google obligatoire.  
+Durcissement : CORS, maxPayload, rate-limits, sanitisation, kick.
 
-WebSocket `wss://…/hakou-studio/api/radio/chat` (`studio/radio-chat.mjs`) — sans auth. Pseudo défaut `Visiteur-xxxx` (hash IP + `SESSION_SECRET`). **Sécurité** : origines CORS strictes, `maxPayload` 2 Ko, max 3 sockets / IP, 200 clients, rate-limit messages/pseudos, sanitisation Unicode (pas d’HTML), kick après abus. Client : `textContent` uniquement.
+## Live studio (WHIP → HLS)
 
-## Étape 3 — Live studio (WHIP → HLS)
-
-1. Installer MediaMTX : `MEDIAMTX_PUBLISH_PASS=… MEDIAMTX_API_PASS=… sudo bash studio/deploy/install-mediamtx.sh`
-2. Nginx : [`deploy/nginx-hakou-live.conf.example`](deploy/nginx-hakou-live.conf.example) → `/etc/nginx/snippets/hakou-live.conf` + `include` dans le vhost HTTPS.
-3. Ouvrir **UDP 8189** (ICE WebRTC).
-4. Dans `studio/.env` : `MEDIAMTX_PUBLISH_PASS`, `MEDIAMTX_API_PASS` (identiques à la config MediaMTX).
-5. Studio connecté → « Passer en direct » → WHIP ; Stream hakou.be lit `…/hakou-live/hls/hakou/index.m3u8`.
-
+1. MediaMTX : `MEDIAMTX_PUBLISH_PASS=… MEDIAMTX_API_PASS=… sudo bash studio/deploy/install-mediamtx.sh`
+2. Nginx live avec **auth_request** (snippet à jour).
+3. UDP 8189 (ICE).
+4. Studio connecté → « Passer en direct » ; Stream hakou.be lit HLS **avec credentials**.
