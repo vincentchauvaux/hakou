@@ -7,6 +7,7 @@
 - UI : zone **Stream** (`#stream`, nav « Stream ») — ex-Radio.
 - **Accès restreint** (4 août 2026) : player + chat uniquement si session Google allowlist (Vincent / Anaïs). Gate [`stream-gate.js`](stream-gate.js) + login Google ; API `GET /api/stream/status` et WebSocket chat exigent le cookie studio. Contenu masqué (`#stream-lock` / `#stream-content`) tant que non connecté.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
+- **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET /hakou-studio/api/stream/status` (alias `/api/radio/status`) — **auth requise**.
 - Config Twitch (VPS `/opt/hakou-studio/.env`) :
   - `TWITCH_LOGIN=` login chaîne sans `@`

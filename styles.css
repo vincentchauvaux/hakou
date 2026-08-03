@@ -1962,23 +1962,24 @@ audio {
 .radio-offline-logo {
   position: absolute;
   inset: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(1rem, 4vw, 2rem);
+  box-sizing: border-box;
+  padding: clamp(1.25rem, 5%, 2.5rem);
   background: #05070d;
+  overflow: visible;
 }
 
 .radio-offline-logo img {
   display: block;
-  width: auto;
+  width: min(70%, 360px);
   height: auto;
-  max-width: min(52%, 280px);
-  max-height: 62%;
-  aspect-ratio: 390 / 340;
+  max-height: calc(100% - 2.5rem);
   object-fit: contain;
   object-position: center;
-  opacity: 0.92;
+  opacity: 0.95;
   filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.45));
   animation: radio-logo-breathe 4.5s ease-in-out infinite;
 }
@@ -1986,11 +1987,9 @@ audio {
 @keyframes radio-logo-breathe {
   0%,
   100% {
-    transform: scale(1);
     opacity: 0.88;
   }
   50% {
-    transform: scale(1.04);
     opacity: 1;
   }
 }
