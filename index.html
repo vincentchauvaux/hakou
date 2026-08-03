@@ -172,26 +172,33 @@
           <p class="tag">Zone Stream</p>
           <h2>Live mix et diffusion</h2>
           <p>
-            Live studio, Twitch ou YouTube quand l’antenne est ouverte — sinon la
-            playlist
+            Live studio, Twitch ou YouTube — accès réservé aux comptes autorisés.
+            Hors antenne : playlist
             <a
               class="inline-link"
               href="https://www.youtube.com/playlist?list=PLGIvCy1w5T6Y"
               target="_blank"
               rel="noopener noreferrer"
               >Hakou Mix</a
-            >
-            sur
-            <a
-              class="inline-link"
-              href="https://www.youtube.com/@MrEtibaliomecus"
-              target="_blank"
-              rel="noopener noreferrer"
-              >@MrEtibaliomecus</a
             >.
           </p>
+          <p class="stream-auth-who" id="stream-auth-who" hidden></p>
         </div>
-        <div class="radio-layout">
+
+        <div class="stream-lock" id="stream-lock" role="dialog" aria-labelledby="stream-lock-title">
+          <p class="tag">Accès restreint</p>
+          <h3 id="stream-lock-title">Stream privé</h3>
+          <p class="stream-lock__text">
+            Seuls Vincent et Anaïs peuvent ouvrir le live et le chat. Connecte-toi
+            avec ton compte Google autorisé.
+          </p>
+          <button type="button" class="panel-btn panel-btn--primary" id="stream-login">
+            Se connecter avec Google
+          </button>
+          <p class="stream-lock__status" id="stream-lock-status" role="status"></p>
+        </div>
+
+        <div class="radio-layout" id="stream-content" hidden>
           <div class="radio-main">
             <div class="panel-card radio-card">
               <div class="radio-status" id="radio-status" data-state="offline">
@@ -238,7 +245,8 @@
               <p class="radio-chat__title">Chat</p>
             </header>
             <p class="radio-chat__legal">
-              Messages publics. Pseudo par défaut dérivé de l’IP (modifiable).
+              Chat réservé aux comptes autorisés. Pseudo par défaut dérivé de l’IP
+              (modifiable).
               <a href="./legal/cgu.html">Règles</a>
               ·
               <a href="./legal/confidentialite.html">Confidentialité</a>
@@ -870,6 +878,7 @@
     </div>
 
     <script src="./consent.js" defer></script>
+    <script type="module" src="./stream-gate.js"></script>
     <script src="./youtube-videos.js" defer></script>
     <script src="./radio.js" defer></script>
     <script src="./radio-chat.js" defer></script>

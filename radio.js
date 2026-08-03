@@ -471,6 +471,7 @@
     const res = await fetch(`${url}?t=${Date.now()}`, {
       cache: "no-store",
       mode: "cors",
+      credentials: "include",
     });
     if (!res.ok) throw new Error(`status API HTTP ${res.status}`);
     return res.json();
@@ -736,13 +737,31 @@
   }
 
   function boot() {
-    init().catch((err) => console.warn(LOG, err));
-    if (window.HakouConsent?.onMediaReady) {
-      window.HakouConsent.onMediaReady(() => {
-        lastAppliedKey = "";
-        refresh().catch((err) => console.warn(LOG, err));
-      });
+    const start = () => {
+      init().catch((err) => console.warn(LOG, err));
+      if (window.HakouConsent?.onMediaReady) {
+        window.HakouConsent.onMediaReady(() => {
+          lastAppliedKey = "";
+          refresh().catch((err) => console.warn(LOG, err));
+        });
+      }
+    };
+
+    if (window.HakouStreamGate?.whenAllowed) {
+      window.HakouStreamGate.whenAllowed(start);
+      return;
     }
+    window.addEventListener(
+      "hakou:stream-allowed",
+      () => start(),
+      { once: true }
+    );
+    // Filet : si le gate n’existe pas (page partielle), ne démarre pas le player public
+    window.setTimeout(() => {
+      if (!window.HakouStreamGate?.isAllowed?.()) {
+        console.info(LOG, "en attente d’auth Stream");
+      }
+    }, 0);
   }
 
   if (document.readyState === "loading") {

@@ -1398,9 +1398,56 @@ audio {
 
 .radio-card {
   max-width: min(100%, 720px);
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--panel-block-gap, 1.25rem);
+}
+
+.stream-auth-who {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--panel-muted, var(--muted));
+}
+
+.stream-lock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  max-width: min(420px, 100%);
+  margin: 0 0 var(--panel-block-gap, 1.25rem);
+  padding: 1.1rem 1.15rem 1.2rem;
+  border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.28));
+  border-radius: 12px;
+  background: var(--panel-card-bg, rgba(9, 13, 24, 0.72));
+}
+
+.stream-lock[hidden] {
+  display: none !important;
+}
+
+.stream-lock h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.stream-lock__text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--panel-muted, var(--muted));
+}
+
+.stream-lock__status {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 0.82rem;
+  color: var(--panel-muted, var(--muted));
+}
+
+#stream-content[hidden] {
+  display: none !important;
 }
 
 .radio-layout {

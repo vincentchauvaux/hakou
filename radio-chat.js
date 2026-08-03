@@ -257,11 +257,20 @@
     connect(url);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
+  function boot() {
+    const start = () => {
       init().catch((err) => console.warn(LOG, err));
-    });
+    };
+    if (window.HakouStreamGate?.whenAllowed) {
+      window.HakouStreamGate.whenAllowed(start);
+      return;
+    }
+    window.addEventListener("hakou:stream-allowed", start, { once: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
   } else {
-    init().catch((err) => console.warn(LOG, err));
+    boot();
   }
 })();

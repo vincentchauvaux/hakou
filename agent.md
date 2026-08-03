@@ -5,14 +5,15 @@
 ## Stream + Twitch (août 2026)
 
 - UI : zone **Stream** (`#stream`, nav « Stream ») — ex-Radio.
+- **Accès restreint** (4 août 2026) : player + chat uniquement si session Google allowlist (Vincent / Anaïs). Gate [`stream-gate.js`](stream-gate.js) + login Google ; API `GET /api/stream/status` et WebSocket chat exigent le cookie studio. Contenu masqué (`#stream-lock` / `#stream-content`) tant que non connecté.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** → playlist Hakou Mix.
-- API : `GET /hakou-studio/api/stream/status` (alias `/api/radio/status`).
+- API : `GET /hakou-studio/api/stream/status` (alias `/api/radio/status`) — **auth requise**.
 - Config Twitch (VPS `/opt/hakou-studio/.env`) :
   - `TWITCH_LOGIN=` login chaîne sans `@`
   - `TWITCH_CLIENT_ID=` / `TWITCH_CLIENT_SECRET=` (app [dev.twitch.tv](https://dev.twitch.tv/console) → Client Credentials)
   - Miroir optionnel : `twitchLogin` dans [`content/radio.json`](content/radio.json) (lien UI hors live)
 - Embed : `https://player.twitch.tv/?channel=…&parent=hakou.be` (consentement médias tiers).
-
+- Note : le chemin HLS MediaMTX `/hakou-live/` peut rester joignable si l’URL est connue — le verrou porte sur l’UI Stream + statut + chat.
 
 
 ## Revue juridique (août 2026)
@@ -186,7 +187,8 @@
 
 | `youtube-videos.js` | Zone Video : RSS (pool ~12) → **2 aléatoires** / visite + repli HTML, modal |
 
-| `radio.js` | Zone **Stream** (`#stream`) : priorité **studio** → **Twitch live** → live YouTube → **playlist Hakou Mix** ; poll ~20 s ; Chrome/Firefox : `hls.js` ; **Safari / iOS** : **WHEP** ; embed Twitch `player.twitch.tv` (consent médias) |
+| `stream-gate.js` | Auth allowlist pour `#stream` : session `/api/auth/me`, login Google, déverrouille `radio.js` / `radio-chat.js` |
+| `radio.js` | Zone **Stream** (`#stream`) : démarre **après** auth ; priorité **studio** → **Twitch live** → live YouTube → **playlist Hakou Mix** ; poll ~20 s ; status API `credentials: include` |
 | `radio-chat.js` | Chat public Stream (WebSocket VPS) : pseudo `Visiteur-xxxx` dérivé IP (éditable), messages texte/emoji, présence. **Téléphone (≤680px)** : composer 1 ligne (champ + Envoyer), chat plus court, padding bas Stream renforcé, bouton INTRO masqué sur Stream |
 
 | `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |

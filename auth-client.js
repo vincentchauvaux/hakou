@@ -1,6 +1,7 @@
 /**
- * Auth Google (GIS) → API studio VPS → cookie session → redirect studio.
+ * Auth Google (GIS) → API studio VPS → cookie session.
  * Config : content/auth-config.json (+ GOOGLE_CLIENT_ID côté serveur).
+ * Un seul `initialize` GIS ; plusieurs boutons possibles (intro / Stream).
  */
 
 const AUTH_CONFIG_URL = "./content/auth-config.json";
@@ -8,6 +9,9 @@ const GIS_SRC = "https://accounts.google.com/gsi/client";
 
 let authConfig = null;
 let gisReady = null;
+let gisInitialized = false;
+/** @type {null | ((response: {credential?: string}) => void)} */
+let pendingCredentialHandler = null;
 
 async function loadAuthConfig() {
   if (authConfig) return authConfig;
@@ -37,8 +41,54 @@ function loadGisScript() {
   return gisReady;
 }
 
+function ensureGisInitialized(clientId) {
+  if (gisInitialized) return;
+  if (!window.google?.accounts?.id) {
+    throw new Error("GIS indisponible");
+  }
+  window.google.accounts.id.initialize({
+    client_id: clientId,
+    callback: (response) => {
+      const handler = pendingCredentialHandler;
+      pendingCredentialHandler = null;
+      if (handler) handler(response);
+    },
+    auto_select: false,
+    cancel_on_tap_outside: true,
+    context: "signin",
+  });
+  gisInitialized = true;
+}
+
 /**
- * @param {(profile: {email:string,name?:string}) => void} onSuccess
+ * Session studio (cookie cross-site, allowlist Vincent / Anaïs).
+ * @returns {Promise<null | { email: string, name?: string|null, picture?: string|null }>}
+ */
+export async function fetchStudioSession() {
+  const cfg = await loadAuthConfig();
+  const apiBase = String(cfg.authApiBase || "").replace(/\/$/, "");
+  if (!apiBase) return null;
+  try {
+    const res = await fetch(`${apiBase}/api/auth/me`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    if (!data?.authenticated || !data.email) return null;
+    return {
+      email: String(data.email),
+      name: data.name || null,
+      picture: data.picture || null,
+    };
+  } catch (err) {
+    console.warn("[Hakou Auth] session", err);
+    return null;
+  }
+}
+
+/**
+ * @param {(profile: {email:string,name?:string,studioUrl?:string}) => void} onSuccess
  * @param {(message: string) => void} onError
  */
 export async function initGoogleLogin(loginButton, { onSuccess, onError }) {
@@ -69,6 +119,7 @@ export async function initGoogleLogin(loginButton, { onSuccess, onError }) {
   }
 
   await loadGisScript();
+  ensureGisInitialized(clientId);
 
   const handleCredential = async (response) => {
     const credential = response?.credential;
@@ -103,19 +154,11 @@ export async function initGoogleLogin(loginButton, { onSuccess, onError }) {
     }
   };
 
-  window.google.accounts.id.initialize({
-    client_id: clientId,
-    callback: handleCredential,
-    auto_select: false,
-    cancel_on_tap_outside: true,
-    context: "signin",
-  });
-
   const onClick = (event) => {
     event.preventDefault();
     event.stopPropagation();
     loginButton.classList.add("is-loading");
-    // Prompt One Tap / FedCM ; repli : bouton GIS invisible
+    pendingCredentialHandler = handleCredential;
     window.google.accounts.id.prompt((notification) => {
       loginButton.classList.remove("is-loading");
       if (
@@ -123,7 +166,7 @@ export async function initGoogleLogin(loginButton, { onSuccess, onError }) {
         notification.isSkippedMoment() ||
         notification.isDismissedMoment()
       ) {
-        mountFallbackButton(loginButton, clientId, handleCredential, onError);
+        mountFallbackButton(loginButton, handleCredential, onError);
       }
     });
   };
@@ -132,7 +175,7 @@ export async function initGoogleLogin(loginButton, { onSuccess, onError }) {
   return { configured: true, config: cfg };
 }
 
-function mountFallbackButton(hostBtn, clientId, handleCredential, onError) {
+function mountFallbackButton(hostBtn, handleCredential, onError) {
   let host = document.getElementById("intro-google-fallback");
   if (!host) {
     host = document.createElement("div");
@@ -142,6 +185,7 @@ function mountFallbackButton(hostBtn, clientId, handleCredential, onError) {
   }
   host.hidden = false;
   host.replaceChildren();
+  pendingCredentialHandler = handleCredential;
   try {
     window.google.accounts.id.renderButton(host, {
       type: "standard",

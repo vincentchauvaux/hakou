@@ -1,6 +1,7 @@
 /**
- * Chat public Radio — WebSocket (présence + messages en RAM).
- * Durcissement : origine, taille payload, rate-limits, sanitisation Unicode.
+ * Chat Stream — WebSocket (présence + messages en RAM).
+ * Accès : session Google allowlist (cookie studio) + origine CORS.
+ * Durcissement : taille payload, rate-limits, sanitisation Unicode.
  */
 
 import { createHash, randomBytes } from "node:crypto";
@@ -26,7 +27,7 @@ const RE_CONTROL =
 const RE_TAGS = /<[^>]*>/g;
 const RE_NICK_OK = /^[\p{L}\p{N} _.\-]+$/u;
 
-/** @typedef {{ id: string, nick: string, ip: string, lastMsgAt: number, lastNickAt: number, burstAt: number[], bad: number, ws: import('ws').WebSocket }} Client */
+/** @typedef {{ id: string, nick: string, ip: string, email?: string|null, lastMsgAt: number, lastNickAt: number, burstAt: number[], bad: number, ws: import('ws').WebSocket }} Client */
 
 /** @type {Map<import('ws').WebSocket, Client>} */
 const clients = new Map();
@@ -41,6 +42,18 @@ function nickFromIp(ip, salt) {
     .digest("hex")
     .slice(0, 4);
   return `Visiteur-${hash}`;
+}
+
+function parseCookieHeader(header, name) {
+  if (!header || !name) return null;
+  for (const part of String(header).split(";")) {
+    const idx = part.indexOf("=");
+    if (idx < 1) continue;
+    const key = part.slice(0, idx).trim();
+    if (key !== name) continue;
+    return decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return null;
 }
 
 function clientIpFromReq(req) {
@@ -65,9 +78,20 @@ function sanitizeNick(raw) {
   const cleaned = stripUnsafe(raw).trim().slice(0, NICK_MAX);
   if (cleaned.length < NICK_MIN || cleaned.length > NICK_MAX) return null;
   if (!RE_NICK_OK.test(cleaned)) return null;
-  // Évite d’uspieler un format « Visiteur-xxxx » serveur
+  // Évite d’usurper un format « Visiteur-xxxx » serveur
   if (/^visiteur-/i.test(cleaned) && cleaned.length <= 13) return null;
   return cleaned;
+}
+
+function nickFromSession(session, ip, salt) {
+  const fromName = String(session?.name || "")
+    .trim()
+    .split(/\s+/)[0];
+  const fromEmail = String(session?.email || "")
+    .split("@")[0]
+    ?.trim();
+  const candidate = sanitizeNick(fromName) || sanitizeNick(fromEmail);
+  return candidate || nickFromIp(ip, salt);
 }
 
 function sanitizeText(raw) {
@@ -155,11 +179,18 @@ function allowBurst(client, now) {
 
 /**
  * @param {import('node:http').Server} httpServer
- * @param {{ corsOrigins?: Set<string>, nickSalt?: string }} [opts]
+ * @param {{
+ *   corsOrigins?: Set<string>,
+ *   nickSalt?: string,
+ *   cookieName?: string,
+ *   verifySession?: (token: string|undefined) => null | { email?: string, name?: string|null },
+ * }} [opts]
  */
 export function attachRadioChat(httpServer, opts = {}) {
   const corsOrigins = opts.corsOrigins || new Set();
   const nickSalt = opts.nickSalt || "hakou-radio-chat";
+  const cookieName = opts.cookieName || "hakou_studio_session";
+  const verifySession = opts.verifySession;
 
   const wss = new WebSocketServer({
     server: httpServer,
@@ -173,6 +204,16 @@ export function attachRadioChat(httpServer, opts = {}) {
     if (corsOrigins.size) {
       if (!origin || !corsOrigins.has(origin)) {
         ws.close(1008, "origin");
+        return;
+      }
+    }
+
+    let session = null;
+    if (typeof verifySession === "function") {
+      const token = parseCookieHeader(req.headers.cookie, cookieName);
+      session = verifySession(token);
+      if (!session?.email) {
+        ws.close(1008, "auth");
         return;
       }
     }
@@ -192,8 +233,9 @@ export function attachRadioChat(httpServer, opts = {}) {
     /** @type {Client} */
     const client = {
       id,
-      nick: nickFromIp(ip, nickSalt),
+      nick: nickFromSession(session, ip, nickSalt),
       ip,
+      email: session?.email || null,
       lastMsgAt: 0,
       lastNickAt: 0,
       burstAt: [],

@@ -208,8 +208,17 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-/** Public — statut live Stream (studio / Twitch / YouTube) pour hakou.be. */
-async function sendStreamStatus(_req, res) {
+/** Stream status — allowlist Google uniquement. */
+async function sendStreamStatus(req, res) {
+  const session = verifySession(req.cookies?.[SESSION_COOKIE]);
+  if (!session) {
+    res.status(401).json({
+      ok: false,
+      error: "connexion requise",
+      authenticated: false,
+    });
+    return;
+  }
   try {
     const status = await getRadioStatus({
       channelId: RADIO_CHANNEL_ID,
@@ -225,8 +234,8 @@ async function sendStreamStatus(_req, res) {
       hlsPublicUrl: HLS_PUBLIC_URL,
       whepPublicUrl: WHEP_PUBLIC_URL,
     });
-    res.setHeader("Cache-Control", "public, max-age=15");
-    res.json(status);
+    res.setHeader("Cache-Control", "private, max-age=15");
+    res.json({ ...status, authenticated: true, email: session.email });
   } catch (err) {
     console.error("[Hakou Studio] stream status", err.message || err);
     res.status(502).json({
@@ -521,6 +530,8 @@ const httpServer = createServer(app);
 attachRadioChat(httpServer, {
   corsOrigins: CORS_ORIGINS,
   nickSalt: SESSION_SECRET,
+  cookieName: SESSION_COOKIE,
+  verifySession,
 });
 
 httpServer.listen(PORT, () => {
