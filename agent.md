@@ -17,8 +17,9 @@
 
 ## Revue juridique (août 2026)
 
-- **Compte rendu** : canvas Cursor [`revue-juridique-hakou.canvas.tsx`](/Users/hakou/.cursor/projects/Users-hakou-hakou/canvases/revue-juridique-hakou.canvas.tsx) (analyse code, **pas** un avis d’avocat).
-- **Juridiction probable** : BE/UE (domaine `.be`, VPS OVH) + sous-traitants US (GitHub Pages, Google, Meta) si embeds acceptés.
+- **Compte rendu** : canvas Cursor [`revue-juridique-hakou.canvas.tsx`](/Users/hakou/.cursor/projects/Users-hakou-hakou/canvases/revue-juridique-hakou.canvas.tsx) — **mise à jour 4 août 2026** (post plan d’action + Stream/Twitch ; pas un avis d’avocat).
+- **Verdict actualisé** : documentation légale de base **en place** (mentions / privacy / cookies / CGU / CMP / rétention / licence). Résiduel : **droits musicaux** des lives (SABAM/SACEM) ; Twitch opérationnel seulement après `TWITCH_*` sur le VPS ; modération chat limitée aux CGU + Contact.
+- **Juridiction probable** : BE/UE (domaine `.be`, VPS OVH) + sous-traitants US (GitHub Pages, Google, Meta, Twitch si embeds acceptés).
 
 ### Mise en conformité (plan d’action — août 2026)
 
