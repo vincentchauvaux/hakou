@@ -9,15 +9,8 @@
 
   const LOG = "[Hakou Stream]";
   const HLS_CDN = "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js";
-  const DEFAULT_PLAYLIST_ID = "PLGIvCy1w5T6Y";
-  const DEFAULT_PLAYLIST_TITLE = "Hakou Mix";
   const TWITCH_WATCH_URL = (login) =>
     `https://www.twitch.tv/${encodeURIComponent(login)}`;
-
-  const PLAYLIST_EMBED_URL = (listId) =>
-    `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(listId)}&rel=0&modestbranding=1`;
-  const PLAYLIST_WATCH_URL = (listId) =>
-    `https://www.youtube.com/playlist?list=${encodeURIComponent(listId)}`;
 
   let pollTimer = null;
   let lastAppliedKey = "";
@@ -120,14 +113,39 @@
   function clearFrame(frame) {
     destroyHls();
     destroyWhep();
-    frame.querySelectorAll("iframe, video.radio-hls, .radio-unmute").forEach((el) => {
-      try {
-        el.srcObject = null;
-      } catch {
-        /* ignore */
-      }
-      el.remove();
-    });
+    frame
+      .querySelectorAll(
+        "iframe, video.radio-hls, .radio-unmute, .radio-offline-logo"
+      )
+      .forEach((el) => {
+        try {
+          el.srcObject = null;
+        } catch {
+          /* ignore */
+        }
+        el.remove();
+      });
+  }
+
+  /** Hors antenne : logo Hakou à la place de la playlist YouTube. */
+  function showOfflineLogo(frame, emptyEl) {
+    if (!frame) return;
+    clearFrame(frame);
+    const ph = frame.querySelector("[data-consent-placeholder]");
+    if (ph) ph.hidden = true;
+    if (emptyEl) emptyEl.hidden = true;
+
+    const wrap = document.createElement("div");
+    wrap.className = "radio-offline-logo";
+    wrap.setAttribute("aria-label", "Hors antenne");
+    const img = document.createElement("img");
+    img.src = "./assets/logo-hakou.svg";
+    img.alt = "Hakou";
+    img.width = 280;
+    img.height = 280;
+    img.decoding = "async";
+    wrap.appendChild(img);
+    frame.appendChild(wrap);
   }
 
   /** Autoplay navigateur = muet : bouton pour activer le son (geste utilisateur). */
@@ -394,24 +412,6 @@
     frame.appendChild(iframe);
   }
 
-  function playPlaylist(frame, emptyEl, playlistId, title) {
-    if (!frame || !playlistId) return;
-    clearFrame(frame);
-    const ph = frame.querySelector("[data-consent-placeholder]");
-    if (ph) ph.hidden = true;
-    if (emptyEl) emptyEl.hidden = true;
-
-    const iframe = document.createElement("iframe");
-    iframe.src = PLAYLIST_EMBED_URL(playlistId);
-    iframe.title = title || DEFAULT_PLAYLIST_TITLE;
-    iframe.allow =
-      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
-    iframe.allowFullscreen = true;
-    iframe.loading = "lazy";
-    iframe.referrerPolicy = "strict-origin-when-cross-origin";
-    frame.appendChild(iframe);
-  }
-
   /** Parents Twitch embed (domaine courant + hakou.be / localhost). */
   function twitchParentParams() {
     const hosts = new Set(["hakou.be", "www.hakou.be", "localhost", "127.0.0.1"]);
@@ -453,7 +453,6 @@
       data.whepUrl || "",
       data.twitchLogin || "",
       data.liveVideoId || "",
-      data.playlistId || "",
     ].join("|");
   }
 
@@ -567,12 +566,6 @@
       studioLive,
       twitchLive,
       twitchLogin,
-      playlistId:
-        (typeof base.playlistId === "string" && base.playlistId.trim()) ||
-        DEFAULT_PLAYLIST_ID,
-      playlistTitle:
-        (typeof base.playlistTitle === "string" && base.playlistTitle.trim()) ||
-        DEFAULT_PLAYLIST_TITLE,
       source,
     };
   }
@@ -611,17 +604,13 @@
         : twitchLive
           ? "Live Twitch"
           : "Mix en direct");
-    const playlistId =
-      (typeof data.playlistId === "string" && data.playlistId.trim()) ||
-      DEFAULT_PLAYLIST_ID;
-    const playlistTitle =
-      (typeof data.playlistTitle === "string" && data.playlistTitle.trim()) ||
-      DEFAULT_PLAYLIST_TITLE;
 
     // Évite de recharger le player si rien n’a changé (poll)
     if (
       key === lastAppliedKey &&
-      (frame.querySelector("iframe") || frame.querySelector("video.radio-hls"))
+      (frame.querySelector("iframe") ||
+        frame.querySelector("video.radio-hls") ||
+        frame.querySelector(".radio-offline-logo"))
     ) {
       return;
     }
@@ -654,25 +643,10 @@
       } else {
         playVideo(frame, emptyEl, liveId, liveTitle);
       }
-    } else if (playlistId) {
-      mode = "playlist";
-      setStatus("offline", playlistTitle);
-      if (!hasMediaConsent()) {
-        showMediaBlocked(
-          frame,
-          emptyEl,
-          "Playlist YouTube en attente d’accord médias tiers."
-        );
-      } else {
-        playPlaylist(frame, emptyEl, playlistId, playlistTitle);
-      }
     } else {
+      mode = "offline";
       setStatus("offline", "Prochain set à venir");
-      showEmpty(
-        frame,
-        emptyEl,
-        "Aucun flux pour le moment — la playlist Hakou Mix s’affichera ici."
-      );
+      showOfflineLogo(frame, emptyEl);
     }
 
     const channelLink = document.querySelector("#stream .embed-source a");
@@ -680,10 +654,7 @@
       if (mode === "twitch" && twitchLogin) {
         channelLink.href = TWITCH_WATCH_URL(twitchLogin);
         channelLink.textContent = `twitch.tv/${twitchLogin}`;
-      } else if (mode === "playlist" && playlistId) {
-        channelLink.href = PLAYLIST_WATCH_URL(playlistId);
-        channelLink.textContent = playlistTitle;
-      } else if (twitchLogin && !liveId) {
+      } else if (twitchLogin && mode === "offline") {
         channelLink.href = TWITCH_WATCH_URL(twitchLogin);
         channelLink.textContent = `twitch.tv/${twitchLogin}`;
       } else if (data.channelHandle) {
@@ -701,19 +672,15 @@
           ? `twitch ${twitchLogin}`
           : mode === "yt-live"
             ? `live ${liveId}`
-            : mode === "playlist"
-              ? `playlist ${playlistId}`
-              : "empty",
+            : "offline logo",
       {
         source: data.source || "local",
         watch:
           mode === "twitch" && twitchLogin
             ? TWITCH_WATCH_URL(twitchLogin)
-            : mode === "playlist"
-              ? PLAYLIST_WATCH_URL(playlistId)
-              : liveId
-                ? WATCH_URL(liveId)
-                : null,
+            : liveId
+              ? WATCH_URL(liveId)
+              : null,
       }
     );
   }
