@@ -31,11 +31,6 @@ function setAllowed(profile) {
   const content = document.getElementById("stream-content");
   if (lock) lock.hidden = true;
   if (content) content.hidden = false;
-  const who = document.getElementById("stream-auth-who");
-  if (who && profile?.email) {
-    who.textContent = profile.name || profile.email;
-    who.hidden = false;
-  }
   flushAllowed();
 }
 

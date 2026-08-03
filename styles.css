@@ -1404,12 +1404,6 @@ audio {
   gap: var(--panel-block-gap, 1.25rem);
 }
 
-.stream-auth-who {
-  margin: 0.35rem 0 0;
-  font-size: 0.78rem;
-  color: var(--panel-muted, var(--muted));
-}
-
 .stream-lock {
   display: flex;
   flex-direction: column;
