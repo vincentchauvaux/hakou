@@ -141,9 +141,10 @@
     const img = document.createElement("img");
     img.src = "./assets/logo-hakou.svg";
     img.alt = "Hakou";
-    img.width = 280;
-    img.height = 280;
     img.decoding = "async";
+    // Proportions du viewBox SVG (390×340) — pas de carré forcé
+    img.width = 390;
+    img.height = 340;
     wrap.appendChild(img);
     frame.appendChild(wrap);
   }

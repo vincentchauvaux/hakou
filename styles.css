@@ -1976,10 +1976,14 @@ audio {
 }
 
 .radio-offline-logo img {
-  width: min(42%, 220px);
+  display: block;
+  width: auto;
   height: auto;
-  max-height: 55%;
+  max-width: min(52%, 280px);
+  max-height: 62%;
+  aspect-ratio: 390 / 340;
   object-fit: contain;
+  object-position: center;
   opacity: 0.92;
   filter: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.45));
   animation: radio-logo-breathe 4.5s ease-in-out infinite;
