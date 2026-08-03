@@ -2,7 +2,7 @@
  * Validation + anti-spam Contact (honeypot, captcha HMAC, filtres, rate-limit).
  */
 
-import { appendFileSync, mkdirSync, existsSync } from "node:fs";
+import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createHmac, randomInt, timingSafeEqual, randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INBOX_DIR = join(__dirname, "data");
 const INBOX_FILE = join(INBOX_DIR, "contact-messages.jsonl");
+const DEFAULT_RETENTION_DAYS = 365;
 
 const NAME_RE = /^[\p{L}\p{M}\s.''-]{2,80}$/u;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -241,20 +242,66 @@ export function validateContactPayload(body, { minFillMs = 2500 } = {}) {
   };
 }
 
-export function appendContactInbox(entry) {
+export function purgeContactInbox({ maxAgeDays = DEFAULT_RETENTION_DAYS } = {}) {
+  const days = Number(maxAgeDays);
+  const retentionDays =
+    Number.isFinite(days) && days > 0 ? days : DEFAULT_RETENTION_DAYS;
+  if (!existsSync(INBOX_FILE)) {
+    return { removed: 0, kept: 0 };
+  }
+
+  const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  const raw = readFileSync(INBOX_FILE, "utf8");
+  const lines = raw.split("\n").filter((line) => line.trim());
+  const kept = [];
+  let removed = 0;
+
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      const ts = Date.parse(entry?.at);
+      if (Number.isFinite(ts) && ts < cutoff) {
+        removed += 1;
+        continue;
+      }
+      kept.push(line);
+    } catch {
+      kept.push(line);
+    }
+  }
+
+  if (removed > 0) {
+    writeFileSync(INBOX_FILE, kept.length ? `${kept.join("\n")}\n` : "", "utf8");
+  }
+  return { removed, kept: kept.length, retentionDays };
+}
+
+export function appendContactInbox(entry, { retentionDays } = {}) {
   if (!existsSync(INBOX_DIR)) {
     mkdirSync(INBOX_DIR, { recursive: true });
   }
   appendFileSync(INBOX_FILE, `${JSON.stringify(entry)}\n`, "utf8");
+  try {
+    purgeContactInbox({
+      maxAgeDays:
+        retentionDays ??
+        Number(process.env.CONTACT_RETENTION_DAYS || DEFAULT_RETENTION_DAYS),
+    });
+  } catch (err) {
+    console.warn("[Hakou Contact] purge inbox", err?.message || err);
+  }
 }
 
 export async function deliverContactEmail(env, data) {
-  const to = String(env.CONTACT_TO || "vincent.chauvaux@gmail.com").trim();
+  const to = String(env.CONTACT_TO || "").trim();
   const host = String(env.CONTACT_SMTP_HOST || "").trim();
   const user = String(env.CONTACT_SMTP_USER || "").trim();
   const pass = String(env.CONTACT_SMTP_PASS || "").trim();
   const port = Number(env.CONTACT_SMTP_PORT || 465);
 
+  if (!to) {
+    return { sent: false, reason: "contact_to_missing" };
+  }
   if (!host || !user || !pass) {
     return { sent: false, reason: "smtp_unconfigured" };
   }

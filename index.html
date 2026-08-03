@@ -144,6 +144,12 @@
         <div class="panel-card soundcloud-card">
           <p class="card-title">Profil SoundCloud — hakou</p>
           <div class="soundcloud-embed">
+            <div class="consent-placeholder" data-consent-placeholder hidden>
+              <p>Lecteur SoundCloud désactivé tant que les médias tiers ne sont pas acceptés.</p>
+              <button type="button" class="panel-btn panel-btn--primary" data-consent-enable>
+                Activer les médias
+              </button>
+            </div>
             <iframe
               title="Lecteur SoundCloud — hakou"
               width="100%"
@@ -151,7 +157,8 @@
               scrolling="no"
               frameborder="no"
               allow="autoplay"
-              src="https://w.soundcloud.com/player/?visual=true&amp;url=https%3A%2F%2Fapi.soundcloud.com%2Fusers%2F4170372&amp;show_artwork=true&amp;color=%237f9dff"
+              src="about:blank"
+              data-consent-src="https://w.soundcloud.com/player/?visual=true&amp;url=https%3A%2F%2Fapi.soundcloud.com%2Fusers%2F4170372&amp;show_artwork=true&amp;color=%237f9dff"
             ></iframe>
           </div>
           <p class="embed-source">
@@ -195,6 +202,15 @@
               </div>
               <div class="radio-player" id="radio-player">
                 <div class="radio-player__frame" id="radio-player-frame">
+                  <div class="consent-placeholder" data-consent-placeholder hidden>
+                    <p>
+                      YouTube (live / playlist) nécessite l’accord médias tiers.
+                      Le live studio Hakou reste disponible sans cet accord.
+                    </p>
+                    <button type="button" class="panel-btn panel-btn--primary" data-consent-enable>
+                      Activer les médias
+                    </button>
+                  </div>
                   <p class="radio-player__empty" id="radio-player-empty">
                     Playlist Hakou Mix — ou live dès qu’un mix est en cours.
                   </p>
@@ -221,6 +237,12 @@
             <header class="radio-chat__header">
               <p class="radio-chat__title">Chat</p>
             </header>
+            <p class="radio-chat__legal">
+              Messages publics. Pseudo par défaut dérivé de l’IP (modifiable).
+              <a href="./legal/cgu.html">Règles</a>
+              ·
+              <a href="./legal/confidentialite.html">Confidentialité</a>
+            </p>
             <div class="radio-chat__log" id="radio-chat-log" role="log" aria-live="polite"></div>
             <form class="radio-chat__form" id="radio-chat-form">
               <div class="radio-chat__identity">
@@ -319,8 +341,15 @@
               aria-label="Fil Instagram @hakoulik"
             >
               <div class="instagram-embed-panel__scroll">
+                <div class="consent-placeholder" data-consent-placeholder hidden>
+                  <p>Embed Instagram désactivé sans consentement médias tiers.</p>
+                  <button type="button" class="panel-btn panel-btn--primary" data-consent-enable>
+                    Activer les médias
+                  </button>
+                </div>
                 <iframe
-                  src="https://www.instagram.com/hakoulik/embed"
+                  src="about:blank"
+                  data-consent-src="https://www.instagram.com/hakoulik/embed"
                   title="Fil Instagram @hakoulik"
                   width="100%"
                   height="500"
@@ -716,6 +745,12 @@
                 hidden
               ></div>
             </div>
+            <p class="contact-form__legal">
+              En envoyant, tu acceptes le traitement de ton message (nom, e-mail,
+              contenu) pour y répondre, ainsi que l’IP / User-Agent anti-spam,
+              conservés au plus <strong>12 mois</strong>. Détails :
+              <a href="./legal/confidentialite.html">confidentialité</a>.
+            </p>
             <button
               type="submit"
               id="contact-form-submit"
@@ -725,6 +760,15 @@
             </button>
             <p id="contact-form-status" class="contact-form__status" hidden></p>
           </form>
+          <nav class="legal-links" aria-label="Informations légales">
+            <a href="./legal/mentions.html">Mentions légales</a>
+            <a href="./legal/confidentialite.html">Confidentialité</a>
+            <a href="./legal/cookies.html">Cookies</a>
+            <a href="./legal/cgu.html">CGU</a>
+            <button type="button" class="legal-links__btn" id="cookie-prefs-open">
+              Gérer les cookies
+            </button>
+          </nav>
         </div>
       </section>
     </div>
@@ -803,8 +847,15 @@
           Galerie Instagram
         </p>
         <div class="instagram-modal__body instagram-profile-modal__scroll">
+          <div class="consent-placeholder" data-consent-placeholder hidden>
+            <p>Profil Instagram désactivé sans consentement médias tiers.</p>
+            <button type="button" class="panel-btn panel-btn--primary" data-consent-enable>
+              Activer les médias
+            </button>
+          </div>
           <iframe
-            src="https://www.instagram.com/hakoulik/embed"
+            src="about:blank"
+            data-consent-src="https://www.instagram.com/hakoulik/embed"
             title="Profil Instagram"
             loading="lazy"
           ></iframe>
@@ -818,6 +869,7 @@
       </div>
     </div>
 
+    <script src="./consent.js" defer></script>
     <script src="./youtube-videos.js" defer></script>
     <script src="./radio.js" defer></script>
     <script src="./radio-chat.js" defer></script>

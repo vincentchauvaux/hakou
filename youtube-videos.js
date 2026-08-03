@@ -272,6 +272,17 @@
     closeBtn?.addEventListener("click", closeModal);
   }
 
+  function showVideoConsentGate(grid) {
+    if (!grid || grid.querySelector("[data-consent-placeholder]")) return;
+    const box = document.createElement("div");
+    box.className = "consent-placeholder";
+    box.dataset.consentPlaceholder = "";
+    box.innerHTML =
+      "<p>Vignettes et lecteurs YouTube désactivés sans accord médias tiers.</p>" +
+      '<button type="button" class="panel-btn panel-btn--primary" data-consent-enable>Activer les médias</button>';
+    grid.prepend(box);
+  }
+
   function init() {
     try {
       initVideoModal();
@@ -295,9 +306,29 @@
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
+  function start() {
+    const grid = document.querySelector("#video .video-grid");
+    if (!window.HakouConsent?.hasMedia?.()) {
+      try {
+        initVideoModal();
+      } catch (err) {
+        console.error(`${LOG_PREFIX} Modal vidéo.`, err);
+      }
+      showVideoConsentGate(grid);
+      window.HakouConsent?.onMediaReady?.(() => {
+        grid?.querySelectorAll("[data-consent-placeholder]").forEach((el) => {
+          el.remove();
+        });
+        init();
+      });
+      return;
+    }
     init();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
   }
 })();

@@ -354,7 +354,6 @@ app.post("/api/contact", async (req, res) => {
       ok: true,
       delivered: false,
       queued: true,
-      to: CONTACT_TO,
     });
   } catch (err) {
     console.error("[Hakou Studio] contact mail", err.message || err);
@@ -396,7 +395,7 @@ app.get("/api/studio/ingest", (req, res) => {
 app.get("/api/auth/config", (_req, res) => {
   res.json({
     googleClientId: GOOGLE_CLIENT_ID || null,
-    allowedHint: [...ALLOWED_EMAILS][0] || null,
+    googleConfigured: Boolean(GOOGLE_CLIENT_ID),
   });
 });
 

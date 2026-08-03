@@ -897,9 +897,41 @@
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
+  function showInstagramConsentGate(grid) {
+    if (!grid) return;
+    grid.classList.add("instagram-grid--empty");
+    grid.classList.remove("instagram-grid--loading", "instagram-grid--has-posts");
+    if (grid.querySelector("[data-consent-placeholder]")) return;
+    const box = document.createElement("div");
+    box.className = "consent-placeholder";
+    box.dataset.consentPlaceholder = "";
+    box.innerHTML =
+      "<p>Galerie Instagram (embeds / miniatures Meta) désactivée sans accord médias tiers.</p>" +
+      '<button type="button" class="panel-btn panel-btn--primary" data-consent-enable>Activer les médias</button>';
+    grid.replaceChildren(box);
   }
+
+  function boot() {
+    const start = () => {
+      if (!window.HakouConsent?.hasMedia?.()) {
+        const grid = document.getElementById("instagram-grid");
+        showInstagramConsentGate(grid);
+        if (window.HakouConsent?.onMediaReady) {
+          window.HakouConsent.onMediaReady(() => {
+            init().catch((err) => console.error(LOG_PREFIX, err));
+          });
+        }
+        return;
+      }
+      init().catch((err) => console.error(LOG_PREFIX, err));
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", start);
+    } else {
+      start();
+    }
+  }
+
+  boot();
 })();

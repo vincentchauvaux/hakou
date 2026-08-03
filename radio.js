@@ -67,6 +67,21 @@
     }
   }
 
+  function hasMediaConsent() {
+    return window.HakouConsent?.hasMedia?.() === true;
+  }
+
+  function showMediaBlocked(frame, emptyEl, title) {
+    showEmpty(
+      frame,
+      emptyEl,
+      title ||
+        "YouTube désactivé — accepte les médias tiers (bandeau cookies) ou utilise le live studio."
+    );
+    const ph = frame?.querySelector("[data-consent-placeholder]");
+    if (ph) ph.hidden = false;
+  }
+
   function setStatus(state, title) {
     const status = $("radio-status");
     const badge = $("radio-status-badge");
@@ -343,6 +358,8 @@
   }
 
   async function playStudioLive(frame, emptyEl, { hlsUrl, whepUrl, title }) {
+    const ph = frame?.querySelector("[data-consent-placeholder]");
+    if (ph) ph.hidden = true;
     const whep =
       (typeof whepUrl === "string" && whepUrl.trim()) ||
       whepUrlFromHls(hlsUrl);
@@ -360,6 +377,8 @@
   function playVideo(frame, emptyEl, videoId, title) {
     if (!frame || !videoId) return;
     clearFrame(frame);
+    const ph = frame.querySelector("[data-consent-placeholder]");
+    if (ph) ph.hidden = true;
     if (emptyEl) emptyEl.hidden = true;
 
     const iframe = document.createElement("iframe");
@@ -376,6 +395,8 @@
   function playPlaylist(frame, emptyEl, playlistId, title) {
     if (!frame || !playlistId) return;
     clearFrame(frame);
+    const ph = frame.querySelector("[data-consent-placeholder]");
+    if (ph) ph.hidden = true;
     if (emptyEl) emptyEl.hidden = true;
 
     const iframe = document.createElement("iframe");
@@ -545,11 +566,23 @@
     } else if (liveId) {
       mode = "yt-live";
       setStatus("live", liveTitle);
-      playVideo(frame, emptyEl, liveId, liveTitle);
+      if (!hasMediaConsent()) {
+        showMediaBlocked(frame, emptyEl);
+      } else {
+        playVideo(frame, emptyEl, liveId, liveTitle);
+      }
     } else if (playlistId) {
       mode = "playlist";
       setStatus("offline", playlistTitle);
-      playPlaylist(frame, emptyEl, playlistId, playlistTitle);
+      if (!hasMediaConsent()) {
+        showMediaBlocked(
+          frame,
+          emptyEl,
+          "Playlist YouTube en attente d’accord médias tiers."
+        );
+      } else {
+        playPlaylist(frame, emptyEl, playlistId, playlistTitle);
+      }
     } else {
       setStatus("offline", "Prochain set à venir");
       showEmpty(
@@ -610,9 +643,19 @@
     pollTimer = setInterval(refresh, POLL_MS);
   }
 
+  function boot() {
+    init().catch((err) => console.warn(LOG, err));
+    if (window.HakouConsent?.onMediaReady) {
+      window.HakouConsent.onMediaReady(() => {
+        lastAppliedKey = "";
+        refresh().catch((err) => console.warn(LOG, err));
+      });
+    }
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", boot);
   } else {
-    init();
+    boot();
   }
 })();

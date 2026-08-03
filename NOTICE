@@ -1,0 +1,17 @@
+Hakou — third-party notices
+===========================
+
+This site loads the following open-source libraries (CDN):
+
+- three.js (https://github.com/mrdoob/three.js) — MIT License
+  Version referenced: 0.165.0 via jsDelivr
+
+- hls.js (https://github.com/video-dev/hls.js) — Apache License 2.0
+  Version referenced: 1.5.17 via jsDelivr
+
+Studio server dependencies (see studio/package.json) include Express (MIT),
+cookie-parser (MIT), google-auth-library (Apache-2.0), nodemailer (MIT-0),
+and ws (MIT).
+
+SoundCloud, YouTube and Instagram embeds remain subject to their respective
+terms of service and are only loaded after visitor consent.

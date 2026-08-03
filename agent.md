@@ -2,6 +2,26 @@
 
 
 
+## Revue juridique (août 2026)
+
+- **Compte rendu** : canvas Cursor [`revue-juridique-hakou.canvas.tsx`](/Users/hakou/.cursor/projects/Users-hakou-hakou/canvases/revue-juridique-hakou.canvas.tsx) (analyse code, **pas** un avis d’avocat).
+- **Juridiction probable** : BE/UE (domaine `.be`, VPS OVH) + sous-traitants US (GitHub Pages, Google, Meta) si embeds acceptés.
+
+### Mise en conformité (plan d’action — août 2026)
+
+| Priorité | Livrable | Fichiers |
+|----------|----------|----------|
+| **P0** | Pages légales | [`legal/mentions.html`](legal/mentions.html), [`legal/confidentialite.html`](legal/confidentialite.html), [`legal/cookies.html`](legal/cookies.html), [`legal/cgu.html`](legal/cgu.html), [`legal/legal.css`](legal/legal.css) |
+| **P0** | Bannière cookies + médias différés | [`consent.js`](consent.js) ; SoundCloud / IG `data-consent-src` ; gates YouTube / Radio YT / Instagram dans `youtube-videos.js`, `radio.js`, `instagram-gallery.js` ; liens Contact + « Gérer les cookies » |
+| **P1** | Chat / Contact informés | Notice chat (pseudo ↔ IP) + liens CGU ; notice RGPD avant submit Contact |
+| **P1** | Durcissement données | `allowedEmails` retiré de [`content/auth-config.json`](content/auth-config.json) (allowlist = `ALLOWED_EMAILS` serveur uniquement) ; plus de `allowedHint` / `to: CONTACT_TO` dans les JSON API ; purge inbox `CONTACT_RETENTION_DAYS` (défaut 365) dans [`studio/contact.mjs`](studio/contact.mjs) |
+| **P2** | Licence & notices | [`LICENSE`](LICENSE) (MIT), [`NOTICE`](NOTICE) (Three.js MIT, hls.js Apache-2.0) |
+
+- **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
+- **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
+
+
+
 ## Navigation (`navigation.js`)
 
 
@@ -155,6 +175,8 @@
 | `radio-chat.js` | Chat public Radio (WebSocket VPS) : pseudo `Visiteur-xxxx` dérivé IP (éditable), messages texte/emoji, présence. **Téléphone (≤680px)** : composer 1 ligne (champ + Envoyer), chat plus court, padding bas Radio renforcé, bouton INTRO masqué sur Radio |
 
 | `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |
+| `consent.js` | Bannière cookies (`hakou-consent-v1`) ; monte `data-consent-src` ; callbacks `HakouConsent.onMediaReady` |
+| `legal/` | Mentions, confidentialité, cookies, CGU (pages statiques) |
 
 | `content/contact-config.json` | `contactApi`, parties e-mail (`emailUser` / `emailDomain`) |
 
@@ -321,7 +343,7 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Ne
 - **UI** (`#intro-gate`) : hit-area `#intro-enter` centrée, hint « Cliquer le logo pour entrer », bouton `#intro-login` haut-droite. Bouton **`#intro-replay`** bas-gauche (petit, visible seulement si `data-intro="done"`) → `replayIntroGate()` : clear `sessionStorage`, `goToSectionIndex(0)`, réaffiche le gate 3D.
 - **État** : `body[data-intro="pending"|"playing"|"done"]` masque nav / échelle / overlay pendant pending+playing. `sessionStorage` clé `hakou-intro-done` : skip au refresh de session. `setNavigationLocked(true)` bloque molette / clavier / touch / menu. **Menu latéral** : scrollbar masquée aussi en laptop compact (`scrollbar-width: none` / `::-webkit-scrollbar`).
 - **Auth Google (Étape 2)** :
-  - Client : [`auth-client.js`](auth-client.js) + GIS ; config publique [`content/auth-config.json`](content/auth-config.json) — **Client ID** renseigné (`245439358451-…apps.googleusercontent.com`), `authApiBase` / `studioUrl` → `https://vps-e09ed6db.vps.ovh.net/hakou-studio`, allowlist `vincent.chauvaux@gmail.com` + `anaismotquin@gmail.com`.
+  - Client : [`auth-client.js`](auth-client.js) + GIS ; config publique [`content/auth-config.json`](content/auth-config.json) — **Client ID** renseigné (`245439358451-…apps.googleusercontent.com`), `authApiBase` / `studioUrl` → `https://vps-e09ed6db.vps.ovh.net/hakou-studio` (**pas** d’e-mails allowlist dans le JSON public ; allowlist = `ALLOWED_EMAILS` sur le VPS uniquement).
   - Serveur VPS : `/opt/hakou-studio` (code + `pm2` `hakou-studio` :8787). `POST /api/auth/google` vérifie l’ID token GIS, cookie HttpOnly `SameSite=None; Secure` path `/hakou-studio`. Chat public : [`studio/radio-chat.mjs`](studio/radio-chat.mjs) WebSocket `/api/radio/chat` — origines CORS, rate-limit, sanitisation, plafond IP/clients.
   - **Secrets** : `GOOGLE_CLIENT_SECRET` + `SESSION_SECRET` uniquement dans `/opt/hakou-studio/.env` (`chmod 600`, hors git). Le JSON `client_secret_*.json` Google ne doit **jamais** être committer (`.gitignore`).
   - Nginx : snippet `/etc/nginx/snippets/hakou-studio.conf` (`location /hakou-studio/` → `127.0.0.1:8787`), `include` dans le vhost HTTPS `streamtv` (`vps-e09ed6db.vps.ovh.net`). Exemple repo : [`studio/deploy/nginx-hakou-studio.conf.example`](studio/deploy/nginx-hakou-studio.conf.example).
