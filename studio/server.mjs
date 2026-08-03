@@ -57,6 +57,12 @@ const YOUTUBE_API_KEY = env.YOUTUBE_API_KEY || "";
 const RADIO_CHANNEL_ID =
   env.RADIO_CHANNEL_ID || "UCmm1lsi4IS7RzwFFhIax3ug";
 const RADIO_CHANNEL_HANDLE = env.RADIO_CHANNEL_HANDLE || "@MrEtibaliomecus";
+const TWITCH_LOGIN = String(env.TWITCH_LOGIN || "")
+  .trim()
+  .replace(/^@/, "")
+  .toLowerCase();
+const TWITCH_CLIENT_ID = String(env.TWITCH_CLIENT_ID || "").trim();
+const TWITCH_CLIENT_SECRET = String(env.TWITCH_CLIENT_SECRET || "").trim();
 const MEDIAMTX_PATH = env.MEDIAMTX_PATH || "hakou";
 const MEDIAMTX_API_BASE = env.MEDIAMTX_API_BASE || "http://127.0.0.1:9997";
 const MEDIAMTX_API_USER = env.MEDIAMTX_API_USER || "api";
@@ -202,13 +208,16 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-/** Public — statut live + archives pour la page Radio (tous les visiteurs). */
-app.get("/api/radio/status", async (_req, res) => {
+/** Public — statut live Stream (studio / Twitch / YouTube) pour hakou.be. */
+async function sendStreamStatus(_req, res) {
   try {
     const status = await getRadioStatus({
       channelId: RADIO_CHANNEL_ID,
       channelHandle: RADIO_CHANNEL_HANDLE,
       youtubeApiKey: YOUTUBE_API_KEY || undefined,
+      twitchLogin: TWITCH_LOGIN || undefined,
+      twitchClientId: TWITCH_CLIENT_ID || undefined,
+      twitchClientSecret: TWITCH_CLIENT_SECRET || undefined,
       mediamtxApiBase: MEDIAMTX_API_BASE,
       mediamtxPath: MEDIAMTX_PATH,
       mediamtxApiUser: MEDIAMTX_API_USER,
@@ -219,20 +228,24 @@ app.get("/api/radio/status", async (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=15");
     res.json(status);
   } catch (err) {
-    console.error("[Hakou Studio] radio status", err.message || err);
+    console.error("[Hakou Studio] stream status", err.message || err);
     res.status(502).json({
       ok: false,
       live: false,
+      studioLive: false,
+      twitchLive: false,
       liveVideoId: null,
       liveTitle: null,
       hlsUrl: null,
       whepUrl: null,
       archives: [],
-      error: "statut radio indisponible",
+      error: "statut stream indisponible",
     });
   }
-});
+}
 
+app.get("/api/stream/status", sendStreamStatus);
+app.get("/api/radio/status", sendStreamStatus);
 /**
  * Public — challenge anti-spam arithmétique (HMAC, usage unique).
  * Chemin volontairement sans « captcha » (souvent filtré par bloqueurs pub).

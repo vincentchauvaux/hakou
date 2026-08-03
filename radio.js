@@ -7,10 +7,12 @@
   const WATCH_URL = (id) =>
     `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
 
-  const LOG = "[Hakou Radio]";
+  const LOG = "[Hakou Stream]";
   const HLS_CDN = "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js";
   const DEFAULT_PLAYLIST_ID = "PLGIvCy1w5T6Y";
   const DEFAULT_PLAYLIST_TITLE = "Hakou Mix";
+  const TWITCH_WATCH_URL = (login) =>
+    `https://www.twitch.tv/${encodeURIComponent(login)}`;
 
   const PLAYLIST_EMBED_URL = (listId) =>
     `https://www.youtube.com/embed/videoseries?list=${encodeURIComponent(listId)}&rel=0&modestbranding=1`;
@@ -76,7 +78,7 @@
       frame,
       emptyEl,
       title ||
-        "YouTube désactivé — accepte les médias tiers (bandeau cookies) ou utilise le live studio."
+        "YouTube / Twitch désactivés — accepte les médias tiers (bandeau cookies) ou utilise le live studio."
     );
     const ph = frame?.querySelector("[data-consent-placeholder]");
     if (ph) ph.hidden = false;
@@ -410,12 +412,46 @@
     frame.appendChild(iframe);
   }
 
+  /** Parents Twitch embed (domaine courant + hakou.be / localhost). */
+  function twitchParentParams() {
+    const hosts = new Set(["hakou.be", "www.hakou.be", "localhost", "127.0.0.1"]);
+    try {
+      if (location.hostname) hosts.add(location.hostname);
+    } catch {
+      /* ignore */
+    }
+    return [...hosts]
+      .map((h) => `parent=${encodeURIComponent(h)}`)
+      .join("&");
+  }
+
+  function playTwitch(frame, emptyEl, login, title) {
+    if (!frame || !login) return;
+    clearFrame(frame);
+    const ph = frame.querySelector("[data-consent-placeholder]");
+    if (ph) ph.hidden = true;
+    if (emptyEl) emptyEl.hidden = true;
+
+    const iframe = document.createElement("iframe");
+    iframe.src = `https://player.twitch.tv/?channel=${encodeURIComponent(
+      login
+    )}&${twitchParentParams()}&autoplay=true`;
+    iframe.title = title || `Twitch — ${login}`;
+    iframe.allow =
+      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+    iframe.allowFullscreen = true;
+    iframe.loading = "lazy";
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
+    frame.appendChild(iframe);
+  }
+
   function configKey(data) {
     return [
       data.live ? "1" : "0",
-      data.studioLive ? "s" : "y",
+      data.studioLive ? "s" : data.twitchLive ? "t" : "y",
       data.hlsUrl || "",
       data.whepUrl || "",
+      data.twitchLogin || "",
       data.liveVideoId || "",
       data.playlistId || "",
     ].join("|");
@@ -444,7 +480,11 @@
     const channelId = base.channelId || "UCmm1lsi4IS7RzwFFhIax3ug";
     const statusApi =
       base.statusApi ||
-      "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/radio/status";
+      "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/stream/status";
+    const twitchLoginLocal = String(base.twitchLogin || "")
+      .trim()
+      .replace(/^@/, "")
+      .toLowerCase();
 
     let live = Boolean(base.live) && Boolean(base.liveVideoId);
     let liveVideoId = live ? String(base.liveVideoId).trim() : null;
@@ -454,11 +494,16 @@
     let hlsUrl = null;
     let whepUrl = null;
     let studioLive = false;
+    let twitchLive = false;
+    let twitchLogin = twitchLoginLocal || null;
 
     try {
       const remote = await fetchStatusApi(statusApi);
       if (remote && remote.ok !== false) {
         source = remote.source || "status-api";
+        if (typeof remote.twitchLogin === "string" && remote.twitchLogin.trim()) {
+          twitchLogin = remote.twitchLogin.trim().replace(/^@/, "").toLowerCase();
+        }
         if (remote.studioLive && remote.hlsUrl) {
           live = true;
           liveVideoId = null;
@@ -471,6 +516,21 @@
               ? remote.whepUrl.trim()
               : whepUrlFromHls(hlsUrl);
           studioLive = true;
+          twitchLive = false;
+        } else if (remote.twitchLive && (remote.twitchLogin || twitchLogin)) {
+          live = true;
+          liveVideoId = null;
+          liveTitle =
+            (typeof remote.liveTitle === "string" && remote.liveTitle.trim()) ||
+            "Live Twitch";
+          hlsUrl = null;
+          whepUrl = null;
+          studioLive = false;
+          twitchLive = true;
+          twitchLogin = String(remote.twitchLogin || twitchLogin)
+            .trim()
+            .replace(/^@/, "")
+            .toLowerCase();
         } else if (remote.live && remote.liveVideoId) {
           live = true;
           liveVideoId = String(remote.liveVideoId).trim();
@@ -480,6 +540,7 @@
           hlsUrl = null;
           whepUrl = null;
           studioLive = false;
+          twitchLive = false;
         } else {
           live = false;
           liveVideoId = null;
@@ -487,6 +548,7 @@
           hlsUrl = null;
           whepUrl = null;
           studioLive = false;
+          twitchLive = false;
         }
       }
     } catch (err) {
@@ -502,6 +564,8 @@
       hlsUrl,
       whepUrl,
       studioLive,
+      twitchLive,
+      twitchLogin,
       playlistId:
         (typeof base.playlistId === "string" && base.playlistId.trim()) ||
         DEFAULT_PLAYLIST_ID,
@@ -527,15 +591,25 @@
         ? data.whepUrl.trim()
         : whepUrlFromHls(hlsUrl);
     const studioLive = Boolean(data.studioLive) && Boolean(hlsUrl);
+    const twitchLogin =
+      typeof data.twitchLogin === "string" && data.twitchLogin.trim()
+        ? data.twitchLogin.trim().replace(/^@/, "").toLowerCase()
+        : null;
+    const twitchLive = Boolean(data.twitchLive) && Boolean(twitchLogin);
     const ytLive =
       !studioLive &&
+      !twitchLive &&
       Boolean(data.live) &&
       typeof data.liveVideoId === "string" &&
       data.liveVideoId.trim().length > 0;
     const liveId = ytLive ? data.liveVideoId.trim() : null;
     const liveTitle =
       (typeof data.liveTitle === "string" && data.liveTitle.trim()) ||
-      (studioLive ? "Live studio Hakou" : "Mix en direct");
+      (studioLive
+        ? "Live studio Hakou"
+        : twitchLive
+          ? "Live Twitch"
+          : "Mix en direct");
     const playlistId =
       (typeof data.playlistId === "string" && data.playlistId.trim()) ||
       DEFAULT_PLAYLIST_ID;
@@ -563,6 +637,14 @@
           showEmpty(frame, emptyEl, "Flux studio indisponible pour le moment.");
         }
       );
+    } else if (twitchLive) {
+      mode = "twitch";
+      setStatus("live", liveTitle);
+      if (!hasMediaConsent()) {
+        showMediaBlocked(frame, emptyEl, "Twitch en attente d’accord médias tiers.");
+      } else {
+        playTwitch(frame, emptyEl, twitchLogin, liveTitle);
+      }
     } else if (liveId) {
       mode = "yt-live";
       setStatus("live", liveTitle);
@@ -592,11 +674,17 @@
       );
     }
 
-    const channelLink = document.querySelector("#radio .embed-source a");
+    const channelLink = document.querySelector("#stream .embed-source a");
     if (channelLink) {
-      if (mode === "playlist" && playlistId) {
+      if (mode === "twitch" && twitchLogin) {
+        channelLink.href = TWITCH_WATCH_URL(twitchLogin);
+        channelLink.textContent = `twitch.tv/${twitchLogin}`;
+      } else if (mode === "playlist" && playlistId) {
         channelLink.href = PLAYLIST_WATCH_URL(playlistId);
         channelLink.textContent = playlistTitle;
+      } else if (twitchLogin && !liveId) {
+        channelLink.href = TWITCH_WATCH_URL(twitchLogin);
+        channelLink.textContent = `twitch.tv/${twitchLogin}`;
       } else if (data.channelHandle) {
         const handle = String(data.channelHandle).replace(/^@/, "");
         channelLink.href = `https://www.youtube.com/@${handle}`;
@@ -608,26 +696,30 @@
       LOG,
       mode === "studio"
         ? `studio ${prefersStudioWebRtc() ? "WHEP" : "HLS"} ${prefersStudioWebRtc() ? whepUrl || hlsUrl : hlsUrl}`
-        : mode === "yt-live"
-          ? `live ${liveId}`
-          : mode === "playlist"
-            ? `playlist ${playlistId}`
-            : "empty",
+        : mode === "twitch"
+          ? `twitch ${twitchLogin}`
+          : mode === "yt-live"
+            ? `live ${liveId}`
+            : mode === "playlist"
+              ? `playlist ${playlistId}`
+              : "empty",
       {
         source: data.source || "local",
         watch:
-          mode === "playlist"
-            ? PLAYLIST_WATCH_URL(playlistId)
-            : liveId
-              ? WATCH_URL(liveId)
-              : null,
+          mode === "twitch" && twitchLogin
+            ? TWITCH_WATCH_URL(twitchLogin)
+            : mode === "playlist"
+              ? PLAYLIST_WATCH_URL(playlistId)
+              : liveId
+                ? WATCH_URL(liveId)
+                : null,
       }
     );
   }
 
   async function refresh() {
     try {
-      if (!$("radio")) return;
+      if (!$("radio-player") && !$("stream")) return;
       const base = await loadRadioConfig();
       const data = await resolveRadioData(base || {});
       applyConfig(data);

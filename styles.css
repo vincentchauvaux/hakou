@@ -1465,15 +1465,15 @@ audio {
   font-size: 0.85rem;
 }
 
-#radio.panel > .radio-layout {
+#stream.panel > .radio-layout {
   max-width: none;
   width: 100%;
   align-self: stretch;
 }
 
 /* Radio : toute la largeur utile (échelle → menu), pas le cadre 520px des autres panels */
-#radio.panel.panel--frame-left,
-#radio.panel.panel--frame-right {
+#stream.panel.panel--frame-left,
+#stream.panel.panel--frame-right {
   width: calc(
     100vw - var(--solar-scale-gutter) - var(--side-nav-gutter) -
       clamp(16px, 2.2vw, 36px)
@@ -1485,21 +1485,21 @@ audio {
   text-align: left;
 }
 
-#radio.panel .panel-lead {
+#stream.panel .panel-lead {
   max-width: min(560px, 100%);
   align-self: flex-start;
 }
 
-#radio.panel.panel--frame-right .panel-lead,
-#radio.panel.panel--frame-right .radio-layout,
-#radio.panel.panel--frame-right .radio-card {
+#stream.panel.panel--frame-right .panel-lead,
+#stream.panel.panel--frame-right .radio-layout,
+#stream.panel.panel--frame-right .radio-card {
   align-self: stretch;
   width: 100%;
 }
 
-#radio.panel.panel--frame-right h1,
-#radio.panel.panel--frame-right h2,
-#radio.panel.panel--frame-right p {
+#stream.panel.panel--frame-right h1,
+#stream.panel.panel--frame-right h2,
+#stream.panel.panel--frame-right p {
   margin-left: 0;
 }
 
@@ -1708,8 +1708,8 @@ audio {
 }
 
 @media (max-width: 680px) {
-  #radio.panel.panel--frame-left,
-  #radio.panel.panel--frame-right {
+  #stream.panel.panel--frame-left,
+  #stream.panel.panel--frame-right {
     width: min(100%, 94vw);
     margin-left: auto;
     margin-right: auto;
@@ -2886,7 +2886,7 @@ body.youtube-video-modal-open {
   }
 
   #son.panel.is-active,
-  #radio.panel.is-active,
+  #stream.panel.is-active,
   #video.panel.is-active,
   #visuel.panel.is-active,
   #plugin.panel.is-active {
@@ -2953,7 +2953,7 @@ body.youtube-video-modal-open {
   }
 
   /* Sur Radio, INTRO recouvrait le champ message — on le range */
-  body:has(#radio.panel.is-active) .intro-replay {
+  body:has(#stream.panel.is-active) .intro-replay {
     opacity: 0;
     pointer-events: none;
   }
@@ -3272,7 +3272,7 @@ body.youtube-video-modal-open {
   }
 
   /* Radio + chat : assez d’air pour scroller Envoyer au-dessus de la nav */
-  #radio.panel.is-active {
+  #stream.panel.is-active {
     padding-bottom: calc(
       var(--mobile-chrome-bottom) + min(150px, 24vh)
     );

@@ -105,7 +105,7 @@
           <p id="cookie-banner-title" class="cookie-banner__title">Cookies &amp; médias tiers</p>
           <p class="cookie-banner__text">
             Hakou utilise un stockage local essentiel (navigation, chat, préférences).
-            Les lecteurs YouTube, SoundCloud et Instagram ne se chargent qu’avec votre accord.
+            Les lecteurs YouTube, Twitch, SoundCloud et Instagram ne se chargent qu’avec votre accord.
             <a href="./legal/cookies.html">En savoir plus</a>
             ·
             <a href="./legal/confidentialite.html">Confidentialité</a>

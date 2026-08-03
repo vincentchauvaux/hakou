@@ -38,9 +38,11 @@ Console Google (OAuth) :
 
 ## Statut Radio public
 
-`GET /api/radio/status` — **sans auth**, CORS vers hakou.be. Priorité : **studio MediaMTX** (HLS) → live YouTube Public → archives RSS.
+`GET /api/stream/status` (alias `/api/radio/status`) — **sans auth**, CORS vers hakou.be. Priorité : **studio MediaMTX** (HLS) → **Twitch live** (Helix) → live YouTube Public → archives / playlist.
 
-## Chat Radio public
+Twitch : `TWITCH_LOGIN` + `TWITCH_CLIENT_ID` + `TWITCH_CLIENT_SECRET` dans `.env` (app Twitch → client credentials). Sans secret, Twitch est ignoré.
+
+## Chat Stream public
 
 WebSocket `wss://…/hakou-studio/api/radio/chat` (`studio/radio-chat.mjs`) — sans auth. Pseudo défaut `Visiteur-xxxx` (hash IP + `SESSION_SECRET`). **Sécurité** : origines CORS strictes, `maxPayload` 2 Ko, max 3 sockets / IP, 200 clients, rate-limit messages/pseudos, sanitisation Unicode (pas d’HTML), kick après abus. Client : `textContent` uniquement.
 
@@ -50,5 +52,5 @@ WebSocket `wss://…/hakou-studio/api/radio/chat` (`studio/radio-chat.mjs`) — 
 2. Nginx : [`deploy/nginx-hakou-live.conf.example`](deploy/nginx-hakou-live.conf.example) → `/etc/nginx/snippets/hakou-live.conf` + `include` dans le vhost HTTPS.
 3. Ouvrir **UDP 8189** (ICE WebRTC).
 4. Dans `studio/.env` : `MEDIAMTX_PUBLISH_PASS`, `MEDIAMTX_API_PASS` (identiques à la config MediaMTX).
-5. Studio connecté → « Passer en direct » → WHIP ; Radio hakou.be lit `…/hakou-live/hls/hakou/index.m3u8`.
+5. Studio connecté → « Passer en direct » → WHIP ; Stream hakou.be lit `…/hakou-live/hls/hakou/index.m3u8`.
 

@@ -1,15 +1,16 @@
 /**
- * Statut Radio YouTube (live + archives) — public, sans auth.
- * Utilisé par GET /api/radio/status pour hakou.be (tous les visiteurs).
+ * Statut Stream (studio / Twitch / YouTube) — public, sans auth.
+ * Utilisé par GET /api/stream/status (alias /api/radio/status) pour hakou.be.
  */
 
 const DEFAULT_CHANNEL_ID = "UCmm1lsi4IS7RzwFFhIax3ug";
 const DEFAULT_HANDLE = "@MrEtibaliomecus";
 const ARCHIVE_MAX = 8;
 const CACHE_TTL_MS = 45_000;
-const ARCHIVE_KEYWORDS = /\b(set|mix|radio|dj|live|techno|hard|gaming)\b/i;
+const ARCHIVE_KEYWORDS = /\b(set|mix|radio|dj|live|techno|hard|gaming|stream)\b/i;
 
-let cache = { at: 0, yt: null };
+let cache = { at: 0, yt: null, twitch: null, twitchAt: 0 };
+let twitchTokenCache = { token: null, exp: 0 };
 
 function extractJsonObject(html, marker) {
   const idx = html.indexOf(marker);
@@ -255,9 +256,70 @@ async function detectStudioLive(opts = {}) {
       audioOnly: !hlsVideo,
     };
   } catch (err) {
-    console.warn("[Hakou Radio] MediaMTX:", err.message || err);
+    console.warn("[Hakou Stream] MediaMTX:", err.message || err);
     return null;
   }
+}
+
+async function getTwitchAppToken(clientId, clientSecret) {
+  if (
+    twitchTokenCache.token &&
+    Date.now() < twitchTokenCache.exp - 60_000
+  ) {
+    return twitchTokenCache.token;
+  }
+  const res = await fetch("https://id.twitch.tv/oauth2/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: "client_credentials",
+    }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.access_token) {
+    throw new Error(body?.message || `Twitch token HTTP ${res.status}`);
+  }
+  twitchTokenCache = {
+    token: body.access_token,
+    exp: Date.now() + Number(body.expires_in || 3600) * 1000,
+  };
+  return twitchTokenCache.token;
+}
+
+/**
+ * @returns {{ login: string, title: string, gameName: string|null, viewerCount: number|null } | null}
+ */
+async function detectTwitchLive({ login, clientId, clientSecret }) {
+  const userLogin = String(login || "")
+    .trim()
+    .replace(/^@/, "")
+    .toLowerCase();
+  if (!userLogin || !clientId || !clientSecret) return null;
+
+  const token = await getTwitchAppToken(clientId, clientSecret);
+  const url = new URL("https://api.twitch.tv/helix/streams");
+  url.searchParams.set("user_login", userLogin);
+  const res = await fetch(url, {
+    headers: {
+      "Client-ID": clientId,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(body?.message || `Twitch streams HTTP ${res.status}`);
+  }
+  const stream = Array.isArray(body.data) ? body.data[0] : null;
+  if (!stream || stream.type !== "live") return null;
+  return {
+    login: userLogin,
+    title: stream.title || "Live Twitch",
+    gameName: stream.game_name || null,
+    viewerCount:
+      typeof stream.viewer_count === "number" ? stream.viewer_count : null,
+  };
 }
 
 /**
@@ -265,6 +327,9 @@ async function detectStudioLive(opts = {}) {
  *   channelId?: string,
  *   channelHandle?: string,
  *   youtubeApiKey?: string,
+ *   twitchLogin?: string,
+ *   twitchClientId?: string,
+ *   twitchClientSecret?: string,
  *   mediamtxApiBase?: string,
  *   mediamtxPath?: string,
  *   mediamtxApiUser?: string,
@@ -277,8 +342,35 @@ export async function getRadioStatus(opts = {}) {
   const now = Date.now();
   const channelId = opts.channelId || DEFAULT_CHANNEL_ID;
   const channelHandle = opts.channelHandle || DEFAULT_HANDLE;
+  const twitchLogin = String(opts.twitchLogin || "")
+    .trim()
+    .replace(/^@/, "")
+    .toLowerCase();
 
   const studio = await detectStudioLive(opts);
+
+  let twitch = cache.twitch;
+  if (
+    twitchLogin &&
+    opts.twitchClientId &&
+    opts.twitchClientSecret &&
+    (!twitch || now - cache.twitchAt >= CACHE_TTL_MS)
+  ) {
+    try {
+      twitch = await detectTwitchLive({
+        login: twitchLogin,
+        clientId: opts.twitchClientId,
+        clientSecret: opts.twitchClientSecret,
+      });
+      cache = { ...cache, twitch: twitch || null, twitchAt: now };
+    } catch (err) {
+      console.warn("[Hakou Stream] Twitch:", err.message || err);
+      twitch = null;
+      cache = { ...cache, twitch: null, twitchAt: now };
+    }
+  } else if (!twitchLogin) {
+    twitch = null;
+  }
 
   let yt = cache.yt;
   if (!yt || now - cache.at >= CACHE_TTL_MS) {
@@ -288,7 +380,7 @@ export async function getRadioStatus(opts = {}) {
       live = await detectLiveWithApiKey(channelId, opts.youtubeApiKey);
       if (live) source = "youtube-api";
     } catch (err) {
-      console.warn("[Hakou Radio] API live:", err.message || err);
+      console.warn("[Hakou Stream] API live:", err.message || err);
     }
     if (!live) {
       live = await detectLive(channelId, channelHandle);
@@ -299,7 +391,7 @@ export async function getRadioStatus(opts = {}) {
     try {
       archives = await fetchArchives(channelId, live?.id || null);
     } catch (err) {
-      console.warn("[Hakou Radio] archives RSS:", err.message || err);
+      console.warn("[Hakou Stream] archives RSS:", err.message || err);
     }
 
     yt = {
@@ -309,44 +401,65 @@ export async function getRadioStatus(opts = {}) {
       archives,
       source: live ? source : archives.length ? "rss" : "none",
     };
-    cache = { at: now, yt };
+    cache = { ...cache, at: now, yt };
   }
+
+  const baseMeta = {
+    ok: true,
+    channelId,
+    channelHandle,
+    twitchLogin: twitchLogin || null,
+    archives: yt.archives || [],
+    updatedAt: new Date().toISOString(),
+  };
 
   if (studio) {
     return {
-      ok: true,
-      channelId,
-      channelHandle,
+      ...baseMeta,
       live: true,
       studioLive: true,
+      twitchLive: false,
       liveVideoId: null,
       liveTitle: studio.title,
       hlsUrl: studio.hlsUrl,
       whepUrl: studio.whepUrl || null,
-      archives: yt.archives || [],
-      updatedAt: new Date().toISOString(),
       source: "studio",
       cached: false,
     };
   }
 
+  if (twitch) {
+    return {
+      ...baseMeta,
+      live: true,
+      studioLive: false,
+      twitchLive: true,
+      liveVideoId: null,
+      liveTitle: twitch.title,
+      twitchGameName: twitch.gameName,
+      twitchViewerCount: twitch.viewerCount,
+      hlsUrl: null,
+      whepUrl: null,
+      source: "twitch",
+      cached: now - cache.twitchAt < CACHE_TTL_MS,
+    };
+  }
+
   return {
-    ok: true,
-    channelId,
-    channelHandle,
+    ...baseMeta,
     live: Boolean(yt.live),
     studioLive: false,
+    twitchLive: false,
     liveVideoId: yt.liveVideoId || null,
     liveTitle: yt.liveTitle || null,
     hlsUrl: null,
     whepUrl: null,
-    archives: yt.archives || [],
-    updatedAt: new Date().toISOString(),
     source: yt.source,
     cached: now - cache.at < CACHE_TTL_MS,
   };
 }
 
 export function clearRadioStatusCache() {
-  cache = { at: 0, yt: null };
+  cache = { at: 0, yt: null, twitch: null, twitchAt: 0 };
+  twitchTokenCache = { token: null, exp: 0 };
 }
