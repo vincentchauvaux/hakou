@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=17";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=18";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -2285,10 +2285,9 @@ function makeOceanRoughnessMap(sourceTex) {
   const id = ctx.getImageData(0, 0, w, h);
   const d = id.data;
   for (let i = 0; i < d.length; i += 4) {
-    // Océans clairs (G↑) → roughness basse ; continents sombres → roughness haute.
+    // Océans clairs (G↑) → roughness basse mais pas miroir (évite hot-spot).
     const oceanSmooth = 255 - d[i + 1];
-    // Légèrement remonter le plancher continents pour garder un peu de mat.
-    const rough = Math.min(255, Math.floor(oceanSmooth * 0.92 + 20));
+    const rough = Math.min(255, Math.floor(oceanSmooth * 0.55 + 90));
     d[i] = rough;
     d[i + 1] = rough;
     d[i + 2] = rough;
@@ -2330,18 +2329,19 @@ async function upgradePlanetWithEarthGltf(entry) {
   const earthSpin = new THREE.Group();
   const cloudSpin = new THREE.Group();
 
-  // Physical + IOR eau : Fresnel sur océans (lisses via roughness inversée).
+  // Physical + IOR eau : Fresnel doux (évite le hot-spot Soleil trop ponctuel).
   const earthMat = new THREE.MeshPhysicalMaterial({
     map: dayMap,
     color: 0xffffff,
     roughness: 1,
     roughnessMap: oceanRoughMap || undefined,
-    metalness: 0.08,
+    metalness: 0.04,
     ior: HERO_OCEAN_IOR,
-    reflectivity: 0.55,
-    clearcoat: 0.55,
-    clearcoatRoughness: 0.28,
+    reflectivity: 0.28,
+    clearcoat: 0.22,
+    clearcoatRoughness: 0.55,
     clearcoatRoughnessMap: oceanRoughMap || undefined,
+    specularIntensity: 0.35,
     emissiveMap: dayMap,
     emissive: new THREE.Color(0xffffff),
     emissiveIntensity: 0.05,
