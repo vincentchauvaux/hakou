@@ -2107,8 +2107,20 @@ function prepareGltfTextures(root) {
       if (mat.map) {
         mat.map.colorSpace = THREE.SRGBColorSpace;
         mat.map.anisotropy = 8;
+        // Scène spatiale très sombre : sans émissif la Terre PBR disparaît
+        // à côté des planètes stylisées (emissiveIntensity élevé).
+        if (!mat.emissiveMap) {
+          mat.emissiveMap = mat.map;
+          mat.emissive = new THREE.Color(0xffffff);
+          const isCloud =
+            mat.transparent ||
+            mat.opacity < 0.99 ||
+            /cloud/i.test(mat.name || "");
+          mat.emissiveIntensity = isCloud ? 0.28 : 0.55;
+        }
       }
       if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+      if ("roughness" in mat) mat.roughness = Math.min(mat.roughness ?? 0.8, 0.7);
       mat.needsUpdate = true;
     });
     obj.castShadow = false;
@@ -2125,6 +2137,7 @@ async function upgradePlanetWithEarthGltf(entry) {
   if (!data.gltfUrl || !scene) return;
 
   const loader = new GLTFLoader();
+  if (MeshoptDecoder.ready) await MeshoptDecoder.ready;
   loader.setMeshoptDecoder(MeshoptDecoder);
   const gltf = await loader.loadAsync(data.gltfUrl);
   const source = gltf.scene;
@@ -2190,6 +2203,7 @@ async function upgradePlanetWithEarthGltf(entry) {
   entry.earthSpin = earthSpin;
   entry.moonPivot = moonPivot;
   entry.isGltf = true;
+  console.info("[Hakou 3D] Terre GLB chargée (intro §0 + Lune orbitale).");
 }
 
 function addPlanetEntry(data) {
