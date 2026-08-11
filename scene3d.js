@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "24";
+const PLANET_GLB_V = "25";
 const PLANET_GLB = {
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
@@ -118,7 +118,7 @@ const GLIDE_RADIAL_Y_BREATHE = 0;
 /** Demi-angle max du disque Soleil (rad) — évite le Soleil plein écran hors Contact. */
 /** Plafond angulaire Soleil (rad) — plus élevé en orbites intérieures pour ne pas repousser la caméra hors limite. */
 const SUN_MAX_ANGULAR_BY_SECTION = [
-  0.042, 0.055, 0.05, 0.044, 0.046, 0.055, 0.1, 0.07, 0.11,
+  0.042, 0.055, 0.038, 0.044, 0.046, 0.055, 0.1, 0.07, 0.11,
 ];
 /** Rotation propre planète sur son axe (× spinSpeed × axialScale) — distincte de REST_ORBIT_DRIFT */
 const PLANET_SPIN_SCALE = 0.025;
@@ -203,19 +203,19 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
-    /* §2 Stream / Pluton */
+    /* §2 Stream / Pluton — corps petit → caméra très proche + focale télé */
     planetSide: 1,
-    distScale: 0.72,
-    tangentMul: 0.92,
-    compositionSlide: 0.78,
-    elevation: 0.18,
-    limbElevation: 0.09,
-    horizonLimbOut: 0.97,
-    horizonSkyLift: 0.13,
-    horizonSunBias: 0.14,
-    sunFrameBias: 0.24,
-    orbitSunLift: 0.05,
-    dutch: -0.012,
+    distScale: 0.52,
+    tangentMul: 0.78,
+    compositionSlide: 0.62,
+    elevation: 0.14,
+    limbElevation: 0.08,
+    horizonLimbOut: 0.98,
+    horizonSkyLift: 0.12,
+    horizonSunBias: 0.08,
+    sunFrameBias: 0.16,
+    orbitSunLift: 0.03,
+    dutch: -0.008,
     textAlign: "left",
     panelOffset: "left",
     safeSide: "west",
@@ -332,7 +332,7 @@ const SECTION_FRAMING = [
 ];
 
 /** Focale repos (mm) — Plugin un peu moins télé pour laisser du ciel derrière la Terre. */
-const FOCAL_REST_MM = [42, 34, 38, 32, 36, 48, 46, 50, 54];
+const FOCAL_REST_MM = [42, 34, 52, 32, 36, 48, 46, 50, 54];
 const GLIDE_FOV_DIRECT_START = 0.9;
 const SENSOR_HEIGHT_MM = 24;
 /** Lissage exponentiel FOV — constant pour éviter un saut quand le glide s'arrête. */
@@ -369,7 +369,7 @@ function getHeroSunBiasScale(sectionIndex) {
   if (sectionIndex === 8) return 0.7;
   if (sectionIndex === 7) return 0.38;
   if (sectionIndex === 5) return 0.4;
-  if (sectionIndex === 2 || sectionIndex === 1) return 0.42;
+  if (sectionIndex === 2 || sectionIndex === 1) return 0.32;
   if (sectionIndex >= 6) return 0.55;
   return 0.58;
 }
@@ -379,7 +379,7 @@ function getHeroLookSunLerp(sectionIndex) {
   if (sectionIndex === 8) return 0.05;
   if (sectionIndex === 7) return 0.03;
   if (sectionIndex === 5) return 0.04;
-  if (sectionIndex === 2 || sectionIndex === 1) return 0.035;
+  if (sectionIndex === 2 || sectionIndex === 1) return 0.02;
   if (sectionIndex >= 6) return 0.07;
   return 0.06 + sectionIndex * 0.008;
 }
@@ -462,9 +462,9 @@ const PLANETS = [
     gltfUrl: PLANET_GLB.saturn,
   },
   {
-    name: "Pluto", // panel UI §2 : Radio
+    name: "Pluto", // panel UI §2 Stream — rayon scénique exagéré (réel trop petit pour le héro)
     orbitRadius: scaledOrbit(36),
-    size: Math.max(0.14, sceneRadiusFromEarthRadii(0.186)),
+    size: 0.48,
     color: 0x9080a8,
     emissive: 0x201828,
     accentColor: 0xc8b8d8,
@@ -478,11 +478,11 @@ const PLANETS = [
     heroAngle: 2.78,
     startAngle: 2.78,
     section: 2,
-    camDistMul: 0.95,
-    camLift: 0.08,
-    camTangent: 0.42,
-    atmRadiusMul: 1.015,
-    atmIntensity: 0.07,
+    camDistMul: 0.78,
+    camLift: 0.06,
+    camTangent: 0.32,
+    atmRadiusMul: 1.012,
+    atmIntensity: 0.05,
   },
   {
     name: "Jupiter",
