@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=16";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=17";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -25,6 +25,8 @@ const HERO_CLOUD_RADIUS_MUL = 1.028;
 /** Lumière clé locale (côté Soleil) pour terminateur / ombres Terre intro. */
 const HERO_EARTH_KEY_INTENSITY = 3.2;
 const HERO_EARTH_KEY_DIST_MUL = 14;
+/** IOR eau (MeshPhysical) — Fresnel océans. */
+const HERO_OCEAN_IOR = 1.333;
 
 const SECTION_COUNT = 9;
 const STAR_COUNT = 2800;
@@ -2233,18 +2235,26 @@ function extractHeroMaps(root) {
   let dayMap = null;
   let cloudMap = null;
   let moonMap = null;
+  let roughnessMap = null;
   root.traverse((obj) => {
     if (!obj.isMesh) return;
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
     mats.forEach((mat) => {
-      if (!mat?.map) return;
+      if (!mat) return;
       const name = String(mat.name || "").toLowerCase();
-      if (name.includes("terre")) dayMap = mat.map;
-      if (name.includes("cloud")) cloudMap = mat.map;
-      if (name.includes("lune") || name.includes("moon")) moonMap = mat.map;
+      if (name.includes("terre")) {
+        if (mat.map) dayMap = mat.map;
+        // glTF MR : souvent la specular océans est branchée en roughnessMap.
+        if (mat.roughnessMap) roughnessMap = mat.roughnessMap;
+        else if (mat.metalnessMap) roughnessMap = mat.metalnessMap;
+      }
+      if (name.includes("cloud") && mat.map) cloudMap = mat.map;
+      if ((name.includes("lune") || name.includes("moon")) && mat.map) {
+        moonMap = mat.map;
+      }
     });
   });
-  return { dayMap, cloudMap, moonMap };
+  return { dayMap, cloudMap, moonMap, roughnessMap };
 }
 
 function prepareHeroTexture(tex, { srgb = true } = {}) {
@@ -2253,6 +2263,43 @@ function prepareHeroTexture(tex, { srgb = true } = {}) {
   tex.anisotropy = 8;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Inverse la roughness pour que les océans (souvent clairs en specular) soient lisses.
+ * Canal G glTF MR → roughness Three.js.
+ */
+function makeOceanRoughnessMap(sourceTex) {
+  const img = sourceTex?.image;
+  if (!img || !img.width) return null;
+  const w = img.width;
+  const h = img.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0);
+  const id = ctx.getImageData(0, 0, w, h);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    // Océans clairs (G↑) → roughness basse ; continents sombres → roughness haute.
+    const oceanSmooth = 255 - d[i + 1];
+    // Légèrement remonter le plancher continents pour garder un peu de mat.
+    const rough = Math.min(255, Math.floor(oceanSmooth * 0.92 + 20));
+    d[i] = rough;
+    d[i + 1] = rough;
+    d[i + 2] = rough;
+  }
+  ctx.putImageData(id, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.flipY = sourceTex.flipY;
+  tex.wrapS = sourceTex.wrapS;
+  tex.wrapT = sourceTex.wrapT;
+  tex.anisotropy = 8;
   tex.needsUpdate = true;
   return tex;
 }
@@ -2268,7 +2315,7 @@ async function upgradePlanetWithEarthGltf(entry) {
   const loader = new GLTFLoader();
   const gltf = await loader.loadAsync(data.gltfUrl);
   const source = gltf.scene;
-  const { dayMap, cloudMap, moonMap } = extractHeroMaps(source);
+  const { dayMap, cloudMap, moonMap, roughnessMap } = extractHeroMaps(source);
   if (!dayMap) {
     throw new Error("GLB Earth : texture « terre » introuvable");
   }
@@ -2276,19 +2323,28 @@ async function upgradePlanetWithEarthGltf(entry) {
   prepareHeroTexture(dayMap, { srgb: true });
   prepareHeroTexture(cloudMap, { srgb: true });
   prepareHeroTexture(moonMap, { srgb: true });
+  if (roughnessMap) prepareHeroTexture(roughnessMap, { srgb: false });
+  const oceanRoughMap = roughnessMap ? makeOceanRoughnessMap(roughnessMap) : null;
 
   const earthR = data.size;
   const earthSpin = new THREE.Group();
   const cloudSpin = new THREE.Group();
 
-  const earthMat = new THREE.MeshStandardMaterial({
+  // Physical + IOR eau : Fresnel sur océans (lisses via roughness inversée).
+  const earthMat = new THREE.MeshPhysicalMaterial({
     map: dayMap,
     color: 0xffffff,
-    roughness: 0.82,
-    metalness: 0.04,
+    roughness: 1,
+    roughnessMap: oceanRoughMap || undefined,
+    metalness: 0.08,
+    ior: HERO_OCEAN_IOR,
+    reflectivity: 0.55,
+    clearcoat: 0.55,
+    clearcoatRoughness: 0.28,
+    clearcoatRoughnessMap: oceanRoughMap || undefined,
     emissiveMap: dayMap,
     emissive: new THREE.Color(0xffffff),
-    emissiveIntensity: 0.06,
+    emissiveIntensity: 0.05,
   });
   const earthMesh = new THREE.Mesh(
     new THREE.SphereGeometry(earthR, 64, 48),
@@ -2443,7 +2499,7 @@ async function upgradePlanetWithEarthGltf(entry) {
   entry.heroEarthRadius = earthR;
   entry.isGltf = true;
   console.info(
-    `[Hakou 3D] Terre GLB OK — R=${earthR}, nuages=${hasClouds}, lumière Soleil locale`
+    `[Hakou 3D] Terre GLB OK — R=${earthR}, nuages=${hasClouds}, IOR océans=${HERO_OCEAN_IOR}`
   );
 }
 
