@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=18";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=19";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -2268,39 +2268,58 @@ function prepareHeroTexture(tex, { srgb = true } = {}) {
 }
 
 /**
- * Inverse la roughness pour que les océans (souvent clairs en specular) soient lisses.
- * Canal G glTF MR → roughness Three.js.
+ * Maps eau vs continents à partir de la specular GLB (G clair = océan).
+ * - roughnessMap : continents mats, océans un peu plus lisses (pas miroir)
+ * - clearcoatMap : clearcoat / IOR visibles **uniquement** sur l’eau (R)
  */
-function makeOceanRoughnessMap(sourceTex) {
+function makeOceanWaterMaps(sourceTex) {
   const img = sourceTex?.image;
-  if (!img || !img.width) return null;
+  if (!img || !img.width) return { roughnessMap: null, clearcoatMap: null };
   const w = img.width;
   const h = img.height;
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return null;
-  ctx.drawImage(img, 0, 0);
-  const id = ctx.getImageData(0, 0, w, h);
-  const d = id.data;
-  for (let i = 0; i < d.length; i += 4) {
-    // Océans clairs (G↑) → roughness basse mais pas miroir (évite hot-spot).
-    const oceanSmooth = 255 - d[i + 1];
-    const rough = Math.min(255, Math.floor(oceanSmooth * 0.55 + 90));
-    d[i] = rough;
-    d[i + 1] = rough;
-    d[i + 2] = rough;
+  const canvasR = document.createElement("canvas");
+  const canvasC = document.createElement("canvas");
+  canvasR.width = canvasC.width = w;
+  canvasR.height = canvasC.height = h;
+  const ctxR = canvasR.getContext("2d", { willReadFrequently: true });
+  const ctxC = canvasC.getContext("2d", { willReadFrequently: true });
+  if (!ctxR || !ctxC) return { roughnessMap: null, clearcoatMap: null };
+  ctxR.drawImage(img, 0, 0);
+  const idR = ctxR.getImageData(0, 0, w, h);
+  const idC = ctxC.createImageData(w, h);
+  const dR = idR.data;
+  const dC = idC.data;
+  for (let i = 0; i < dR.length; i += 4) {
+    const g = dR[i + 1];
+    // 0 = continent, 1 = océan
+    const ocean = clamp(g / 255, 0, 1);
+    // Continents : roughness haute ; océans : moyenne (reflet doux, pas hot-spot)
+    const rough = Math.round(255 * (0.92 - ocean * 0.35));
+    dR[i] = rough;
+    dR[i + 1] = rough;
+    dR[i + 2] = rough;
+    dR[i + 3] = 255;
+    // clearcoatMap utilise le canal R — océans seulement
+    const coat = Math.round(255 * ocean * ocean);
+    dC[i] = coat;
+    dC[i + 1] = coat;
+    dC[i + 2] = coat;
+    dC[i + 3] = 255;
   }
-  ctx.putImageData(id, 0, 0);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.NoColorSpace;
-  tex.flipY = sourceTex.flipY;
-  tex.wrapS = sourceTex.wrapS;
-  tex.wrapT = sourceTex.wrapT;
-  tex.anisotropy = 8;
-  tex.needsUpdate = true;
-  return tex;
+  ctxR.putImageData(idR, 0, 0);
+  ctxC.putImageData(idC, 0, 0);
+
+  const mk = (canvas) => {
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.NoColorSpace;
+    tex.flipY = sourceTex.flipY;
+    tex.wrapS = sourceTex.wrapS;
+    tex.wrapT = sourceTex.wrapT;
+    tex.anisotropy = 8;
+    tex.needsUpdate = true;
+    return tex;
+  };
+  return { roughnessMap: mk(canvasR), clearcoatMap: mk(canvasC) };
 }
 
 /**
@@ -2323,25 +2342,28 @@ async function upgradePlanetWithEarthGltf(entry) {
   prepareHeroTexture(cloudMap, { srgb: true });
   prepareHeroTexture(moonMap, { srgb: true });
   if (roughnessMap) prepareHeroTexture(roughnessMap, { srgb: false });
-  const oceanRoughMap = roughnessMap ? makeOceanRoughnessMap(roughnessMap) : null;
+  const waterMaps = roughnessMap
+    ? makeOceanWaterMaps(roughnessMap)
+    : { roughnessMap: null, clearcoatMap: null };
 
   const earthR = data.size;
   const earthSpin = new THREE.Group();
   const cloudSpin = new THREE.Group();
 
-  // Physical + IOR eau : Fresnel doux (évite le hot-spot Soleil trop ponctuel).
+  // IOR / clearcoat masqués sur les continents (clearcoatMap = océans seuls).
   const earthMat = new THREE.MeshPhysicalMaterial({
     map: dayMap,
     color: 0xffffff,
     roughness: 1,
-    roughnessMap: oceanRoughMap || undefined,
-    metalness: 0.04,
+    roughnessMap: waterMaps.roughnessMap || undefined,
+    metalness: 0,
     ior: HERO_OCEAN_IOR,
-    reflectivity: 0.28,
-    clearcoat: 0.22,
-    clearcoatRoughness: 0.55,
-    clearcoatRoughnessMap: oceanRoughMap || undefined,
-    specularIntensity: 0.35,
+    reflectivity: 0.12,
+    specularIntensity: 0.12,
+    clearcoat: 1,
+    clearcoatMap: waterMaps.clearcoatMap || undefined,
+    clearcoatRoughness: 0.5,
+    clearcoatRoughnessMap: waterMaps.roughnessMap || undefined,
     emissiveMap: dayMap,
     emissive: new THREE.Color(0xffffff),
     emissiveIntensity: 0.05,
