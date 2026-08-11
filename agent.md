@@ -58,7 +58,7 @@
 
 - **9 sections** (indices 0–8), scroll gating via molette / clavier / touch. `sectionCount` et `scaleSectionMax` dérivés de `panels.length` à l’init.
 
-- **Modèle spatial** : section **0 = Intro / Neptune (loin)**, section **8 = Contact / Mercure (proche Soleil)**. Avancer = index++ = vers le Soleil. **Stream** = §2 (Pluton) entre Son et Video. **Étapes intermédiaires intérieures** : §6 **Sites** (orbite 3D : Vénus), §7 **Plugin** (orbite 3D : Terre décorative, avant Contact).
+- **Modèle spatial** : section **0 = Intro / Neptune (loin)**, section **8 = Contact / Mercure (proche Soleil)**. Avancer = index++ = vers le Soleil. **Stream** = §2 (Pluton) entre Son et Video. **Étapes intermédiaires intérieures** : §6 **Sites** (orbite 3D : Vénus), §7 **Plugin** (orbite 3D : Terre GLB + Lune, avant Contact).
 
 - **Entrées scroll (alignées page / overlay)** :
 
@@ -132,7 +132,7 @@
 
 - **Vénus (§6)** : `camDistMul` **1,05**, `distScale` **0,90**, `horizonSunBias` **0,32**, focale **46 mm** — début `getSunHeat` / `--bg` chaud.
 
-- **Plugin (§7, orbite Terre décorative)** : `camDistMul` **1,00**, `distScale` **0,86**, `horizonSunBias` **0,30**, focale **50 mm**.
+- **Plugin (§7, orbite Terre GLB)** : `camDistMul` **1,00**, `distScale` **0,86**, `horizonSunBias` **0,30**, focale **50 mm**.
 
 - **Visuel (§4, Uranus)** : `camDistMul` **1,09**, `distScale` **1,00**, `horizonSunBias` **0,38**, `sunFrameBias` **0,56**, `orbitSunLift` **0,10**, focale **36 mm**.
 
@@ -248,7 +248,7 @@
 
 | 6 | Sites (`#venus`) | Vénus (3D) | mid |
 
-| 7 | Plugin (`#plugin`) | Terre (3D décoratif) | mid |
+| 7 | Plugin (`#plugin`) | Terre (GLB + Lune) | mid |
 
 | 8 | Contact | Mercure | mercury |
 
@@ -309,7 +309,7 @@ Site statique sans backend dédié : SoundCloud / modales Instagram / Radio YouT
 
 | **Sites** (`#venus`, `data-zone="6"`) | [StreamTV](https://vps-e09ed6db.vps.ovh.net/) + [RPG CR](https://vps-e09ed6db.vps.ovh.net/rpg-cr/) + [Hirakana](https://vps-e09ed6db.vps.ovh.net/hirakana/) + [Canopée](https://xn--canope-fva.be/) + [LM Studio](https://lmstudio.ai/download) | Nav libellé **Sites**. Galerie **masonry** (`.sites-grid` : `columns: 2` desktop / laptop, `1` mobile ; `break-inside: avoid` sur `.site-card`). Cartes : StreamTV (accueil VPS), Hirakana, RPG CR, Canopée (`.site-card--feature`, kicker « Pour ma maman »). Orbite 3D : Vénus. |
 
-| **Plugin** (`#plugin`, `data-zone="7"`) | GitHub | Quatre boutons `.panel-btn` (`target="_blank"`, `rel="noopener"`) : **Hakou Dark Mode** (`#plugin-1`) → `https://github.com/vincentchauvaux/og-elementor-dark-mode/tree/cursor/wporg-publication-prep` ; **OG Time Tab** (`#plugin-2`) → `https://github.com/vincentchauvaux/og-time-tab/archive/refs/heads/master.zip` (`href` + `data-github-zip`, `download`) ; **Hakou Lighthouse** (`#plugin-3`) → `https://github.com/vincentchauvaux/Lighthouse` ; **Space H** (`#plugin-4`) → `https://github.com/vincentchauvaux/spaceh`. Nav **Plugin** ; icône mobile prise. Orbite 3D : Terre inchangée (`section: 7`). |
+| **Plugin** (`#plugin`, `data-zone="7"`) | GitHub | Quatre boutons `.panel-btn` (`target="_blank"`, `rel="noopener"`) : **Hakou Dark Mode** (`#plugin-1`) → `https://github.com/vincentchauvaux/og-elementor-dark-mode/tree/cursor/wporg-publication-prep` ; **OG Time Tab** (`#plugin-2`) → `https://github.com/vincentchauvaux/og-time-tab/archive/refs/heads/master.zip` (`href` + `data-github-zip`, `download`) ; **Hakou Lighthouse** (`#plugin-3`) → `https://github.com/vincentchauvaux/Lighthouse` ; **Space H** (`#plugin-4`) → `https://github.com/vincentchauvaux/spaceh`. Nav **Plugin** ; icône mobile prise. Orbite 3D : Terre GLB (`section: 7`, `earth.glb`). |
 
 | **Contact** (`#contact`, `data-zone="8"`) | Liens + formulaire | Icônes Instagram / YouTube / SoundCloud / e-mail (`.contact-links`, stroke SVG) ; e-mail assemblé en JS (`content/contact-config.json`). Formulaire `contact.js` → `POST /hakou-studio/api/contact` : challenge arithmétique HMAC (`GET /api/contact/challenge`), honeypot, filtres, rate-limit, `Origin`. Inbox JSONL + SMTP optionnel. Thème `theme-mercury`. |
 
