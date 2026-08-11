@@ -1,12 +1,11 @@
 import * as THREE from "three";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb";
-/** Ratio Blender : distance Lune / rayon Terre (~5,055). */
-const HERO_MOON_ORBIT_RADIUS_MUL = 5.055;
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=3";
+/** Ratio Blender : distance Lune / rayon Terre — rapproché pour le cadrage héro. */
+const HERO_MOON_ORBIT_RADIUS_MUL = 2.65;
 /** Ratio Blender : rayon Lune / rayon Terre (~0,117). */
 const HERO_MOON_SIZE_MUL = 0.117;
 /** Vitesse orbitale Lune autour de la Terre héro (rad/s, × PLANET_ORBIT_SPEED_MUL). */
@@ -2102,27 +2101,30 @@ function prepareGltfTextures(root) {
   root.traverse((obj) => {
     if (!obj.isMesh) return;
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-    mats.forEach((mat) => {
-      if (!mat) return;
-      if (mat.map) {
-        mat.map.colorSpace = THREE.SRGBColorSpace;
-        mat.map.anisotropy = 8;
-        // Scène spatiale très sombre : sans émissif la Terre PBR disparaît
-        // à côté des planètes stylisées (emissiveIntensity élevé).
-        if (!mat.emissiveMap) {
-          mat.emissiveMap = mat.map;
-          mat.emissive = new THREE.Color(0xffffff);
-          const isCloud =
-            mat.transparent ||
-            mat.opacity < 0.99 ||
-            /cloud/i.test(mat.name || "");
-          mat.emissiveIntensity = isCloud ? 0.28 : 0.55;
-        }
-      }
-      if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-      if ("roughness" in mat) mat.roughness = Math.min(mat.roughness ?? 0.8, 0.7);
-      mat.needsUpdate = true;
+    const nextMats = mats.map((mat) => {
+      if (!mat?.map) return mat;
+      mat.map.colorSpace = THREE.SRGBColorSpace;
+      mat.map.anisotropy = 8;
+
+      const isCloud =
+        mat.transparent ||
+        mat.opacity < 0.99 ||
+        /cloud/i.test(mat.name || "");
+
+      // MeshBasicMaterial : lisible même avec lumière Soleil très lointaine (§0).
+      const basic = new THREE.MeshBasicMaterial({
+        map: mat.map,
+        color: 0xffffff,
+        transparent: Boolean(isCloud || mat.transparent),
+        opacity: isCloud ? Math.min(mat.opacity ?? 0.85, 0.9) : 1,
+        depthWrite: !isCloud,
+        side: mat.side ?? THREE.FrontSide,
+        toneMapped: true,
+      });
+      mat.dispose?.();
+      return basic;
     });
+    obj.material = nextMats.length === 1 ? nextMats[0] : nextMats;
     obj.castShadow = false;
     obj.receiveShadow = false;
   });
@@ -2137,8 +2139,6 @@ async function upgradePlanetWithEarthGltf(entry) {
   if (!data.gltfUrl || !scene) return;
 
   const loader = new GLTFLoader();
-  if (MeshoptDecoder.ready) await MeshoptDecoder.ready;
-  loader.setMeshoptDecoder(MeshoptDecoder);
   const gltf = await loader.loadAsync(data.gltfUrl);
   const source = gltf.scene;
 
@@ -2184,6 +2184,14 @@ async function upgradePlanetWithEarthGltf(entry) {
 
   if (entry.atmMesh) {
     oldMesh.remove(entry.atmMesh);
+    // Halo plus discret pour ne pas masquer les continents texturés.
+    entry.atmMesh.scale.setScalar(1.02);
+    if (entry.atmMat?.uniforms?.uIntensity) {
+      entry.atmMat.uniforms.uIntensity.value = 0.45;
+    }
+    if (entry.atmMat?.uniforms?.uColor) {
+      entry.atmMat.uniforms.uColor.value.setHex(0x6eb8ff);
+    }
     root.add(entry.atmMesh);
   }
 
@@ -2384,7 +2392,9 @@ function updatePlanets(elapsed, displaySection, glideState) {
     mesh.scale.setScalar(scale);
 
     if (entry.atmMat) {
-      entry.atmMat.uniforms.uIntensity.value = 0.85 + proximity * 0.9;
+      entry.atmMat.uniforms.uIntensity.value = isGltf
+        ? 0.35 + proximity * 0.35
+        : 0.85 + proximity * 0.9;
     }
 
     if (rings) {
