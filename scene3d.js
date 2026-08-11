@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=6";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=7";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.52;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -16,8 +16,8 @@ const HERO_MOON_SPIN_SPEED = 0.55;
 const HERO_EARTH_SPIN_SPEED = 0.18;
 /** Inclinaison du plan orbital (rad) pour ne pas être pile de profil. */
 const HERO_MOON_INCLINATION = 0.35;
-/** Halo atmosphère / rayon Terre (serré = faux air autour du globe). */
-const HERO_ATM_RADIUS_MUL = 1.06;
+/** Halo atmosphère / rayon Terre opaque (très serré). */
+const HERO_ATM_RADIUS_MUL = 1.03;
 
 const SECTION_COUNT = 9;
 const STAR_COUNT = 2800;
@@ -2197,6 +2197,13 @@ function prepareGltfTextures(root) {
   });
 }
 
+function measureObjectRadius(object) {
+  object.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(object);
+  if (box.isEmpty()) return 0;
+  return box.getBoundingSphere(new THREE.Sphere()).radius;
+}
+
 /**
  * Remplace la sphère stylisée §0 par le GLB Terre + Lune (orbite lunaire locale).
  * Neptune stylisée reste visible jusqu'au chargement (~2 Mo compressé).
@@ -2218,10 +2225,26 @@ async function upgradePlanetWithEarthGltf(entry) {
   earthSpin.add(earthSrc);
   fitObjectToRadius(earthSrc, data.size);
 
+  // Le bbox inclut souvent les nuages > surface opaque : on calibre sur « terre »
+  // pour que le globe remplisse le halo bleu.
+  let terreMesh = null;
+  earthSrc.traverse((obj) => {
+    if (terreMesh || !obj.isMesh) return;
+    if (meshMaterialNames(obj).some((n) => n.includes("terre"))) {
+      terreMesh = obj;
+    }
+  });
+  const surfaceRef = terreMesh || earthSpin;
+  const surfaceR = measureObjectRadius(surfaceRef);
+  if (surfaceR > 1e-4) {
+    earthSpin.scale.multiplyScalar(data.size / surfaceR);
+  }
+  const earthRadius = measureObjectRadius(earthSpin) || data.size;
+
   const moonSpin = new THREE.Group();
   moonSpin.add(moonSrc);
-  fitObjectToRadius(moonSrc, data.size * HERO_MOON_SIZE_MUL);
-  moonSpin.position.set(data.size * HERO_MOON_ORBIT_RADIUS_MUL, 0, 0);
+  fitObjectToRadius(moonSrc, earthRadius * HERO_MOON_SIZE_MUL);
+  moonSpin.position.set(earthRadius * HERO_MOON_ORBIT_RADIUS_MUL, 0, 0);
 
   const moonPivot = new THREE.Group();
   moonPivot.rotation.x = HERO_MOON_INCLINATION;
@@ -2246,11 +2269,11 @@ async function upgradePlanetWithEarthGltf(entry) {
     entry.atmMesh.geometry?.dispose();
     entry.atmMat?.dispose?.();
   }
-  // Halo serré autour du globe texturé (= fausse atmosphère).
+  // Halo = cercle bleu : rayon mesuré du globe × mul serré.
   const atm = createAtmosphereShell(
-    data.size,
+    earthRadius,
     0x6eb8ff,
-    0.72,
+    0.58,
     HERO_ATM_RADIUS_MUL
   );
   root.add(atm.mesh);
