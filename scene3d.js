@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=3";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=4";
 /** Ratio Blender : distance Lune / rayon Terre — rapproché pour le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 2.65;
 /** Ratio Blender : rayon Lune / rayon Terre (~0,117). */
@@ -2097,6 +2097,48 @@ function fitObjectToRadius(object, targetRadius) {
   return fit;
 }
 
+function collectGltfMeshes(root) {
+  const meshes = [];
+  root.traverse((obj) => {
+    if (obj.isMesh) meshes.push(obj);
+  });
+  return meshes;
+}
+
+function meshMaterialNames(mesh) {
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  return mats.map((m) => String(m?.name || "").toLowerCase());
+}
+
+/** Résout Terre / Lune par nom Blender, sinon par matériaux (terre/clouds / lune). */
+function resolveEarthAndMoon(root) {
+  let earth = root.getObjectByName("Sphere.001");
+  let moon = root.getObjectByName("Sphere");
+  if (earth && moon) return { earth, moon };
+
+  const meshes = collectGltfMeshes(root);
+  const earthMesh = meshes.find((m) =>
+    meshMaterialNames(m).some((n) => n.includes("terre") || n.includes("cloud"))
+  );
+  const moonMesh = meshes.find((m) =>
+    meshMaterialNames(m).some((n) => n.includes("lune") || n.includes("moon"))
+  );
+
+  earth = earth || earthMesh;
+  moon = moon || moonMesh;
+
+  if (!earth || !moon) {
+    const graph = [];
+    root.traverse((obj) => {
+      graph.push(`${obj.type}:${obj.name || "(anon)"}`);
+    });
+    throw new Error(
+      `GLB Earth : nœuds introuvables (scene=[${graph.join(", ")}])`
+    );
+  }
+  return { earth, moon };
+}
+
 function prepareGltfTextures(root) {
   root.traverse((obj) => {
     if (!obj.isMesh) return;
@@ -2141,12 +2183,7 @@ async function upgradePlanetWithEarthGltf(entry) {
   const loader = new GLTFLoader();
   const gltf = await loader.loadAsync(data.gltfUrl);
   const source = gltf.scene;
-
-  const earthSrc = source.getObjectByName("Sphere.001");
-  const moonSrc = source.getObjectByName("Sphere");
-  if (!earthSrc || !moonSrc) {
-    throw new Error("GLB Earth : nœuds Sphere.001 / Sphere introuvables");
-  }
+  const { earth: earthSrc, moon: moonSrc } = resolveEarthAndMoon(source);
 
   earthSrc.parent?.remove(earthSrc);
   moonSrc.parent?.remove(moonSrc);
