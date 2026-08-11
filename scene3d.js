@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=13";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=14";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -2300,8 +2300,8 @@ async function upgradePlanetWithEarthGltf(entry) {
 
   let hasClouds = false;
   if (cloudMap) {
-    // Pas de castShadow : les transparents projettent des stries (shadow acne).
-    const cloudMat = new THREE.MeshStandardMaterial({
+    // MeshBasic : pas d’éclairage ni d’ombres sur la couche nuages.
+    const cloudMat = new THREE.MeshBasicMaterial({
       map: cloudMap,
       color: 0xffffff,
       transparent: true,
@@ -2309,8 +2309,7 @@ async function upgradePlanetWithEarthGltf(entry) {
       depthWrite: false,
       depthTest: true,
       side: THREE.FrontSide,
-      roughness: 1,
-      metalness: 0,
+      toneMapped: false,
       alphaTest: 0.04,
       polygonOffset: true,
       polygonOffsetFactor: -2,
