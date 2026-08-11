@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=5";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=6";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.52;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -12,6 +12,8 @@ const HERO_MOON_SIZE_MUL = 0.22;
 const HERO_MOON_ORBIT_SPEED = 0.38;
 /** Rotation propre Lune (rad/s). */
 const HERO_MOON_SPIN_SPEED = 0.55;
+/** Rotation propre Terre sur l’axe vertical Y (rad/s) — lisible, hors PLANET_SPIN_MUL. */
+const HERO_EARTH_SPIN_SPEED = 0.18;
 /** Inclinaison du plan orbital (rad) pour ne pas être pile de profil. */
 const HERO_MOON_INCLINATION = 0.35;
 /** Halo atmosphère / rayon Terre (serré = faux air autour du globe). */
@@ -374,7 +376,7 @@ const PLANETS = [
   {
     name: "Earth", // §0 intro — mesh GLB texturé (ex-Neptune) ; §7 reste Terre stylisée
     orbitRadius: scaledOrbit(58),
-    size: 1.4,
+    size: 2.15,
     color: 0x1e3a8a,
     emissive: 0x081428,
     accentColor: 0x5c8fd4,
@@ -2429,7 +2431,8 @@ function updatePlanets(elapsed, displaySection, glideState) {
     const spinY = elapsed * data.spinSpeed * spinFactor * PLANET_SPIN_MUL;
 
     if (isGltf && earthSpin) {
-      earthSpin.rotation.y = spinY;
+      // Axe vertical scène = Y (pas Z) — rotation continue lisible.
+      earthSpin.rotation.y = elapsed * HERO_EARTH_SPIN_SPEED;
       if (moonPivot) {
         // Orbite lisible (indépendante du mul d'ambiance très lent).
         moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED;
