@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=15";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=16";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -18,8 +18,8 @@ const HERO_EARTH_SPIN_SPEED = 0.18;
 const HERO_CLOUD_SPIN_SPEED = 0.12;
 /** Inclinaison du plan orbital (rad). */
 const HERO_MOON_INCLINATION = 0.35;
-/** Halo / rayon Terre — anneau mince (quelques px à l’écran). */
-const HERO_ATM_RADIUS_MUL = 1.012;
+/** Halo / rayon Terre — aligné sur les nuages (une seule couche externe). */
+const HERO_ATM_RADIUS_MUL = 1.028;
 /** Nuages au-dessus de la surface (marge anti z-fight). */
 const HERO_CLOUD_RADIUS_MUL = 1.028;
 /** Lumière clé locale (côté Soleil) pour terminateur / ombres Terre intro. */
