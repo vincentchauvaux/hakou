@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=10";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=11";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -14,6 +14,8 @@ const HERO_MOON_ORBIT_SPEED = 0.38;
 const HERO_MOON_SPIN_SPEED = 0.55;
 /** Rotation propre Terre sur l’axe vertical Y (rad/s). */
 const HERO_EARTH_SPIN_SPEED = 0.18;
+/** Rotation nuages (rad/s) — un peu plus lente que la Terre. */
+const HERO_CLOUD_SPIN_SPEED = 0.12;
 /** Inclinaison du plan orbital (rad). */
 const HERO_MOON_INCLINATION = 0.35;
 /** Halo / rayon Terre — anneau mince (quelques px à l’écran). */
@@ -2274,6 +2276,7 @@ async function upgradePlanetWithEarthGltf(entry) {
 
   const earthR = data.size;
   const earthSpin = new THREE.Group();
+  const cloudSpin = new THREE.Group();
 
   const earthMat = new THREE.MeshBasicMaterial({
     map: dayMap,
@@ -2286,7 +2289,7 @@ async function upgradePlanetWithEarthGltf(entry) {
   );
   earthSpin.add(earthMesh);
 
-  let cloudMesh = null;
+  let hasClouds = false;
   if (cloudMap) {
     const cloudMat = new THREE.MeshBasicMaterial({
       map: cloudMap,
@@ -2298,12 +2301,13 @@ async function upgradePlanetWithEarthGltf(entry) {
       toneMapped: false,
       alphaTest: 0.015,
     });
-    cloudMesh = new THREE.Mesh(
+    const cloudMesh = new THREE.Mesh(
       new THREE.SphereGeometry(earthR * HERO_CLOUD_RADIUS_MUL, 64, 48),
       cloudMat
     );
     cloudMesh.renderOrder = 3;
-    earthSpin.add(cloudMesh);
+    cloudSpin.add(cloudMesh);
+    hasClouds = true;
   }
 
   // Halo mince : BackSide opaque faible → anneau de quelques px (occulté au centre par le globe).
@@ -2347,6 +2351,7 @@ async function upgradePlanetWithEarthGltf(entry) {
 
   const root = new THREE.Group();
   root.add(earthSpin);
+  if (hasClouds) root.add(cloudSpin);
   root.add(moonPivot);
 
   const oldMesh = entry.mesh;
@@ -2372,11 +2377,12 @@ async function upgradePlanetWithEarthGltf(entry) {
   entry.atmMesh = atmMesh;
   entry.atmMat = atmMat;
   entry.earthSpin = earthSpin;
+  entry.cloudSpin = hasClouds ? cloudSpin : null;
   entry.moonPivot = moonPivot;
   entry.moonSpin = moonSpin;
   entry.isGltf = true;
   console.info(
-    `[Hakou 3D] Terre GLB OK — R=${earthR}, nuages=${Boolean(cloudMesh)}, cam rapprochée`
+    `[Hakou 3D] Terre GLB OK — R=${earthR}, nuages=${hasClouds}, cam rapprochée`
   );
 }
 
@@ -2408,6 +2414,7 @@ function addPlanetEntry(data) {
     atmMat,
     rings,
     earthSpin: null,
+    cloudSpin: null,
     moonPivot: null,
     moonSpin: null,
     isGltf: false,
@@ -2521,7 +2528,8 @@ function updatePlanets(elapsed, displaySection, glideState) {
   const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
 
   planetEntries.forEach((entry) => {
-    const { data, mesh, mat, rings, earthSpin, moonPivot, moonSpin, isGltf } = entry;
+    const { data, mesh, mat, rings, earthSpin, cloudSpin, moonPivot, moonSpin, isGltf } =
+      entry;
     const isDecorative = data.section == null;
     const isActive = !isDecorative && data.section === activeIndex;
     const proximity = isDecorative
@@ -2534,10 +2542,12 @@ function updatePlanets(elapsed, displaySection, glideState) {
     const spinY = elapsed * data.spinSpeed * spinFactor * PLANET_SPIN_MUL;
 
     if (isGltf && earthSpin) {
-      // Axe vertical scène = Y (pas Z) — rotation continue lisible.
+      // Axe vertical scène = Y — Terre et nuages à des vitesses différentes.
       earthSpin.rotation.y = elapsed * HERO_EARTH_SPIN_SPEED;
+      if (cloudSpin) {
+        cloudSpin.rotation.y = elapsed * HERO_CLOUD_SPIN_SPEED;
+      }
       if (moonPivot) {
-        // Orbite lisible (indépendante du mul d'ambiance très lent).
         moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED;
       }
       if (moonSpin) {
