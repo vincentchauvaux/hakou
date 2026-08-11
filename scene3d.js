@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=11";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=12";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -22,6 +22,9 @@ const HERO_MOON_INCLINATION = 0.35;
 const HERO_ATM_RADIUS_MUL = 1.012;
 /** Nuages légèrement au-dessus de la surface. */
 const HERO_CLOUD_RADIUS_MUL = 1.02;
+/** Lumière clé locale (côté Soleil) pour terminateur / ombres Terre intro. */
+const HERO_EARTH_KEY_INTENSITY = 3.2;
+const HERO_EARTH_KEY_DIST_MUL = 14;
 
 const SECTION_COUNT = 9;
 const STAR_COUNT = 2800;
@@ -2278,27 +2281,34 @@ async function upgradePlanetWithEarthGltf(entry) {
   const earthSpin = new THREE.Group();
   const cloudSpin = new THREE.Group();
 
-  const earthMat = new THREE.MeshBasicMaterial({
+  const earthMat = new THREE.MeshStandardMaterial({
     map: dayMap,
     color: 0xffffff,
-    toneMapped: true,
+    roughness: 0.82,
+    metalness: 0.04,
+    emissiveMap: dayMap,
+    emissive: new THREE.Color(0xffffff),
+    emissiveIntensity: 0.06,
   });
   const earthMesh = new THREE.Mesh(
     new THREE.SphereGeometry(earthR, 64, 48),
     earthMat
   );
+  earthMesh.castShadow = true;
+  earthMesh.receiveShadow = true;
   earthSpin.add(earthMesh);
 
   let hasClouds = false;
   if (cloudMap) {
-    const cloudMat = new THREE.MeshBasicMaterial({
+    const cloudMat = new THREE.MeshStandardMaterial({
       map: cloudMap,
       color: 0xffffff,
       transparent: true,
       opacity: 1,
       depthWrite: false,
       side: THREE.DoubleSide,
-      toneMapped: false,
+      roughness: 1,
+      metalness: 0,
       alphaTest: 0.015,
     });
     const cloudMesh = new THREE.Mesh(
@@ -2306,11 +2316,13 @@ async function upgradePlanetWithEarthGltf(entry) {
       cloudMat
     );
     cloudMesh.renderOrder = 3;
+    cloudMesh.castShadow = true;
+    cloudMesh.receiveShadow = true;
     cloudSpin.add(cloudMesh);
     hasClouds = true;
   }
 
-  // Halo mince : BackSide opaque faible → anneau de quelques px (occulté au centre par le globe).
+  // Halo mince : BackSide → anneau de quelques px.
   const atmMat = new THREE.MeshBasicMaterial({
     color: 0x6eb8ff,
     transparent: true,
@@ -2332,15 +2344,32 @@ async function upgradePlanetWithEarthGltf(entry) {
   if (moonFromGltf) {
     moonFromGltf.parent?.remove(moonFromGltf);
     moonSpin.add(moonFromGltf);
-    prepareGltfTextures(moonSpin);
+    moonFromGltf.traverse((obj) => {
+      if (!obj.isMesh) return;
+      const map = obj.material?.map || moonMap;
+      obj.material = new THREE.MeshStandardMaterial({
+        map: map || null,
+        color: 0xffffff,
+        roughness: 0.95,
+        metalness: 0,
+      });
+      obj.castShadow = true;
+      obj.receiveShadow = true;
+    });
     fitObjectToRadius(moonFromGltf, earthR * HERO_MOON_SIZE_MUL);
   } else if (moonMap) {
-    moonSpin.add(
-      new THREE.Mesh(
-        new THREE.SphereGeometry(earthR * HERO_MOON_SIZE_MUL, 32, 24),
-        new THREE.MeshBasicMaterial({ map: moonMap, color: 0xffffff })
-      )
+    const moonMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(earthR * HERO_MOON_SIZE_MUL, 32, 24),
+      new THREE.MeshStandardMaterial({
+        map: moonMap,
+        color: 0xffffff,
+        roughness: 0.95,
+        metalness: 0,
+      })
     );
+    moonMesh.castShadow = true;
+    moonMesh.receiveShadow = true;
+    moonSpin.add(moonMesh);
   }
   moonSpin.position.set(earthR * HERO_MOON_ORBIT_RADIUS_MUL, 0, 0);
 
@@ -2353,6 +2382,30 @@ async function upgradePlanetWithEarthGltf(entry) {
   root.add(earthSpin);
   if (hasClouds) root.add(cloudSpin);
   root.add(moonPivot);
+
+  // Lumière clé côté Soleil (locale) — terminateur + ombres sans sur-exposer le système.
+  if (entry.heroSunLight) {
+    scene.remove(entry.heroSunLight);
+    scene.remove(entry.heroSunLight.target);
+    entry.heroSunLight.dispose?.();
+  }
+  const heroSunLight = new THREE.DirectionalLight(
+    0xfff1d2,
+    HERO_EARTH_KEY_INTENSITY
+  );
+  heroSunLight.castShadow = true;
+  heroSunLight.shadow.mapSize.set(2048, 2048);
+  heroSunLight.shadow.bias = -0.00015;
+  heroSunLight.shadow.normalBias = 0.035;
+  const shadowSpan = earthR * 2.8;
+  heroSunLight.shadow.camera.left = -shadowSpan;
+  heroSunLight.shadow.camera.right = shadowSpan;
+  heroSunLight.shadow.camera.top = shadowSpan;
+  heroSunLight.shadow.camera.bottom = -shadowSpan;
+  heroSunLight.shadow.camera.near = earthR * 0.5;
+  heroSunLight.shadow.camera.far = earthR * HERO_EARTH_KEY_DIST_MUL * 1.8;
+  scene.add(heroSunLight);
+  scene.add(heroSunLight.target);
 
   const oldMesh = entry.mesh;
   const oldMat = entry.mat;
@@ -2380,9 +2433,11 @@ async function upgradePlanetWithEarthGltf(entry) {
   entry.cloudSpin = hasClouds ? cloudSpin : null;
   entry.moonPivot = moonPivot;
   entry.moonSpin = moonSpin;
+  entry.heroSunLight = heroSunLight;
+  entry.heroEarthRadius = earthR;
   entry.isGltf = true;
   console.info(
-    `[Hakou 3D] Terre GLB OK — R=${earthR}, nuages=${hasClouds}, cam rapprochée`
+    `[Hakou 3D] Terre GLB OK — R=${earthR}, nuages=${hasClouds}, lumière Soleil locale`
   );
 }
 
@@ -2417,6 +2472,8 @@ function addPlanetEntry(data) {
     cloudSpin: null,
     moonPivot: null,
     moonSpin: null,
+    heroSunLight: null,
+    heroEarthRadius: 0,
     isGltf: false,
   });
 }
@@ -2552,6 +2609,17 @@ function updatePlanets(elapsed, displaySection, glideState) {
       }
       if (moonSpin) {
         moonSpin.rotation.y = elapsed * HERO_MOON_SPIN_SPEED;
+      }
+      if (entry.heroSunLight) {
+        const r = entry.heroEarthRadius || data.size;
+        // Direction Soleil → planète : lumière placée côté Soleil, cible = globe.
+        tmpToSun.copy(sunOrigin).sub(pos).normalize();
+        entry.heroSunLight.position
+          .copy(pos)
+          .addScaledVector(tmpToSun, r * HERO_EARTH_KEY_DIST_MUL);
+        entry.heroSunLight.target.position.copy(pos);
+        entry.heroSunLight.target.updateMatrixWorld();
+        entry.heroSunLight.visible = mesh.visible;
       }
     } else {
       mesh.rotation.y = spinY;
@@ -3191,6 +3259,8 @@ export function initScene(canvas) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x020408);
@@ -3272,7 +3342,12 @@ export function disposeScene() {
   window.removeEventListener("resize", onResize);
   disposeRestOrbitInteraction();
   disposeIntroGate();
-  planetEntries.forEach(({ mesh, mat, atmMesh, atmMat, rings, isGltf }) => {
+  planetEntries.forEach(({ mesh, mat, atmMesh, atmMat, rings, isGltf, heroSunLight }) => {
+    if (heroSunLight) {
+      scene?.remove(heroSunLight);
+      scene?.remove(heroSunLight.target);
+      heroSunLight.dispose?.();
+    }
     if (isGltf) {
       disposeObject3D(mesh);
     } else {
