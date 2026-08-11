@@ -3,25 +3,23 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=9";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=10";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
-const HERO_MOON_ORBIT_RADIUS_MUL = 1.52;
+const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
-const HERO_MOON_SIZE_MUL = 0.22;
+const HERO_MOON_SIZE_MUL = 0.2;
 /** Orbite Lune (rad/s) — volontairement visible (pas × PLANET_ORBIT_SPEED_MUL). */
 const HERO_MOON_ORBIT_SPEED = 0.38;
 /** Rotation propre Lune (rad/s). */
 const HERO_MOON_SPIN_SPEED = 0.55;
-/** Rotation propre Terre sur l’axe vertical Y (rad/s) — lisible, hors PLANET_SPIN_MUL. */
+/** Rotation propre Terre sur l’axe vertical Y (rad/s). */
 const HERO_EARTH_SPIN_SPEED = 0.18;
-/** Inclinaison du plan orbital (rad) pour ne pas être pile de profil. */
+/** Inclinaison du plan orbital (rad). */
 const HERO_MOON_INCLINATION = 0.35;
-/** Halo atmosphère / rayon Terre (rim mince). */
-const HERO_ATM_RADIUS_MUL = 1.02;
-/** Surplus de taille globe pour coller au disque bleu perçu à l’écran. */
-const HERO_EARTH_FILL_SCALE = 1.42;
-/** Écart nuages / surface (évite z-fight). */
-const HERO_CLOUD_RADIUS_MUL = 1.035;
+/** Halo / rayon Terre — anneau mince (quelques px à l’écran). */
+const HERO_ATM_RADIUS_MUL = 1.012;
+/** Nuages légèrement au-dessus de la surface. */
+const HERO_CLOUD_RADIUS_MUL = 1.02;
 
 const SECTION_COUNT = 9;
 const STAR_COUNT = 2800;
@@ -137,7 +135,7 @@ const BODY_PUSH_MAX_ITER = 8;
 const SECTION_FRAMING = [
   {
     planetSide: 1,
-    distScale: 1.53,
+    distScale: 1.05,
     tangentMul: 1.02,
     compositionSlide: 1.04,
     elevation: 0.3,
@@ -380,7 +378,7 @@ const PLANETS = [
   {
     name: "Earth", // §0 intro — mesh GLB texturé (ex-Neptune) ; §7 reste Terre stylisée
     orbitRadius: scaledOrbit(58),
-    size: 2.15,
+    size: 2.4,
     color: 0x1e3a8a,
     emissive: 0x081428,
     accentColor: 0x5c8fd4,
@@ -393,7 +391,7 @@ const PLANETS = [
     heroAngle: 0.78,
     startAngle: 0.78,
     section: 0,
-    camDistMul: 2.4,
+    camDistMul: 1.55,
     camLift: 0.1,
     camTangent: 0.34,
     gltfUrl: HERO_EARTH_GLB_URL,
@@ -2226,9 +2224,37 @@ function measureObjectRadius(object) {
   return box.getBoundingSphere(new THREE.Sphere()).radius;
 }
 
+function extractHeroMaps(root) {
+  let dayMap = null;
+  let cloudMap = null;
+  let moonMap = null;
+  root.traverse((obj) => {
+    if (!obj.isMesh) return;
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    mats.forEach((mat) => {
+      if (!mat?.map) return;
+      const name = String(mat.name || "").toLowerCase();
+      if (name.includes("terre")) dayMap = mat.map;
+      if (name.includes("cloud")) cloudMap = mat.map;
+      if (name.includes("lune") || name.includes("moon")) moonMap = mat.map;
+    });
+  });
+  return { dayMap, cloudMap, moonMap };
+}
+
+function prepareHeroTexture(tex, { srgb = true } = {}) {
+  if (!tex) return null;
+  tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  tex.anisotropy = 8;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /**
- * Remplace la sphère stylisée §0 par le GLB Terre + Lune (orbite lunaire locale).
- * Neptune stylisée reste visible jusqu'au chargement (~2 Mo compressé).
+ * Remplace la sphère stylisée §0 : textures du GLB sur des sphères Three.js
+ * (contrôle total taille / nuages / halo), Lune = mesh GLB.
  */
 async function upgradePlanetWithEarthGltf(entry) {
   const { data } = entry;
@@ -2237,42 +2263,82 @@ async function upgradePlanetWithEarthGltf(entry) {
   const loader = new GLTFLoader();
   const gltf = await loader.loadAsync(data.gltfUrl);
   const source = gltf.scene;
-  const { earth: earthSrc, moon: moonSrc } = resolveEarthAndMoon(source);
-
-  earthSrc.parent?.remove(earthSrc);
-  moonSrc.parent?.remove(moonSrc);
-
-  // Conserve l'orientation Blender (tilt).
-  const earthSpin = new THREE.Group();
-  earthSpin.add(earthSrc);
-
-  let terreMesh = null;
-  let cloudMesh = null;
-  earthSrc.traverse((obj) => {
-    if (!obj.isMesh) return;
-    const names = meshMaterialNames(obj);
-    if (names.some((n) => n.includes("cloud"))) cloudMesh = obj;
-    else if (names.some((n) => n.includes("terre")) || !terreMesh) terreMesh = obj;
-  });
-
-  prepareGltfTextures(earthSpin);
-
-  fitObjectToRadius(terreMesh || earthSrc, data.size);
-  if (cloudMesh) {
-    cloudMesh.scale.set(1, 1, 1);
-    fitObjectToRadius(cloudMesh, data.size * HERO_CLOUD_RADIUS_MUL);
-    if (terreMesh) cloudMesh.position.copy(terreMesh.position);
+  const { dayMap, cloudMap, moonMap } = extractHeroMaps(source);
+  if (!dayMap) {
+    throw new Error("GLB Earth : texture « terre » introuvable");
   }
 
-  // Agrandit globe + halo ensemble (halo enfant de earthSpin).
-  earthSpin.scale.setScalar(HERO_EARTH_FILL_SCALE);
-  const earthRadius = data.size * HERO_EARTH_FILL_SCALE;
+  prepareHeroTexture(dayMap, { srgb: true });
+  prepareHeroTexture(cloudMap, { srgb: true });
+  prepareHeroTexture(moonMap, { srgb: true });
 
+  const earthR = data.size;
+  const earthSpin = new THREE.Group();
+
+  const earthMat = new THREE.MeshBasicMaterial({
+    map: dayMap,
+    color: 0xffffff,
+    toneMapped: true,
+  });
+  const earthMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(earthR, 64, 48),
+    earthMat
+  );
+  earthSpin.add(earthMesh);
+
+  let cloudMesh = null;
+  if (cloudMap) {
+    const cloudMat = new THREE.MeshBasicMaterial({
+      map: cloudMap,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+      alphaTest: 0.015,
+    });
+    cloudMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(earthR * HERO_CLOUD_RADIUS_MUL, 64, 48),
+      cloudMat
+    );
+    cloudMesh.renderOrder = 3;
+    earthSpin.add(cloudMesh);
+  }
+
+  // Halo mince : BackSide opaque faible → anneau de quelques px (occulté au centre par le globe).
+  const atmMat = new THREE.MeshBasicMaterial({
+    color: 0x6eb8ff,
+    transparent: true,
+    opacity: 0.35,
+    depthWrite: false,
+    side: THREE.BackSide,
+    toneMapped: false,
+  });
+  const atmMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(earthR * HERO_ATM_RADIUS_MUL, 48, 32),
+    atmMat
+  );
+  atmMesh.renderOrder = 1;
+  earthSpin.add(atmMesh);
+
+  // Lune : mesh GLB si possible, sinon sphère + texture.
   const moonSpin = new THREE.Group();
-  moonSpin.add(moonSrc);
-  prepareGltfTextures(moonSpin);
-  fitObjectToRadius(moonSrc, earthRadius * HERO_MOON_SIZE_MUL);
-  moonSpin.position.set(earthRadius * HERO_MOON_ORBIT_RADIUS_MUL, 0, 0);
+  const moonFromGltf = source.getObjectByName("Sphere");
+  if (moonFromGltf) {
+    moonFromGltf.parent?.remove(moonFromGltf);
+    moonSpin.add(moonFromGltf);
+    prepareGltfTextures(moonSpin);
+    fitObjectToRadius(moonFromGltf, earthR * HERO_MOON_SIZE_MUL);
+  } else if (moonMap) {
+    moonSpin.add(
+      new THREE.Mesh(
+        new THREE.SphereGeometry(earthR * HERO_MOON_SIZE_MUL, 32, 24),
+        new THREE.MeshBasicMaterial({ map: moonMap, color: 0xffffff })
+      )
+    );
+  }
+  moonSpin.position.set(earthR * HERO_MOON_ORBIT_RADIUS_MUL, 0, 0);
 
   const moonPivot = new THREE.Group();
   moonPivot.rotation.x = HERO_MOON_INCLINATION;
@@ -2295,36 +2361,22 @@ async function upgradePlanetWithEarthGltf(entry) {
     entry.atmMesh.geometry?.dispose();
     entry.atmMat?.dispose?.();
   }
-  // Rayon local = data.size ; le scale earthSpin applique le fill.
-  const atm = createAtmosphereShell(
-    data.size,
-    0x6eb8ff,
-    0.48,
-    HERO_ATM_RADIUS_MUL
-  );
-  earthSpin.add(atm.mesh);
-  entry.atmMesh = atm.mesh;
-  entry.atmMat = atm.mat;
 
   scene.remove(oldMesh);
   disposeObject3D(oldMesh);
   oldMat?.dispose?.();
   scene.add(root);
 
-  const earthMat = terreMesh
-    ? Array.isArray(terreMesh.material)
-      ? terreMesh.material[0]
-      : terreMesh.material
-    : null;
-
   entry.mesh = root;
   entry.mat = earthMat;
+  entry.atmMesh = atmMesh;
+  entry.atmMat = atmMat;
   entry.earthSpin = earthSpin;
   entry.moonPivot = moonPivot;
   entry.moonSpin = moonSpin;
   entry.isGltf = true;
   console.info(
-    `[Hakou 3D] Terre GLB OK — rayon≈${earthRadius.toFixed(2)}, nuages=${Boolean(cloudMesh)}`
+    `[Hakou 3D] Terre GLB OK — R=${earthR}, nuages=${Boolean(cloudMesh)}, cam rapprochée`
   );
 }
 
@@ -2512,9 +2564,11 @@ function updatePlanets(elapsed, displaySection, glideState) {
     mesh.scale.setScalar(scale);
 
     if (entry.atmMat) {
-      entry.atmMat.uniforms.uIntensity.value = isGltf
-        ? 0.55 + proximity * 0.25
-        : 0.85 + proximity * 0.9;
+      if (isGltf && entry.atmMat.opacity != null) {
+        entry.atmMat.opacity = 0.28 + proximity * 0.12;
+      } else if (entry.atmMat.uniforms?.uIntensity) {
+        entry.atmMat.uniforms.uIntensity.value = 0.85 + proximity * 0.9;
+      }
     }
 
     if (rings) {
