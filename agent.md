@@ -118,9 +118,9 @@
 
 - **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement. Focale **42 mm**. Neptune `camDistMul` **2,40**, `distScale` **1,53**, `orbitSunLift` **0,08**. `INTRO_SNAP_FRAMES` 5. Pas de dérive caméra au repos Intro.
 
-- **Ordre planètes / caméra** : 0 Neptune → 1 Saturn → **2 Pluton (Radio)** → 3 Jupiter (Video) → **4 Uranus (Visuel)** → 5 Mars (3D) → **6 Vénus (panel Sites)** → **7 Terre GLB + Lune** (panel Plugin) → 8 Mercure (Contact) ; le voyage caméra 0→8 reste « vers le Soleil ». **Corps décoratifs 3D** : **Cérès** et **Lune** décorative entre Mars et Vénus. **Août 2026** : [`assets/planets/earth.glb`](assets/planets/earth.glb) sur **§7** (IOR océans seuls, nuages opacity 0,42, lumière Soleil locale) ; cache-bust `earth20`.
+- **Ordre planètes / caméra** : 0 Neptune GLB → 1 Saturne GLB (+ anneaux) → **2 Pluton stylisée (Radio)** → 3 Jupiter GLB → **4 Uranus GLB** → 5 Mars GLB → **6 Vénus GLB (+ nuages)** → **7 Terre GLB + Lune** → 8 Mercure GLB ; Soleil texturé (`sun.glb`). Voyage caméra 0→8 « vers le Soleil ». **Corps décoratifs** : Cérès + Lune décorative. **Août 2026** : assets `assets/planets/*.glb` WebP 2K sans meshopt ; cache-bust `planets21` / `?v=21`.
 
-- **Palette planètes 3D** (`PLANETS` / `DECORATIVE_PLANETS`, juil. 2026) : teintes **distinctes** par corps — Neptune bleu profond ; Saturne beige/doré ; **Pluton glace mauve** ; Jupiter orange/brun ; Uranus **cyan-vert** ; Mars rouge ocre ; Vénus jaune chaud pâle ; Terre §7 **GLB** ; Mercure gris pierre ; Cérès gris-vert ; Lune décorative gris clair. Aligné marqueur échelle (`SCALE_MARKER_COLORS`).
+- **Palette planètes 3D** : fallback stylisé conservé jusqu’au load GLB — Neptune bleu ; Saturne beige ; **Pluton mauve** (pas de GLB) ; Jupiter orange ; Uranus cyan ; Mars ocre ; Vénus jaune ; Terre vert-bleu ; Mercure gris. Marqueur échelle inchangé.
 
 - **Échelle orbitale** (`PLANETS`, juin 2026) : facteur global **`ORBIT_SCALE` 1,2** (~+20 %) — Neptune **69,6**, Saturne **50,4**, Pluton **43,2**, Jupiter **33,6**, Uranus **42**, Mars **24** (3D, §5), Vénus **12,2** (§6), Terre **9,1** (§7), Mercure **15,6** (Contact, §8). Caméra far **864**, lumière Soleil portée **480**, brouillard initial **0,005**.
 
@@ -234,23 +234,23 @@
 
 |-------|--------|---------|-------|
 
-| 0 | Intro | Neptune | dark |
+| 0 | Intro | Neptune (GLB) | dark |
 
-| 1 | Son | Saturne | light |
+| 1 | Son | Saturne (GLB + anneaux) | light |
 
-| 2 | Stream (`#stream`) | Pluton | mid |
+| 2 | Stream (`#stream`) | Pluton (stylisée) | mid |
 
-| 3 | Video | Jupiter | mid |
+| 3 | Video | Jupiter (GLB) | mid |
 
-| 4 | Visuel | Uranus | mid |
+| 4 | Visuel | Uranus (GLB) | mid |
 
-| 5 | 3D | Mars | mid |
+| 5 | 3D | Mars (GLB) | mid |
 
-| 6 | Sites (`#venus`) | Vénus (3D) | mid |
+| 6 | Sites (`#venus`) | Vénus (GLB + nuages) | mid |
 
 | 7 | Plugin (`#plugin`) | Terre (GLB + Lune) | mid |
 
-| 8 | Contact | Mercure | mercury |
+| 8 | Contact | Mercure (GLB) | mercury |
 
 
 
