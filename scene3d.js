@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "21";
+const PLANET_GLB_V = "22";
 const PLANET_GLB = {
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
@@ -15,35 +15,51 @@ const PLANET_GLB = {
   mercury: `assets/planets/mercury.glb?v=${PLANET_GLB_V}`,
 };
 const SUN_GLB_URL = `assets/planets/sun.glb?v=${PLANET_GLB_V}`;
-/** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
-const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
-/** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
-const HERO_MOON_SIZE_MUL = 0.2;
-/** Orbite Lune (rad/s) — volontairement visible (pas × PLANET_ORBIT_SPEED_MUL). */
-const HERO_MOON_ORBIT_SPEED = 0.38;
-/** Rotation propre Lune (rad/s). */
-const HERO_MOON_SPIN_SPEED = 0.55;
-/** Rotation propre Terre sur l’axe vertical Y (rad/s). */
-const HERO_EARTH_SPIN_SPEED = 0.18;
-/** Rotation nuages (rad/s) — un peu plus lente que la Terre. */
-const HERO_CLOUD_SPIN_SPEED = 0.12;
-/** Inclinaison du plan orbital (rad). */
-const HERO_MOON_INCLINATION = 0.35;
-/** Halo / rayon corps — aligné sur les nuages (une seule couche externe). */
+
+const DEG = Math.PI / 180;
+/** Rayon Terre en unités scène — ancre des proportions. */
+const EARTH_SCENE_R = 0.5;
+/**
+ * Rayon réel / Terre → rayon scène.
+ * Terrestres en ratio vrai ; géants adoucis (^0,48) pour garder le cadrage héro.
+ */
+function sceneRadiusFromEarthRadii(earthRadii) {
+  const soft = earthRadii <= 1.15 ? earthRadii : Math.pow(earthRadii, 0.48);
+  return EARTH_SCENE_R * soft;
+}
+/** Période sidérale (h) → vitesse de spin scène (rad/s). Plancher pour Mercure/Vénus. */
+function spinSpeedFromPeriodHours(periodH, { retrograde = false } = {}) {
+  const earthH = 24;
+  const rel = earthH / Math.max(periodH, 0.1);
+  const compressed = Math.sign(rel) * Math.pow(Math.abs(rel), 0.42);
+  const speed = 0.14 * Math.max(0.045, Math.abs(compressed));
+  return retrograde ? -speed : speed;
+}
+
+/** Lune : rayon réel / Terre ≈ 0,273 ; orbite compressée (réel ~60 R⊕). */
+const HERO_MOON_ORBIT_RADIUS_MUL = 2.65;
+const HERO_MOON_SIZE_MUL = 0.273;
+/** Orbite Lune (rad/s) — visible, pas à l’échelle réelle. */
+const HERO_MOON_ORBIT_SPEED = 0.22;
+/** Inclinaison orbite lunaire / écliptique (~5°). */
+const HERO_MOON_INCLINATION = 5.14 * DEG;
+/** Halo / nuages au-dessus de la surface. */
 const HERO_ATM_RADIUS_MUL = 1.028;
-/** Nuages au-dessus de la surface (marge anti z-fight). */
 const HERO_CLOUD_RADIUS_MUL = 1.028;
-/** Lumière clé locale (côté Soleil) pour terminateur / ombres Terre. */
-const HERO_EARTH_KEY_INTENSITY = 3.2;
-const HERO_EARTH_KEY_DIST_MUL = 14;
+/** Lumière clé Soleil → planète active (terminateur / ombres). */
+const SUN_KEY_INTENSITY = 3.05;
+const SUN_KEY_DIST_MUL = 14;
 /** IOR eau (MeshPhysical) — Fresnel océans. */
 const HERO_OCEAN_IOR = 1.333;
 /** Opacity nuages Vénus (couche dense). */
-const VENUS_CLOUD_OPACITY = 0.58;
+const VENUS_CLOUD_OPACITY = 0.62;
+/** Anneau Saturne : bord externe ≈ 2,27 R♄. */
+const SATURN_RING_OUTER_MUL = 2.27;
 
 const SECTION_COUNT = 9;
 const STAR_COUNT = 2800;
-const SUN_BASE_RADIUS = 2.2;
+/** Soleil : clairement plus grand que Jupiter (réel 109 R⊕, compressé). */
+const SUN_BASE_RADIUS = EARTH_SCENE_R * 5.6;
 /** Chaleur Soleil 3D / UI : 0 avant §6 (Sites), 1 à Contact (§8). */
 const SUN_HEAT_START = 5.85;
 const SUN_HEAT_SPAN = 2.15;
@@ -398,7 +414,7 @@ const PLANETS = [
   {
     name: "Neptune",
     orbitRadius: scaledOrbit(58),
-    size: 1.4,
+    size: sceneRadiusFromEarthRadii(3.883),
     color: 0x1e3a8a,
     emissive: 0x081428,
     accentColor: 0x5c8fd4,
@@ -406,12 +422,13 @@ const PLANETS = [
     roughness: 0.82,
     noiseScale: 5.5,
     orbitSpeed: 0.08,
-    spinSpeed: 0.22,
-    axialScale: 0.42,
+    spinSpeed: spinSpeedFromPeriodHours(16.11),
+    axialTilt: 28.32 * DEG,
+    axialScale: 1,
     heroAngle: 0.78,
     startAngle: 0.78,
     section: 0,
-    camDistMul: 2.4,
+    camDistMul: 2.35,
     camLift: 0.1,
     camTangent: 0.34,
     gltfUrl: PLANET_GLB.neptune,
@@ -419,7 +436,7 @@ const PLANETS = [
   {
     name: "Saturn",
     orbitRadius: scaledOrbit(42),
-    size: 1.28,
+    size: sceneRadiusFromEarthRadii(9.449),
     color: 0xc4b078,
     emissive: 0x383020,
     accentColor: 0xe8dcb0,
@@ -427,13 +444,14 @@ const PLANETS = [
     roughness: 0.78,
     noiseScale: 3.2,
     orbitSpeed: 0.14,
-    spinSpeed: 0.38,
-    axialScale: 0.58,
+    spinSpeed: spinSpeedFromPeriodHours(10.66),
+    axialTilt: 26.73 * DEG,
+    axialScale: 1,
     heroAngle: 2.14,
     startAngle: 2.14,
     hasRings: true,
     section: 1,
-    camDistMul: 1.29,
+    camDistMul: 1.42,
     camLift: 0.06,
     camTangent: 0.6,
     ringView: true,
@@ -442,7 +460,7 @@ const PLANETS = [
   {
     name: "Pluto", // panel UI §2 : Radio
     orbitRadius: scaledOrbit(36),
-    size: 0.28,
+    size: Math.max(0.14, sceneRadiusFromEarthRadii(0.186)),
     color: 0x9080a8,
     emissive: 0x201828,
     accentColor: 0xc8b8d8,
@@ -450,19 +468,20 @@ const PLANETS = [
     roughness: 0.88,
     noiseScale: 7.2,
     orbitSpeed: 0.18,
-    spinSpeed: 0.28,
-    axialScale: 0.82,
+    spinSpeed: spinSpeedFromPeriodHours(153.3),
+    axialTilt: 122.53 * DEG,
+    axialScale: 1,
     heroAngle: 2.78,
     startAngle: 2.78,
     section: 2,
-    camDistMul: 1.18,
+    camDistMul: 1.35,
     camLift: 0.08,
     camTangent: 0.48,
   },
   {
     name: "Jupiter",
     orbitRadius: scaledOrbit(28),
-    size: 1.18,
+    size: sceneRadiusFromEarthRadii(11.209),
     color: 0xbc6830,
     emissive: 0x482010,
     accentColor: 0xe09048,
@@ -470,12 +489,13 @@ const PLANETS = [
     roughness: 0.7,
     noiseScale: 2.8,
     orbitSpeed: 0.22,
-    spinSpeed: 0.48,
-    axialScale: 0.55,
+    spinSpeed: spinSpeedFromPeriodHours(9.93),
+    axialTilt: 3.13 * DEG,
+    axialScale: 1,
     heroAngle: 3.42,
     startAngle: 3.42,
     section: 3,
-    camDistMul: 1.22,
+    camDistMul: 1.38,
     camLift: 0.1,
     camTangent: 0.5,
     gltfUrl: PLANET_GLB.jupiter,
@@ -483,7 +503,7 @@ const PLANETS = [
   {
     name: "Uranus",
     orbitRadius: scaledOrbit(35),
-    size: 0.72,
+    size: sceneRadiusFromEarthRadii(4.007),
     color: 0x48b0a8,
     emissive: 0x123838,
     accentColor: 0x78e0d0,
@@ -491,12 +511,13 @@ const PLANETS = [
     roughness: 0.75,
     noiseScale: 4.0,
     orbitSpeed: 0.26,
-    spinSpeed: 0.55,
-    axialScale: 0.7,
+    spinSpeed: spinSpeedFromPeriodHours(17.24, { retrograde: true }),
+    axialTilt: 97.77 * DEG,
+    axialScale: 1,
     heroAngle: 4.1,
     startAngle: 4.1,
     section: 4,
-    camDistMul: 1.09,
+    camDistMul: 1.18,
     camLift: 0.09,
     camTangent: 0.45,
     gltfUrl: PLANET_GLB.uranus,
@@ -504,7 +525,7 @@ const PLANETS = [
   {
     name: "Mars",
     orbitRadius: scaledOrbit(20),
-    size: 0.36,
+    size: sceneRadiusFromEarthRadii(0.532),
     color: 0xae5038,
     emissive: 0x381408,
     accentColor: 0xd87858,
@@ -512,12 +533,13 @@ const PLANETS = [
     roughness: 0.85,
     noiseScale: 6.0,
     orbitSpeed: 0.32,
-    spinSpeed: 0.72,
-    axialScale: 0.9,
+    spinSpeed: spinSpeedFromPeriodHours(24.62),
+    axialTilt: 25.19 * DEG,
+    axialScale: 1,
     heroAngle: 4.8,
     startAngle: 4.8,
     section: 5,
-    camDistMul: 1.21,
+    camDistMul: 1.28,
     camLift: 0.08,
     camTangent: 0.4,
     gltfUrl: PLANET_GLB.mars,
@@ -525,7 +547,7 @@ const PLANETS = [
   {
     name: "Venus", // panel UI §6 : Sites
     orbitRadius: scaledOrbit(10.2),
-    size: 0.54,
+    size: sceneRadiusFromEarthRadii(0.949),
     color: 0xe8d8a8,
     emissive: 0x484028,
     accentColor: 0xfff4d8,
@@ -533,8 +555,9 @@ const PLANETS = [
     roughness: 0.76,
     noiseScale: 4.2,
     orbitSpeed: 0.58,
-    spinSpeed: 0.32,
-    axialScale: 0.9,
+    spinSpeed: spinSpeedFromPeriodHours(5832.6, { retrograde: true }),
+    axialTilt: 2.64 * DEG,
+    axialScale: 1,
     heroAngle: 5.42,
     startAngle: 1.85,
     section: 6,
@@ -546,7 +569,7 @@ const PLANETS = [
   {
     name: "Earth", // panel UI §7 Plugin — GLB texturé + Lune orbitale
     orbitRadius: scaledOrbit(7.6),
-    size: 0.55,
+    size: sceneRadiusFromEarthRadii(1),
     color: 0x286858,
     emissive: 0x0c2820,
     accentColor: 0x58c080,
@@ -554,12 +577,13 @@ const PLANETS = [
     roughness: 0.72,
     noiseScale: 5.0,
     orbitSpeed: 0.68,
-    spinSpeed: 0.42,
-    axialScale: 0.92,
+    spinSpeed: spinSpeedFromPeriodHours(23.93),
+    axialTilt: 23.44 * DEG,
+    axialScale: 1,
     heroAngle: 5.78,
     startAngle: 4.65,
     section: 7,
-    camDistMul: 1.0,
+    camDistMul: 1.05,
     camLift: 0.05,
     camTangent: 0.35,
     gltfUrl: PLANET_GLB.earth,
@@ -568,7 +592,7 @@ const PLANETS = [
   {
     name: "Mercury",
     orbitRadius: scaledOrbit(13),
-    size: 0.24,
+    size: sceneRadiusFromEarthRadii(0.383),
     color: 0x909088,
     emissive: 0x282420,
     accentColor: 0xb0aca4,
@@ -576,12 +600,13 @@ const PLANETS = [
     roughness: 0.9,
     noiseScale: 8.0,
     orbitSpeed: 0.55,
-    spinSpeed: 0.95,
-    axialScale: 0.95,
+    spinSpeed: spinSpeedFromPeriodHours(1407.5),
+    axialTilt: 0.03 * DEG,
+    axialScale: 1,
     heroAngle: 6.02,
     startAngle: 6.02,
     section: 8,
-    camDistMul: 0.87,
+    camDistMul: 0.95,
     camLift: 0.04,
     camTangent: 0.3,
     nearSun: true,
@@ -594,7 +619,7 @@ const DECORATIVE_PLANETS = [
   {
     name: "Ceres",
     orbitRadius: scaledOrbit(17),
-    size: 0.16,
+    size: sceneRadiusFromEarthRadii(0.074),
     color: 0x687868,
     emissive: 0x181c14,
     accentColor: 0x90a088,
@@ -602,8 +627,9 @@ const DECORATIVE_PLANETS = [
     roughness: 0.88,
     noiseScale: 7.0,
     orbitSpeed: 0.38,
-    spinSpeed: 0.55,
-    axialScale: 0.85,
+    spinSpeed: spinSpeedFromPeriodHours(9.07),
+    axialTilt: 4 * DEG,
+    axialScale: 1,
     heroAngle: 5.1,
     startAngle: 5.1,
     section: null,
@@ -611,7 +637,7 @@ const DECORATIVE_PLANETS = [
   {
     name: "Moon",
     orbitRadius: scaledOrbit(14),
-    size: 0.11,
+    size: sceneRadiusFromEarthRadii(0.273),
     color: 0xb0b0b8,
     emissive: 0x1c1c22,
     accentColor: 0xd0d0d8,
@@ -619,8 +645,9 @@ const DECORATIVE_PLANETS = [
     roughness: 0.92,
     noiseScale: 9.0,
     orbitSpeed: 0.48,
-    spinSpeed: 0.18,
-    axialScale: 0.95,
+    spinSpeed: spinSpeedFromPeriodHours(655.7),
+    axialTilt: 6.68 * DEG,
+    axialScale: 1,
     heroAngle: 5.55,
     startAngle: 2.4,
     section: null,
@@ -719,6 +746,7 @@ let sunGlow;
 let sunCorona;
 let sunHaze;
 let sunLight;
+let sunKeyLight;
 let accentLight;
 let planetEntries = [];
 let orbitMeshes = [];
@@ -2034,13 +2062,61 @@ function buildSun() {
   sunHaze.position.copy(sunOrigin);
   scene.add(sunHaze);
 
-  sunLight = new THREE.PointLight(0xffdd88, 4.4, 400 * ORBIT_SCALE, 1.35);
+  sunLight = new THREE.PointLight(0xffdd88, 2.8, 400 * ORBIT_SCALE, 1.35);
   sunLight.position.copy(sunOrigin);
   scene.add(sunLight);
 
-  accentLight = new THREE.PointLight(0x88a7ff, 0.55, 55, 2);
+  accentLight = new THREE.PointLight(0x88a7ff, 0.35, 55, 2);
   accentLight.position.set(8, 6, 10);
   scene.add(accentLight);
+}
+
+function buildSunKeyLight() {
+  if (sunKeyLight) {
+    scene.remove(sunKeyLight);
+    scene.remove(sunKeyLight.target);
+    sunKeyLight.dispose?.();
+  }
+  sunKeyLight = new THREE.DirectionalLight(0xfff2d8, SUN_KEY_INTENSITY);
+  sunKeyLight.castShadow = true;
+  sunKeyLight.shadow.mapSize.set(2048, 2048);
+  sunKeyLight.shadow.bias = -0.00035;
+  sunKeyLight.shadow.normalBias = 0.04;
+  sunKeyLight.shadow.radius = 2.5;
+  sunKeyLight.shadow.camera.near = 0.2;
+  sunKeyLight.shadow.camera.far = 80;
+  scene.add(sunKeyLight);
+  scene.add(sunKeyLight.target);
+}
+
+function updateSunKeyLight(activeEntry, planetPos) {
+  if (!sunKeyLight || !activeEntry) return;
+  const r = (activeEntry.data.size || 0.5) * (activeEntry.mesh?.scale?.x || 1);
+  const moonReach =
+    activeEntry.gltfProfile === "earth"
+      ? r * HERO_MOON_ORBIT_RADIUS_MUL + r * HERO_MOON_SIZE_MUL
+      : 0;
+  const ringReach = activeEntry.data.hasRings ? r * SATURN_RING_OUTER_MUL : 0;
+  const span = Math.max(r * 2.6, moonReach * 1.15, ringReach * 1.1);
+
+  tmpToSun.copy(sunOrigin).sub(planetPos).normalize();
+  sunKeyLight.position
+    .copy(planetPos)
+    .addScaledVector(tmpToSun, Math.max(r * SUN_KEY_DIST_MUL, 6));
+  sunKeyLight.target.position.copy(planetPos);
+  sunKeyLight.target.updateMatrixWorld();
+
+  const cam = sunKeyLight.shadow.camera;
+  cam.left = -span;
+  cam.right = span;
+  cam.top = span;
+  cam.bottom = -span;
+  cam.near = Math.max(0.15, r * 0.35);
+  cam.far = Math.max(r * SUN_KEY_DIST_MUL * 1.6, span * 4);
+  cam.updateProjectionMatrix();
+
+  sunKeyLight.intensity = activeEntry.isGltf ? SUN_KEY_INTENSITY : SUN_KEY_INTENSITY * 0.55;
+  sunKeyLight.visible = true;
 }
 
 function buildOrbitRing(radius) {
@@ -2383,14 +2459,14 @@ function buildGltfSaturnRings(source, planetR, ringMap) {
     const box = new THREE.Box3().setFromObject(torus);
     const size = box.getSize(new THREE.Vector3());
     const major = Math.max(size.x, size.z, size.y) * 0.5;
-    const targetMajor = planetR * 1.95;
+    const targetMajor = planetR * SATURN_RING_OUTER_MUL;
     torus.scale.setScalar(targetMajor / Math.max(major, 1e-4));
     // Anneau dans le plan XZ (même convention que les orbites).
     torus.rotation.x = Math.PI / 2;
     root.add(torus);
   } else if (ringMap) {
     prepareHeroTexture(ringMap, { srgb: true });
-    const geo = new THREE.RingGeometry(planetR * 1.35, planetR * 2.35, 96);
+    const geo = new THREE.RingGeometry(planetR * 1.45, planetR * SATURN_RING_OUTER_MUL, 96);
     const mat = new THREE.MeshBasicMaterial({
       map: ringMap,
       color: 0xffffff,
@@ -2474,6 +2550,8 @@ async function upgradePlanetWithGltf(entry) {
   const isEarth = data.gltfProfile === "earth";
   const bodySpin = new THREE.Group();
   const cloudSpin = new THREE.Group();
+  const equator = new THREE.Group();
+  equator.rotation.z = data.axialTilt ?? 0;
   const root = new THREE.Group();
 
   let bodyMat;
@@ -2496,7 +2574,7 @@ async function upgradePlanetWithGltf(entry) {
       clearcoatRoughnessMap: waterMaps.roughnessMap || undefined,
       emissiveMap: maps.dayMap,
       emissive: new THREE.Color(0xffffff),
-      emissiveIntensity: 0.05,
+      emissiveIntensity: 0.04,
     });
   } else {
     bodyMat = new THREE.MeshStandardMaterial({
@@ -2506,7 +2584,8 @@ async function upgradePlanetWithGltf(entry) {
       metalness: 0,
       emissiveMap: maps.dayMap,
       emissive: new THREE.Color(0xffffff),
-      emissiveIntensity: 0.22,
+      // Faible : laisse la lumière Soleil créer le terminateur.
+      emissiveIntensity: 0.045,
     });
   }
 
@@ -2514,8 +2593,8 @@ async function upgradePlanetWithGltf(entry) {
     new THREE.SphereGeometry(bodyR, 64, 48),
     bodyMat
   );
-  bodyMesh.castShadow = isEarth;
-  bodyMesh.receiveShadow = isEarth;
+  bodyMesh.castShadow = true;
+  bodyMesh.receiveShadow = true;
   bodySpin.add(bodyMesh);
 
   let hasClouds = false;
@@ -2528,8 +2607,10 @@ async function upgradePlanetWithGltf(entry) {
   const { atmMesh, atmMat } = createGltfAtmosphere(
     bodyR,
     data.atmosphereColor,
-    isEarth ? 0.35 : 0.28
+    isEarth ? 0.32 : 0.22
   );
+  atmMesh.castShadow = false;
+  atmMesh.receiveShadow = false;
   bodySpin.add(atmMesh);
 
   let moonPivot = null;
@@ -2549,6 +2630,9 @@ async function upgradePlanetWithGltf(entry) {
           color: 0xffffff,
           roughness: 0.95,
           metalness: 0,
+          emissiveMap: map || null,
+          emissive: new THREE.Color(0xffffff),
+          emissiveIntensity: 0.03,
         });
         obj.castShadow = true;
         obj.receiveShadow = true;
@@ -2562,6 +2646,9 @@ async function upgradePlanetWithGltf(entry) {
           color: 0xffffff,
           roughness: 0.95,
           metalness: 0,
+          emissiveMap: maps.moonMap,
+          emissive: new THREE.Color(0xffffff),
+          emissiveIntensity: 0.03,
         })
       );
       moonMesh.castShadow = true;
@@ -2571,7 +2658,6 @@ async function upgradePlanetWithGltf(entry) {
     moonSpin.position.set(bodyR * HERO_MOON_ORBIT_RADIUS_MUL, 0, 0);
     moonPivot = new THREE.Group();
     moonPivot.rotation.x = HERO_MOON_INCLINATION;
-    moonPivot.rotation.z = 0.22;
     moonPivot.add(moonSpin);
   }
 
@@ -2580,51 +2666,29 @@ async function upgradePlanetWithGltf(entry) {
     rings = buildGltfSaturnRings(source, bodyR, maps.ringMap);
   }
 
-  root.add(bodySpin);
-  if (hasClouds) root.add(cloudSpin);
+  equator.add(bodySpin);
+  if (hasClouds) equator.add(cloudSpin);
+  if (rings?.root) equator.add(rings.root);
+  root.add(equator);
   if (moonPivot) root.add(moonPivot);
-  if (rings?.root) root.add(rings.root);
-
-  let heroSunLight = null;
-  if (isEarth) {
-    if (entry.heroSunLight) {
-      scene.remove(entry.heroSunLight);
-      scene.remove(entry.heroSunLight.target);
-      entry.heroSunLight.dispose?.();
-    }
-    heroSunLight = new THREE.DirectionalLight(0xfff1d2, HERO_EARTH_KEY_INTENSITY);
-    heroSunLight.castShadow = true;
-    heroSunLight.shadow.mapSize.set(2048, 2048);
-    heroSunLight.shadow.bias = -0.0004;
-    heroSunLight.shadow.normalBias = 0.06;
-    heroSunLight.shadow.radius = 2;
-    const shadowSpan = bodyR * 2.8;
-    heroSunLight.shadow.camera.left = -shadowSpan;
-    heroSunLight.shadow.camera.right = shadowSpan;
-    heroSunLight.shadow.camera.top = shadowSpan;
-    heroSunLight.shadow.camera.bottom = -shadowSpan;
-    heroSunLight.shadow.camera.near = bodyR * 0.5;
-    heroSunLight.shadow.camera.far = bodyR * HERO_EARTH_KEY_DIST_MUL * 1.8;
-    scene.add(heroSunLight);
-    scene.add(heroSunLight.target);
-  }
 
   swapPlanetRoot(entry, root, bodyMat, {
     atmMesh,
     atmMat,
     earthSpin: bodySpin,
     bodySpin,
+    equator,
     cloudSpin: hasClouds ? cloudSpin : null,
     moonPivot,
     moonSpin,
-    heroSunLight,
+    heroSunLight: null,
     heroEarthRadius: isEarth ? bodyR : 0,
     rings,
     gltfProfile: isEarth ? "earth" : "simple",
   });
 
   console.info(
-    `[Hakou 3D] ${data.name} GLB OK — R=${bodyR}, nuages=${hasClouds}, anneaux=${!!rings}`
+    `[Hakou 3D] ${data.name} GLB OK — R=${bodyR.toFixed(3)}, tilt=${((data.axialTilt || 0) / DEG).toFixed(1)}°, nuages=${hasClouds}, anneaux=${!!rings}`
   );
 }
 
@@ -2682,6 +2746,7 @@ function addPlanetEntry(data) {
     rings,
     earthSpin: null,
     bodySpin: null,
+    equator: null,
     cloudSpin: null,
     moonPivot: null,
     moonSpin: null,
@@ -2865,6 +2930,8 @@ function updateOrbitRings(displaySection, glideState) {
 function updatePlanets(elapsed, displaySection, glideState) {
   const activeIndex = getActiveSectionIndex(displaySection, glideState);
   const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
+  let activeEntry = null;
+  let activePos = null;
 
   planetEntries.forEach((entry) => {
     const { data, mesh, mat, rings, earthSpin, cloudSpin, moonPivot, moonSpin, isGltf } =
@@ -2877,40 +2944,39 @@ function updatePlanets(elapsed, displaySection, glideState) {
       : getSectionProximity(data.section, displaySection, glideState);
     const pos = getPlanetPosition(data, elapsed, displaySection, tmpPlanetPos, glideState);
     mesh.position.copy(pos);
+    if (isActive) {
+      activeEntry = entry;
+      activePos = pos.clone();
+    }
+
     const axial = data.axialScale ?? 1;
-    const spinFactor = PLANET_SPIN_SCALE * axial;
-    const spinY = elapsed * data.spinSpeed * spinFactor * PLANET_SPIN_MUL;
+    // spinSpeed déjà calibré (période sidérale) — plus de facteur axialScale « fake ».
+    const spinY = elapsed * data.spinSpeed * PLANET_SPIN_MUL * axial;
+
+    if (entry.equator && data.axialTilt != null) {
+      entry.equator.rotation.z = data.axialTilt;
+    }
 
     if (isGltf && bodySpin) {
-      if (entry.gltfProfile === "earth") {
-        bodySpin.rotation.y = elapsed * HERO_EARTH_SPIN_SPEED;
-        if (cloudSpin) {
-          cloudSpin.rotation.y = elapsed * HERO_CLOUD_SPIN_SPEED;
+      bodySpin.rotation.y = spinY;
+      if (cloudSpin) {
+        if (data.name === "Venus") {
+          // Super-rotation atmosphère ~4 j (rétrograde), pas le corps ~243 j.
+          cloudSpin.rotation.y = elapsed * spinSpeedFromPeriodHours(96, { retrograde: true });
+        } else {
+          cloudSpin.rotation.y = spinY * 0.78;
         }
-        if (moonPivot) {
-          moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED;
-        }
-        if (moonSpin) {
-          moonSpin.rotation.y = elapsed * HERO_MOON_SPIN_SPEED;
-        }
-        if (entry.heroSunLight) {
-          const r = entry.heroEarthRadius || data.size;
-          tmpToSun.copy(sunOrigin).sub(pos).normalize();
-          entry.heroSunLight.position
-            .copy(pos)
-            .addScaledVector(tmpToSun, r * HERO_EARTH_KEY_DIST_MUL);
-          entry.heroSunLight.target.position.copy(pos);
-          entry.heroSunLight.target.updateMatrixWorld();
-          entry.heroSunLight.visible = mesh.visible;
-        }
-      } else {
-        bodySpin.rotation.y = spinY;
-        if (cloudSpin) {
-          cloudSpin.rotation.y = spinY * 0.72;
-        }
+      }
+      if (moonPivot) {
+        moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED;
+        // Rotation synchrone (face cachée).
+        if (moonSpin) moonSpin.rotation.y = moonPivot.rotation.y;
       }
     } else {
       mesh.rotation.y = spinY;
+      if (data.axialTilt) {
+        mesh.rotation.z = data.axialTilt * 0.35;
+      }
     }
 
     if (mat?.userData?.shaderUniforms) {
@@ -2924,29 +2990,34 @@ function updatePlanets(elapsed, displaySection, glideState) {
       0.3 + proximity * 0.65 + (isActive ? 0.3 : 0) + decorNearSun;
     if (!isGltf && mat) {
       mat.emissiveIntensity = emissiveBoost;
-    } else if (isGltf && mat && entry.gltfProfile !== "earth") {
-      mat.emissiveIntensity = 0.16 + proximity * 0.28 + (isActive ? 0.12 : 0);
+    } else if (isGltf && mat) {
+      mat.emissiveIntensity = 0.035 + proximity * 0.05 + (isActive ? 0.02 : 0);
     }
 
-    const scale = 1 + proximity * 0.22 + decorNearSun * 0.08;
+    const scale = 1 + proximity * 0.12 + decorNearSun * 0.06;
     mesh.scale.setScalar(scale);
 
     if (entry.atmMat) {
       if (isGltf && entry.atmMat.opacity != null) {
-        entry.atmMat.opacity = 0.24 + proximity * 0.14;
+        entry.atmMat.opacity = 0.18 + proximity * 0.12;
       } else if (entry.atmMat.uniforms?.uIntensity) {
         entry.atmMat.uniforms.uIntensity.value = 0.85 + proximity * 0.9;
       }
     }
 
     if (rings?.gltf && rings.root) {
-      rings.root.rotation.y = elapsed * 0.32 * spinFactor * PLANET_SPIN_MUL;
+      // Anneaux coplanaires : pas de spin propre fort (poussière Kepler).
+      rings.root.rotation.y = elapsed * 0.04 * PLANET_SPIN_MUL;
     } else if (rings) {
       const ringSpin = PLANET_SPIN_SCALE * axial;
       rings.inner.rotation.z = elapsed * 0.4 * ringSpin * PLANET_SPIN_MUL;
       rings.outer.rotation.z = elapsed * 0.28 * ringSpin * PLANET_SPIN_MUL;
     }
   });
+
+  if (activeEntry && activePos) {
+    updateSunKeyLight(activeEntry, activePos);
+  }
 
   const sunHeat = getSunHeat(displaySection, glideState);
   const coreScale = 0.58 + sunHeat * 0.42;
@@ -3010,7 +3081,7 @@ function updatePlanets(elapsed, displaySection, glideState) {
   );
   sunLight.color.copy(tmpSunColor);
   sunLight.intensity =
-    3.6 + sunHeat * 3.2 + Math.sin(elapsed * 0.9 * SCENE_AMBIENT_MOTION_MUL) * 0.2;
+    2.4 + sunHeat * 2.6 + Math.sin(elapsed * 0.9 * SCENE_AMBIENT_MOTION_MUL) * 0.15;
 }
 
 function updateAccentLight(displaySection, elapsed, glideState) {
@@ -3573,10 +3644,11 @@ export function initScene(canvas) {
     720 * ORBIT_SCALE
   );
 
-  scene.add(new THREE.AmbientLight(0x1a2240, 0.14));
-  scene.add(new THREE.HemisphereLight(0x4466aa, 0x050508, 0.32));
+  scene.add(new THREE.AmbientLight(0x12182a, 0.09));
+  scene.add(new THREE.HemisphereLight(0x3a5080, 0x050508, 0.2));
 
   buildSun();
+  buildSunKeyLight();
   buildPlanets();
   buildStars();
   buildIntroGate();
@@ -3641,6 +3713,12 @@ export function disposeScene() {
   window.removeEventListener("resize", onResize);
   disposeRestOrbitInteraction();
   disposeIntroGate();
+  if (sunKeyLight) {
+    scene?.remove(sunKeyLight);
+    scene?.remove(sunKeyLight.target);
+    sunKeyLight.dispose?.();
+    sunKeyLight = null;
+  }
   planetEntries.forEach(({ mesh, mat, atmMesh, atmMat, rings, isGltf, heroSunLight }) => {
     if (heroSunLight) {
       scene?.remove(heroSunLight);
@@ -3655,7 +3733,9 @@ export function disposeScene() {
     }
     atmMesh?.geometry?.dispose();
     atmMat?.dispose();
-    if (rings) {
+    if (rings?.gltf && rings.root) {
+      disposeObject3D(rings.root);
+    } else if (rings) {
       rings.inner.geometry?.dispose();
       rings.inner.material?.dispose();
       rings.outer.geometry?.dispose();
