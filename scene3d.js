@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=19";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=20";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -142,7 +142,7 @@ const BODY_PUSH_MAX_ITER = 8;
 const SECTION_FRAMING = [
   {
     planetSide: 1,
-    distScale: 1.05,
+    distScale: 1.53,
     tangentMul: 1.02,
     compositionSlide: 1.04,
     elevation: 0.3,
@@ -383,13 +383,13 @@ function enforceMinSunViewDistance(sectionIndex, point) {
 
 const PLANETS = [
   {
-    name: "Earth", // §0 intro — mesh GLB texturé (ex-Neptune) ; §7 reste Terre stylisée
+    name: "Neptune",
     orbitRadius: scaledOrbit(58),
-    size: 2.4,
+    size: 1.4,
     color: 0x1e3a8a,
     emissive: 0x081428,
     accentColor: 0x5c8fd4,
-    atmosphereColor: 0x4a90d0,
+    atmosphereColor: 0x3060b0,
     roughness: 0.82,
     noiseScale: 5.5,
     orbitSpeed: 0.08,
@@ -398,10 +398,9 @@ const PLANETS = [
     heroAngle: 0.78,
     startAngle: 0.78,
     section: 0,
-    camDistMul: 1.55,
+    camDistMul: 2.4,
     camLift: 0.1,
     camTangent: 0.34,
-    gltfUrl: HERO_EARTH_GLB_URL,
   },
   {
     name: "Saturn",
@@ -526,9 +525,9 @@ const PLANETS = [
     camTangent: 0.38,
   },
   {
-    name: "Earth", // panel UI §7 : Plugin (planète Terre décorative 3D inchangée)
+    name: "Earth", // panel UI §7 Plugin — GLB texturé + Lune orbitale
     orbitRadius: scaledOrbit(7.6),
-    size: 0.46,
+    size: 0.55,
     color: 0x286858,
     emissive: 0x0c2820,
     accentColor: 0x58c080,
@@ -544,6 +543,7 @@ const PLANETS = [
     camDistMul: 1.0,
     camLift: 0.05,
     camTangent: 0.35,
+    gltfUrl: HERO_EARTH_GLB_URL,
   },
   {
     name: "Mercury",
@@ -2660,9 +2660,9 @@ function updateOrbitRings(displaySection, glideState) {
       opacity = 0.1 + sectionDist * 0.06;
     }
 
-    // §0 : l’anneau d’orbite coupe le globe en gros plan → quasi masqué.
-    if (i === 0 && effectiveSection < 0.45) {
-      opacity *= clamp(effectiveSection / 0.45, 0, 1) * 0.15;
+    // §7 Terre : l’anneau d’orbite coupe le globe en gros plan → quasi masqué.
+    if (i === 7 && Math.abs(effectiveSection - 7) < 0.45) {
+      opacity *= clamp(Math.abs(effectiveSection - 7) / 0.45, 0, 1) * 0.15;
     }
 
     ring.material.opacity = clamp(opacity, 0.0, 0.22);
