@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "23";
+const PLANET_GLB_V = "24";
 const PLANET_GLB = {
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
@@ -109,14 +109,12 @@ const REST_ORBIT_AZ_SENS = 0.0052;
 const REST_ORBIT_EL_SENS = 0.004;
 const REST_ORBIT_ELEV_MIN = -0.35;
 const REST_ORBIT_ELEV_MAX = 0.45;
-/** Derniers % du leg : convergence position + lookAt + FOV vers le cadrage héro destination. */
-const GLIDE_HERO_BLEND_START = 0.92;
-const GLIDE_LOOKAT_HERO_START = 0.95;
-const GLIDE_FOV_DIRECT_START = 0.9;
-/** Trajectoire glide : radiale uniquement (pas de tore / hélice). */
-const GLIDE_TORUS_REVOLUTION = 0;
-/** Légère respiration verticale sur un leg radial (× distance leg, 0 = up stable). */
-const GLIDE_RADIAL_Y_BREATHE = 0.004;
+/** Derniers % du leg : convergence douce vers le cadrage héro destination. */
+const GLIDE_HERO_BLEND_START = 0.88;
+/** Trajectoire glide : mélange courbe Bézier + composante radiale Soleil. */
+const GLIDE_CURVE_RADIAL_BLEND = 0.28;
+/** Respiration Y désactivée (source de tremblement). */
+const GLIDE_RADIAL_Y_BREATHE = 0;
 /** Demi-angle max du disque Soleil (rad) — évite le Soleil plein écran hors Contact. */
 /** Plafond angulaire Soleil (rad) — plus élevé en orbites intérieures pour ne pas repousser la caméra hors limite. */
 const SUN_MAX_ANGULAR_BY_SECTION = [
@@ -295,19 +293,19 @@ const SECTION_FRAMING = [
     safeSide: "west",
   },
   {
-    /* §7 Plugin / Terre — planète dominante (pas le Soleil) */
+    /* §7 Plugin / Terre — masse dominante + bande de ciel / fond */
     planetSide: -1,
-    distScale: 0.68,
-    tangentMul: 0.78,
-    compositionSlide: 0.72,
-    elevation: 0.12,
-    limbElevation: 0.07,
+    distScale: 0.8,
+    tangentMul: 0.82,
+    compositionSlide: 0.78,
+    elevation: 0.13,
+    limbElevation: 0.075,
     horizonLimbOut: 0.96,
-    horizonSkyLift: 0.11,
-    horizonSunBias: 0.12,
-    sunFrameBias: 0.22,
-    orbitSunLift: 0.04,
-    dutch: 0.009,
+    horizonSkyLift: 0.12,
+    horizonSunBias: 0.16,
+    sunFrameBias: 0.26,
+    orbitSunLift: 0.05,
+    dutch: 0.006,
     textAlign: "right",
     panelOffset: "right",
     safeSide: "east",
@@ -333,8 +331,9 @@ const SECTION_FRAMING = [
   },
 ];
 
-/** Focale repos (mm) — Son/Stream un peu plus télé pour grossir la planète. */
-const FOCAL_REST_MM = [42, 34, 38, 32, 36, 48, 46, 56, 54];
+/** Focale repos (mm) — Plugin un peu moins télé pour laisser du ciel derrière la Terre. */
+const FOCAL_REST_MM = [42, 34, 38, 32, 36, 48, 46, 50, 54];
+const GLIDE_FOV_DIRECT_START = 0.9;
 const SENSOR_HEIGHT_MM = 24;
 /** Lissage exponentiel FOV — constant pour éviter un saut quand le glide s'arrête. */
 const FOV_LERP_ALPHA = 0.12;
@@ -590,7 +589,7 @@ const PLANETS = [
     heroAngle: 5.78,
     startAngle: 4.65,
     section: 7,
-    camDistMul: 0.82,
+    camDistMul: 0.94,
     camLift: 0.05,
     camTangent: 0.32,
     gltfUrl: PLANET_GLB.earth,
@@ -1484,12 +1483,9 @@ function computeSectionCamera(sectionIndex, planet, planetPos, elapsed, out) {
   }
   tmpTangent.normalize();
 
-  const wobble =
-    sectionIndex === 0
-      ? 0
-      : Math.sin(elapsed * 0.4 * SCENE_AMBIENT_MOTION_MUL + sectionIndex) * 0.02;
+  const wobble = 0;
   const tangentBase = size * planet.camTangent * framing.tangentMul * framing.planetSide;
-  out.position.addScaledVector(tmpTangent, tangentBase * (1 + wobble));
+  out.position.addScaledVector(tmpTangent, tangentBase);
 
   const slideMul = framing.compositionSlide ?? 1;
   out.position.addScaledVector(
@@ -1758,7 +1754,8 @@ function enforcePathBodyClearance(
 }
 
 /**
- * Trajectoire rectiligne P0→P1 avec dégagement Soleil + collision corps.
+ * Trajectoire vectorielle P0→P1 : courbe de Bézier (lift/side JOURNEY_ARC)
+ * + légère composante radiale Soleil, sans micro-collision agressive (anti-tremblement).
  */
 function sampleRectilinearTransfer(
   p0,
@@ -1772,21 +1769,105 @@ function sampleRectilinearTransfer(
   out
 ) {
   const t = clamp(pathT, 0, 1);
+  if (t <= 1e-6) {
+    return out.copy(p0);
+  }
   if (t >= 1 - 1e-6) {
     return out.copy(p1);
   }
 
-  return enforcePathBodyClearance(
+  const arc = JOURNEY_ARC[fromIndex] ?? { lift: 0.1, side: 0.05 };
+  tmpSeg.copy(p1).sub(p0);
+  const len = tmpSeg.length() || 1;
+  const distScale = clamp(len / 28, 0.75, 1.65);
+
+  // Points de contrôle fixes (arc max au milieu) — courbes stables frame à frame.
+  computeArcControls(
     p0,
     p1,
-    t,
-    fromIndex,
-    toIndex,
-    elapsed,
-    displaySection,
-    glideState,
-    out
+    arc.lift * distScale * 0.62,
+    arc.side * distScale * 1.05,
+    0.5,
+    tmpCamP1,
+    tmpCamP2
   );
+
+  tmpMid.copy(p0).add(p1).multiplyScalar(0.5);
+  tmpToSun.copy(tmpMid).sub(sunOrigin);
+  if (tmpToSun.lengthSq() < 1e-6) {
+    tmpToSun.set(1, 0, 0);
+  } else {
+    tmpToSun.normalize();
+  }
+  const outwardBulge = arc.lift * distScale * len * 0.26;
+  tmpCamP1.addScaledVector(tmpToSun, outwardBulge * 0.7);
+  tmpCamP2.addScaledVector(tmpToSun, outwardBulge * 0.48);
+
+  cubicBezier3(p0, tmpCamP1, tmpCamP2, p1, t, out);
+
+  // Composante radiale douce (voyage vers/depuis le Soleil) — sans push itératif.
+  if (GLIDE_CURVE_RADIAL_BLEND > 0) {
+    const r0 = tmpSeg.copy(p0).sub(sunOrigin).length();
+    const r1 = tmpMid.copy(p1).sub(sunOrigin).length();
+    const r = THREE.MathUtils.lerp(r0, r1, t);
+    tmpSeg.copy(p0).sub(sunOrigin);
+    if (tmpSeg.lengthSq() > 1e-8) tmpSeg.normalize();
+    else tmpSeg.set(1, 0, 0);
+    tmpMid.copy(p1).sub(sunOrigin);
+    if (tmpMid.lengthSq() > 1e-8) tmpMid.normalize();
+    else tmpMid.copy(tmpSeg);
+    const dot = clamp(tmpSeg.dot(tmpMid), -1, 1);
+    const omega = Math.acos(dot);
+    if (omega < 1e-5) {
+      tmpToSun.copy(tmpSeg);
+    } else {
+      const sinOmega = Math.sin(omega);
+      const w0 = Math.sin((1 - t) * omega) / sinOmega;
+      const w1 = Math.sin(t * omega) / sinOmega;
+      tmpToSun
+        .copy(tmpSeg)
+        .multiplyScalar(w0)
+        .addScaledVector(tmpMid, w1)
+        .normalize();
+    }
+    tmpLookDest.copy(sunOrigin).addScaledVector(tmpToSun, r);
+    out.lerp(tmpLookDest, GLIDE_CURVE_RADIAL_BLEND);
+  }
+
+  const sunExtra = getSunPushExtraMargin(fromIndex, toIndex, displaySection) * 0.75;
+  pushPointOutsideSun(out, sunExtra);
+
+  // Dégagement corps uniquement si pénétration nette (évite le jitter de push/frame).
+  let deepPen = 0;
+  tmpBodyPushDir.set(0, 0, 0);
+  forEachCollisionBody((planet) => {
+    const sectionIndex = planet.section;
+    if (sectionIndex === fromIndex || sectionIndex === toIndex) return;
+    getPlanetPosition(planet, elapsed, displaySection, tmpPlanetPos, glideState);
+    const radius = getPlanetBodyCollisionRadius(
+      planet,
+      sectionIndex,
+      displaySection,
+      glideState
+    );
+    const pen = penetrationDepth(
+      out,
+      tmpPlanetPos,
+      radius,
+      CAMERA_BODY_CLEARANCE * 0.65
+    );
+    if (pen > deepPen) {
+      deepPen = pen;
+      tmpBodyPushDir.copy(out).sub(tmpPlanetPos);
+      if (tmpBodyPushDir.lengthSq() < 1e-8) tmpBodyPushDir.set(0, 1, 0);
+      else tmpBodyPushDir.normalize();
+    }
+  });
+  if (deepPen > 0.08) {
+    out.addScaledVector(tmpBodyPushDir, deepPen);
+  }
+
+  return out;
 }
 
 function computeArcControls(p0, p3, arcLift, arcSide, pathT, outP1, outP2) {
@@ -1886,15 +1967,11 @@ function computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySect
     return out;
   }
 
-  const t = easeInOutCubic(clamp(legT, 0, 1));
+  // legT déjà eased (navigation) — lerp linéaire dans cet espace = courbe douce.
+  const t = clamp(legT, 0, 1);
   out
     .copy(sectionCameras[fromIndex].lookAt)
     .lerp(sectionCameras[toIndex].lookAt, t);
-
-  const toPlanet = PLANETS[toIndex];
-  getPlanetPosition(toPlanet, elapsed, displaySection, tmpLookDest, glideState);
-  const planetFocus = computePlanetFocusWeight(legT) * 0.06;
-  out.lerp(tmpLookDest, planetFocus);
   return out;
 }
 
@@ -1977,32 +2054,21 @@ function sampleCameraState(displaySection, elapsed, glideState) {
       tmpCamPos
     );
     if (legT >= GLIDE_HERO_BLEND_START) {
-      const blendT = easeInOutCubic(
-        (legT - GLIDE_HERO_BLEND_START) / (1 - GLIDE_HERO_BLEND_START)
+      const u = clamp(
+        (legT - GLIDE_HERO_BLEND_START) / (1 - GLIDE_HERO_BLEND_START),
+        0,
+        1
       );
+      // smoothstep — pas de double easeInOutCubic sur un t déjà eased.
+      const blendT = u * u * (3 - 2 * u);
       tmpCamPos.lerp(to.position, blendT);
     }
   }
-  pushPointOutsideBodies(
-    tmpCamPos,
-    elapsed,
-    displaySection,
-    glideState,
-    fromIndex,
-    toIndex
-  );
-  const sunClampSection =
-    legT >= GLIDE_HERO_BLEND_START && fromIndex !== toIndex
-      ? toIndex
-      : toIndex === fromIndex
-        ? fromIndex
-        : THREE.MathUtils.lerp(fromIndex, toIndex, legT);
-  enforceMinSunViewDistance(sunClampSection, tmpCamPos);
+  // Pas de pushPointOutsideBodies itératif ici (source de tremblement) —
+  // le path courbe gère déjà un dégagement soft.
 
   if (fromIndex === toIndex || legT < 1e-5) {
     tmpCamLook.copy(from.lookAt);
-  } else if (legT >= GLIDE_LOOKAT_HERO_START) {
-    tmpCamLook.copy(to.lookAt);
   } else {
     computeSmoothFocusLookAt(
       legT,
@@ -3157,8 +3223,8 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
     smoothedCamPos.copy(cam.position);
     camera.position.copy(cam.position);
     camera.lookAt(cam.lookAt);
-    if (activeBlend > 0.5) {
-      camera.rotateZ(framing.dutch * activeBlend);
+    if (activeBlend > 0.92) {
+      camera.rotateZ(framing.dutch * 0.65);
     }
     introSnapFrames += 1;
     camSmoothReady = true;
@@ -3170,15 +3236,14 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 
     const inTransitPosition = inGlide && cam.legT < GLIDE_HERO_BLEND_START;
     let posAlpha;
-    if (heroConverging || atRestFrame) {
+    if (heroConverging || atRestFrame || inTransitPosition) {
+      // Suivi direct du path courbé — le lerp 0,1 provoquait un tremblement.
       posAlpha = 1;
-    } else if (inTransitPosition) {
-      posAlpha = 0.1;
     } else {
       posAlpha = restPosAlpha;
     }
 
-    if (heroConverging || atRestFrame) {
+    if (posAlpha >= 0.999) {
       smoothedCamPos.copy(cam.position);
     } else {
       smoothedCamPos.lerp(cam.position, posAlpha);
@@ -3189,24 +3254,21 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
     if (settling) {
       driftRamp = settleT;
     } else if (heroConverging) {
-      driftRamp = easeInOutCubic(
-        (cam.legT - GLIDE_HERO_BLEND_START) / (1 - GLIDE_HERO_BLEND_START)
+      const u = clamp(
+        (cam.legT - GLIDE_HERO_BLEND_START) / (1 - GLIDE_HERO_BLEND_START),
+        0,
+        1
       );
+      driftRamp = u * u * (3 - 2 * u);
     }
     const introAtRest = sectionIndex === 0 && atRestFrame && !settling;
-    const driftScale = introAtRest
+    // Dérive repos très légère — plus de sin haute fréquence qui « tremble ».
+    const driftScale = introAtRest || inGlide
       ? 0
-      : 0.03 * activeBlend * (inLongGlide ? 0.35 : 1) * driftRamp;
-    const driftPhase = elapsed * 0.14 * SCENE_AMBIENT_MOTION_MUL + sectionIndex * 1.7;
-    const driftAmp = activePlanet.size * 0.06;
-    const driftAttenuation = introAtRest
-      ? 0
-      : (inLongGlide ? 0.2 : 1 - activeBlend * 0.65) * driftRamp;
-    if (!introAtRest && !userOrbit) {
-      camera.position.x +=
-        Math.sin(elapsed * 0.28 * SCENE_AMBIENT_MOTION_MUL) * 0.024 * driftAttenuation;
-      camera.position.y +=
-        Math.sin(elapsed * 0.62 * SCENE_AMBIENT_MOTION_MUL) * 0.016 * driftAttenuation;
+      : 0.012 * activeBlend * driftRamp;
+    const driftPhase = elapsed * 0.09 * SCENE_AMBIENT_MOTION_MUL + sectionIndex * 1.7;
+    const driftAmp = activePlanet.size * 0.025;
+    if (!introAtRest && !userOrbit && !inGlide && atRest) {
       camera.position.addScaledVector(tmpTangent, Math.sin(driftPhase) * driftAmp * driftScale);
     }
 
@@ -3223,22 +3285,22 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
       smoothedCamPos.copy(tmpCamPos);
     }
 
-    pushPointOutsideBodies(
-      camera.position,
-      elapsed,
-      displaySection,
-      glideState,
-      sectionIndex,
-      sectionIndex
-    );
-    enforceMinSunViewDistance(sectionIndex, camera.position);
+    // Collision douce uniquement hors glide (évite le combat path vs push).
+    if (!inGlide) {
+      pushPointOutsideSun(
+        camera.position,
+        getSunPushExtraMargin(sectionIndex, sectionIndex, displaySection) * 0.5
+      );
+      enforceMinSunViewDistance(sectionIndex, camera.position);
+    }
     if (userOrbit) {
       smoothedCamPos.copy(camera.position);
     }
 
     camera.lookAt(cam.lookAt);
-    if (activeBlend > 0.5) {
-      camera.rotateZ(framing.dutch * activeBlend);
+    // Dutch figé au repos plein — pas pendant le blend (évite un roll qui tremble).
+    if (atRest && activeBlend > 0.92) {
+      camera.rotateZ(framing.dutch * 0.65);
     }
   }
 
