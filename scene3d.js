@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=12";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=13";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.45;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -20,8 +20,8 @@ const HERO_CLOUD_SPIN_SPEED = 0.12;
 const HERO_MOON_INCLINATION = 0.35;
 /** Halo / rayon Terre — anneau mince (quelques px à l’écran). */
 const HERO_ATM_RADIUS_MUL = 1.012;
-/** Nuages légèrement au-dessus de la surface. */
-const HERO_CLOUD_RADIUS_MUL = 1.02;
+/** Nuages au-dessus de la surface (marge anti z-fight). */
+const HERO_CLOUD_RADIUS_MUL = 1.028;
 /** Lumière clé locale (côté Soleil) pour terminateur / ombres Terre intro. */
 const HERO_EARTH_KEY_INTENSITY = 3.2;
 const HERO_EARTH_KEY_DIST_MUL = 14;
@@ -2300,24 +2300,29 @@ async function upgradePlanetWithEarthGltf(entry) {
 
   let hasClouds = false;
   if (cloudMap) {
+    // Pas de castShadow : les transparents projettent des stries (shadow acne).
     const cloudMat = new THREE.MeshStandardMaterial({
       map: cloudMap,
       color: 0xffffff,
       transparent: true,
       opacity: 1,
       depthWrite: false,
-      side: THREE.DoubleSide,
+      depthTest: true,
+      side: THREE.FrontSide,
       roughness: 1,
       metalness: 0,
-      alphaTest: 0.015,
+      alphaTest: 0.04,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
     });
     const cloudMesh = new THREE.Mesh(
       new THREE.SphereGeometry(earthR * HERO_CLOUD_RADIUS_MUL, 64, 48),
       cloudMat
     );
     cloudMesh.renderOrder = 3;
-    cloudMesh.castShadow = true;
-    cloudMesh.receiveShadow = true;
+    cloudMesh.castShadow = false;
+    cloudMesh.receiveShadow = false;
     cloudSpin.add(cloudMesh);
     hasClouds = true;
   }
@@ -2395,8 +2400,10 @@ async function upgradePlanetWithEarthGltf(entry) {
   );
   heroSunLight.castShadow = true;
   heroSunLight.shadow.mapSize.set(2048, 2048);
-  heroSunLight.shadow.bias = -0.00015;
-  heroSunLight.shadow.normalBias = 0.035;
+  // Bias plus doux : réduit l’acne sur le limbe sans trop détacher l’ombre Lune.
+  heroSunLight.shadow.bias = -0.0004;
+  heroSunLight.shadow.normalBias = 0.06;
+  heroSunLight.shadow.radius = 2;
   const shadowSpan = earthR * 2.8;
   heroSunLight.shadow.camera.left = -shadowSpan;
   heroSunLight.shadow.camera.right = shadowSpan;
@@ -2576,7 +2583,12 @@ function updateOrbitRings(displaySection, glideState) {
       opacity = 0.1 + sectionDist * 0.06;
     }
 
-    ring.material.opacity = clamp(opacity, 0.025, 0.22);
+    // §0 : l’anneau d’orbite coupe le globe en gros plan → quasi masqué.
+    if (i === 0 && effectiveSection < 0.45) {
+      opacity *= clamp(effectiveSection / 0.45, 0, 1) * 0.15;
+    }
+
+    ring.material.opacity = clamp(opacity, 0.0, 0.22);
   });
 }
 
