@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=7";
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=8";
 /** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
 const HERO_MOON_ORBIT_RADIUS_MUL = 1.52;
 /** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
@@ -2178,13 +2178,28 @@ function prepareGltfTextures(root) {
         mat.opacity < 0.99 ||
         /cloud/i.test(mat.name || "");
 
-      // MeshBasicMaterial : lisible même avec lumière Soleil très lointaine (§0).
+      if (isCloud) {
+        // Carte nuages souvent blanc/gris sur noir sans alpha → alphaMap.
+        const cloudMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          alphaMap: mat.map,
+          transparent: true,
+          opacity: 0.92,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+          blending: THREE.NormalBlending,
+        });
+        mat.map.colorSpace = THREE.NoColorSpace;
+        mat.dispose?.();
+        return cloudMat;
+      }
+
       const basic = new THREE.MeshBasicMaterial({
         map: mat.map,
         color: 0xffffff,
-        transparent: Boolean(isCloud || mat.transparent),
-        opacity: isCloud ? Math.min(mat.opacity ?? 0.85, 0.9) : 1,
-        depthWrite: !isCloud,
+        transparent: false,
+        depthWrite: true,
         side: mat.side ?? THREE.FrontSide,
         toneMapped: true,
       });
@@ -2194,6 +2209,17 @@ function prepareGltfTextures(root) {
     obj.material = nextMats.length === 1 ? nextMats[0] : nextMats;
     obj.castShadow = false;
     obj.receiveShadow = false;
+
+    if (
+      nextMats.some(
+        (m) => m?.transparent && (m.alphaMap || /cloud/i.test(m.name || ""))
+      ) ||
+      mats.some((m) => /cloud/i.test(m?.name || ""))
+    ) {
+      // Légèrement au-dessus de la surface pour éviter le z-fight.
+      obj.scale.multiplyScalar(1.014);
+      obj.renderOrder = 2;
+    }
   });
 }
 
