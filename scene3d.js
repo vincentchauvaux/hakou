@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "22";
+const PLANET_GLB_V = "23";
 const PLANET_GLB = {
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
@@ -120,7 +120,7 @@ const GLIDE_RADIAL_Y_BREATHE = 0.004;
 /** Demi-angle max du disque Soleil (rad) — évite le Soleil plein écran hors Contact. */
 /** Plafond angulaire Soleil (rad) — plus élevé en orbites intérieures pour ne pas repousser la caméra hors limite. */
 const SUN_MAX_ANGULAR_BY_SECTION = [
-  0.042, 0.042, 0.043, 0.044, 0.046, 0.072, 0.14, 0.18, 0.22,
+  0.042, 0.055, 0.05, 0.044, 0.046, 0.055, 0.1, 0.07, 0.11,
 ];
 /** Rotation propre planète sur son axe (× spinSpeed × axialScale) — distincte de REST_ORBIT_DRIFT */
 const PLANET_SPIN_SCALE = 0.025;
@@ -187,35 +187,36 @@ const SECTION_FRAMING = [
     safeSide: "west",
   },
   {
+    /* §1 Son / Saturne — plus de globe, moins de Soleil */
     planetSide: -1,
-    distScale: 1.16,
-    tangentMul: 1.18,
-    compositionSlide: 1.42,
-    elevation: 0.2,
-    limbElevation: 0.13,
-    horizonLimbOut: 0.96,
-    horizonSkyLift: 0.15,
-    horizonSunBias: 0.34,
-    sunFrameBias: 0.44,
-    orbitSunLift: 0.08,
+    distScale: 0.86,
+    tangentMul: 1.02,
+    compositionSlide: 0.82,
+    elevation: 0.18,
+    limbElevation: 0.11,
+    horizonLimbOut: 0.97,
+    horizonSkyLift: 0.14,
+    horizonSunBias: 0.16,
+    sunFrameBias: 0.26,
+    orbitSunLift: 0.05,
     dutch: 0.018,
     textAlign: "right",
     panelOffset: "right",
     safeSide: "east",
   },
   {
-    /* §2 Radio / Pluton */
+    /* §2 Stream / Pluton */
     planetSide: 1,
-    distScale: 1.04,
-    tangentMul: 1.02,
-    compositionSlide: 1.14,
-    elevation: 0.21,
-    limbElevation: 0.1,
-    horizonLimbOut: 0.96,
-    horizonSkyLift: 0.145,
-    horizonSunBias: 0.33,
-    sunFrameBias: 0.42,
-    orbitSunLift: 0.075,
+    distScale: 0.72,
+    tangentMul: 0.92,
+    compositionSlide: 0.78,
+    elevation: 0.18,
+    limbElevation: 0.09,
+    horizonLimbOut: 0.97,
+    horizonSkyLift: 0.13,
+    horizonSunBias: 0.14,
+    sunFrameBias: 0.24,
+    orbitSunLift: 0.05,
     dutch: -0.012,
     textAlign: "left",
     panelOffset: "left",
@@ -260,16 +261,16 @@ const SECTION_FRAMING = [
   {
     /* §5 3D / Mars */
     planetSide: -1,
-    distScale: 1.07,
-    tangentMul: 0.94,
-    compositionSlide: 1.08,
-    elevation: 0.17,
-    limbElevation: 0.09,
+    distScale: 0.78,
+    tangentMul: 0.86,
+    compositionSlide: 0.8,
+    elevation: 0.15,
+    limbElevation: 0.08,
     horizonLimbOut: 0.98,
-    horizonSkyLift: 0.15,
-    horizonSunBias: 0.3,
-    sunFrameBias: 0.62,
-    orbitSunLift: 0.12,
+    horizonSkyLift: 0.13,
+    horizonSunBias: 0.14,
+    sunFrameBias: 0.28,
+    orbitSunLift: 0.05,
     dutch: 0.012,
     textAlign: "right",
     panelOffset: "right",
@@ -294,18 +295,18 @@ const SECTION_FRAMING = [
     safeSide: "west",
   },
   {
-    /* §7 Plugin / Terre */
+    /* §7 Plugin / Terre — planète dominante (pas le Soleil) */
     planetSide: -1,
-    distScale: 0.86,
-    tangentMul: 0.88,
-    compositionSlide: 1.02,
-    elevation: 0.13,
+    distScale: 0.68,
+    tangentMul: 0.78,
+    compositionSlide: 0.72,
+    elevation: 0.12,
     limbElevation: 0.07,
-    horizonLimbOut: 0.94,
-    horizonSkyLift: 0.1,
-    horizonSunBias: 0.3,
-    sunFrameBias: 0.5,
-    orbitSunLift: 0.1,
+    horizonLimbOut: 0.96,
+    horizonSkyLift: 0.11,
+    horizonSunBias: 0.12,
+    sunFrameBias: 0.22,
+    orbitSunLift: 0.04,
     dutch: 0.009,
     textAlign: "right",
     panelOffset: "right",
@@ -314,17 +315,17 @@ const SECTION_FRAMING = [
   {
     /* §8 Contact / Mercure */
     planetSide: 1,
-    distScale: 0.81,
-    tangentMul: 0.72,
-    compositionSlide: 0.88,
-    elevation: 0.05,
-    limbElevation: 0.035,
-    horizonLimbOut: 0.93,
-    horizonSkyLift: 0.08,
-    horizonSunBias: 0.42,
-    lookSunLift: 0.05,
-    sunFrameBias: 0.46,
-    orbitSunLift: 0.09,
+    distScale: 0.66,
+    tangentMul: 0.68,
+    compositionSlide: 0.7,
+    elevation: 0.06,
+    limbElevation: 0.04,
+    horizonLimbOut: 0.95,
+    horizonSkyLift: 0.09,
+    horizonSunBias: 0.2,
+    lookSunLift: 0.03,
+    sunFrameBias: 0.28,
+    orbitSunLift: 0.055,
     dutch: -0.008,
     textAlign: "left",
     panelOffset: "left",
@@ -332,8 +333,8 @@ const SECTION_FRAMING = [
   },
 ];
 
-/** Focale repos (mm) — télé modérée loin ; plus longue près du Soleil = disque contenu. */
-const FOCAL_REST_MM = [42, 22, 28, 32, 36, 42, 46, 50, 52];
+/** Focale repos (mm) — Son/Stream un peu plus télé pour grossir la planète. */
+const FOCAL_REST_MM = [42, 34, 38, 32, 36, 48, 46, 56, 54];
 const SENSOR_HEIGHT_MM = 24;
 /** Lissage exponentiel FOV — constant pour éviter un saut quand le glide s'arrête. */
 const FOV_LERP_ALPHA = 0.12;
@@ -364,20 +365,24 @@ function getSunVisualRadius(sectionIndex) {
   return SUN_BASE_RADIUS * sunScale;
 }
 
-/** Biais regard vers le Soleil — renforcé §0–7 pour disque à l'horizon (ISS). */
+/** Biais regard vers le Soleil — léger : la planète reste la masse dominante. */
 function getHeroSunBiasScale(sectionIndex) {
-  if (sectionIndex >= 8) return 1;
-  if (sectionIndex >= 6) return 0.72 + (sectionIndex - 6) * 0.14;
-  if (sectionIndex === 5) return 0.52;
+  if (sectionIndex === 8) return 0.7;
+  if (sectionIndex === 7) return 0.38;
+  if (sectionIndex === 5) return 0.4;
+  if (sectionIndex === 2 || sectionIndex === 1) return 0.42;
+  if (sectionIndex >= 6) return 0.55;
   return 0.58;
 }
 
-/** Lerp lookAt → Soleil pour garder le disque dans le FOV (sans viser le centre). */
+/** Lerp lookAt → Soleil — faible sur Son / Stream / 3D / Plugin / Contact. */
 function getHeroLookSunLerp(sectionIndex) {
-  if (sectionIndex >= 8) return 0.14;
-  if (sectionIndex >= 6) return 0.11 + (sectionIndex - 6) * 0.025;
-  if (sectionIndex === 5) return 0.13;
-  return 0.09 + sectionIndex * 0.012;
+  if (sectionIndex === 8) return 0.05;
+  if (sectionIndex === 7) return 0.03;
+  if (sectionIndex === 5) return 0.04;
+  if (sectionIndex === 2 || sectionIndex === 1) return 0.035;
+  if (sectionIndex >= 6) return 0.07;
+  return 0.06 + sectionIndex * 0.008;
 }
 
 /** Distance minimale caméra ↔ centre Soleil (plafond angulaire + cap orbite d'ancre). */
@@ -451,7 +456,7 @@ const PLANETS = [
     startAngle: 2.14,
     hasRings: true,
     section: 1,
-    camDistMul: 1.42,
+    camDistMul: 1.12,
     camLift: 0.06,
     camTangent: 0.6,
     ringView: true,
@@ -474,9 +479,11 @@ const PLANETS = [
     heroAngle: 2.78,
     startAngle: 2.78,
     section: 2,
-    camDistMul: 1.35,
+    camDistMul: 0.95,
     camLift: 0.08,
-    camTangent: 0.48,
+    camTangent: 0.42,
+    atmRadiusMul: 1.015,
+    atmIntensity: 0.07,
   },
   {
     name: "Jupiter",
@@ -539,7 +546,7 @@ const PLANETS = [
     heroAngle: 4.8,
     startAngle: 4.8,
     section: 5,
-    camDistMul: 1.28,
+    camDistMul: 1.02,
     camLift: 0.08,
     camTangent: 0.4,
     gltfUrl: PLANET_GLB.mars,
@@ -583,9 +590,9 @@ const PLANETS = [
     heroAngle: 5.78,
     startAngle: 4.65,
     section: 7,
-    camDistMul: 1.05,
+    camDistMul: 0.82,
     camLift: 0.05,
-    camTangent: 0.35,
+    camTangent: 0.32,
     gltfUrl: PLANET_GLB.earth,
     gltfProfile: "earth",
   },
@@ -606,9 +613,9 @@ const PLANETS = [
     heroAngle: 6.02,
     startAngle: 6.02,
     section: 8,
-    camDistMul: 0.95,
+    camDistMul: 0.78,
     camLift: 0.04,
-    camTangent: 0.3,
+    camTangent: 0.28,
     nearSun: true,
     gltfUrl: PLANET_GLB.mercury,
   },
@@ -1248,11 +1255,12 @@ function computeHeroLookAt(
 
   out.x += SUN_FRAME_WORLD_BIAS * size * (sectionIndex <= 4 ? 0.14 : 0.18);
 
-  if (sectionIndex === 7) {
-    const lift = framing.lookSunLift ?? 0.04;
+  // Contact (§8) : léger rappel Soleil à l'horizon — sans voler la masse Mercure.
+  if (sectionIndex === 8) {
+    const lift = framing.lookSunLift ?? 0.03;
     tmpMid.copy(sunOrigin);
     tmpMid.y += lift;
-    out.lerp(tmpMid, 0.42);
+    out.lerp(tmpMid, 0.12);
   }
 
   return out;
@@ -2723,11 +2731,15 @@ function addPlanetEntry(data) {
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.size, 40, 40), mat);
   scene.add(mesh);
 
-  const atmIntensity = data.section === 8 ? 1.4 : data.section == null ? 0.75 : 1.0;
+  const atmIntensity =
+    data.atmIntensity ??
+    (data.section === 8 ? 1.4 : data.section == null ? 0.75 : 1.0);
+  const atmRadiusMul = data.atmRadiusMul ?? 1.14;
   const { mesh: atmMesh, mat: atmMat } = createAtmosphereShell(
     data.size,
     data.atmosphereColor,
-    atmIntensity
+    atmIntensity,
+    atmRadiusMul
   );
   mesh.add(atmMesh);
 
@@ -3001,7 +3013,14 @@ function updatePlanets(elapsed, displaySection, glideState) {
       if (isGltf && entry.atmMat.opacity != null) {
         entry.atmMat.opacity = 0.18 + proximity * 0.12;
       } else if (entry.atmMat.uniforms?.uIntensity) {
-        entry.atmMat.uniforms.uIntensity.value = 0.85 + proximity * 0.9;
+        const base =
+          data.atmIntensity != null
+            ? data.atmIntensity
+            : 0.85 + proximity * 0.9;
+        entry.atmMat.uniforms.uIntensity.value =
+          data.atmIntensity != null
+            ? data.atmIntensity + proximity * 0.04
+            : base;
       }
     }
 
