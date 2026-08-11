@@ -118,8 +118,9 @@
 
 - **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement. Focale **42 mm**. Neptune `camDistMul` **2,40**, `distScale` **1,53**, `orbitSunLift` **0,08**. `INTRO_SNAP_FRAMES` 5. Pas de dérive caméra au repos Intro.
 
-- **Ordre planètes / caméra** : 0 Neptune → 1 Saturn → **2 Pluton (Radio)** → 3 Jupiter (Video) → **4 Uranus (Visuel)** → 5 Mars (3D) → **6 Vénus (panel Sites)** → **7 Terre (panel Plugin)** → 8 Mercure (Contact) ; le voyage caméra 0→8 reste « vers le Soleil ». **Corps décoratifs 3D** (pas de panel UI) : **Cérès** (orbite ~17×1,2) et **Lune** (orbite ~14×1,2) entre Mars et Vénus — étale l’approche visuelle sans passer à 11 sections.
-- **Palette planètes 3D** (`PLANETS` / `DECORATIVE_PLANETS`, juil. 2026) : teintes **distinctes** par corps (`color`, `emissive`, `accentColor`, `atmosphereColor`) — Neptune bleu profond ; Saturne beige/doré ; **Pluton glace mauve** ; Jupiter orange/brun ; Uranus **cyan-vert** (évite le doublon bleu Neptune) ; Mars rouge ocre ; Vénus jaune chaud pâle ; Terre **vert-bleu** (continents + océan) ; Mercure gris pierre ; Cérès gris-vert ; Lune gris clair. Aligné marqueur échelle (`SCALE_MARKER_COLORS`).
+- **Ordre planètes / caméra** : 0 **Terre GLB** (ex-Neptune, intro) → 1 Saturn → **2 Pluton (Radio)** → 3 Jupiter (Video) → **4 Uranus (Visuel)** → 5 Mars (3D) → **6 Vénus (panel Sites)** → **7 Terre stylisée (panel Plugin)** → 8 Mercure (Contact) ; le voyage caméra 0→8 reste « vers le Soleil ». **Corps décoratifs 3D** (pas de panel UI) : **Cérès** (orbite ~17×1,2) et **Lune** (orbite ~14×1,2) entre Mars et Vénus — étale l’approche visuelle sans passer à 11 sections. **Test août 2026** : §0 charge [`assets/planets/earth.glb`](assets/planets/earth.glb) (`GLTFLoader` + `MeshoptDecoder`) — Terre texturée + **Lune en orbite locale** (`moonPivot`, ratios Blender ~5,055× / 0,117×). **Compressé** : 56 Mo → **~2,1 Mo** (`gltf-transform optimize` — textures **2048** WebP + meshopt).
+
+- **Palette planètes 3D** (`PLANETS` / `DECORATIVE_PLANETS`, juil. 2026) : teintes **distinctes** par corps (`color`, `emissive`, `accentColor`, `atmosphereColor`) — **§0 Terre GLB** (fallback bleu type Neptune) ; Saturne beige/doré ; **Pluton glace mauve** ; Jupiter orange/brun ; Uranus **cyan-vert** ; Mars rouge ocre ; Vénus jaune chaud pâle ; Terre §7 **vert-bleu** (continents + océan) ; Mercure gris pierre ; Cérès gris-vert ; Lune décorative gris clair. Aligné marqueur échelle (`SCALE_MARKER_COLORS`).
 
 - **Échelle orbitale** (`PLANETS`, juin 2026) : facteur global **`ORBIT_SCALE` 1,2** (~+20 %) — Neptune **69,6**, Saturne **50,4**, Pluton **43,2**, Jupiter **33,6**, Uranus **42**, Mars **24** (3D, §5), Vénus **12,2** (§6), Terre **9,1** (§7), Mercure **15,6** (Contact, §8). Caméra far **864**, lumière Soleil portée **480**, brouillard initial **0,005**.
 
@@ -233,7 +234,7 @@
 
 |-------|--------|---------|-------|
 
-| 0 | Intro | Neptune | dark |
+| 0 | Intro | Terre (GLB test, ex-Neptune) | dark |
 
 | 1 | Son | Saturne | light |
 
@@ -367,7 +368,7 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 
 ## Intro gate (juil. 2026 — Étape 1 + 2)
 
-Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Neptune.
+Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil §0 (Terre GLB / ex-Neptune).
 
 - **Assets** : [`assets/logo-hakou.svg`](assets/logo-hakou.svg) chargé via **`SVGLoader`** → formes `ShapeGeometry` (vrai vectoriel 3D, pas une texture bitmap) ; PNG `logo-hakou.png` conservé en secours. **Favicon** (5 août 2026) : [`assets/favicon.svg`](assets/favicon.svg) (+ `favicon-32.png`, `apple-touch-icon.png`) — logo blanc sur fond `#05070d` ; branché dans `index.html`, pages `legal/`, studio. Anciennes nébuleuses `assets/nebula/*.png` non utilisées (retirées de l’intro).
 - **Scène** (`scene3d.js`) : groupe `introGate` — logo SVG vectoriel (stable, **sans bounce**). Au repos : fond `#000` + **univers masqué** (pas de plan-voile). Pendant `startIntroGateZoom` (~3,4 s) : univers réaffiché ; **destination caméra = cadrage §0 live** chaque frame ; fond **reste noir** (pas de lerp couleur / wash) ; brouillard qui s’éclaircit ; logo fondu ; **pas de nébuleuses** ; à la fin `finishIntroZoomToLive` aligne caméra / FOV / `introSnapFrames` sans reset brutal.

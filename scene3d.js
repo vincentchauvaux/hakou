@@ -1,5 +1,18 @@
 import * as THREE from "three";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+
+/** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb";
+/** Ratio Blender : distance Lune / rayon Terre (~5,055). */
+const HERO_MOON_ORBIT_RADIUS_MUL = 5.055;
+/** Ratio Blender : rayon Lune / rayon Terre (~0,117). */
+const HERO_MOON_SIZE_MUL = 0.117;
+/** Vitesse orbitale Lune autour de la Terre héro (rad/s, × PLANET_ORBIT_SPEED_MUL). */
+const HERO_MOON_ORBIT_SPEED = 0.55;
+/** Inclinaison légère du plan orbital lunaire (rad). */
+const HERO_MOON_INCLINATION = 0.12;
 
 const SECTION_COUNT = 9;
 const STAR_COUNT = 2800;
@@ -356,13 +369,13 @@ function enforceMinSunViewDistance(sectionIndex, point) {
 
 const PLANETS = [
   {
-    name: "Neptune",
+    name: "Earth", // §0 intro — mesh GLB texturé (ex-Neptune) ; §7 reste Terre stylisée
     orbitRadius: scaledOrbit(58),
     size: 1.4,
     color: 0x1e3a8a,
     emissive: 0x081428,
     accentColor: 0x5c8fd4,
-    atmosphereColor: 0x3060b0,
+    atmosphereColor: 0x4a90d0,
     roughness: 0.82,
     noiseScale: 5.5,
     orbitSpeed: 0.08,
@@ -374,6 +387,7 @@ const PLANETS = [
     camDistMul: 2.4,
     camLift: 0.1,
     camTangent: 0.34,
+    gltfUrl: HERO_EARTH_GLB_URL,
   },
   {
     name: "Saturn",
@@ -2041,6 +2055,143 @@ function buildSaturnRings(parent, size) {
   return { inner, outer };
 }
 
+function disposeObject3D(root) {
+  if (!root) return;
+  root.traverse((obj) => {
+    if (obj.geometry) obj.geometry.dispose();
+    const mats = obj.material
+      ? Array.isArray(obj.material)
+        ? obj.material
+        : [obj.material]
+      : [];
+    mats.forEach((m) => {
+      if (!m) return;
+      [
+        "map",
+        "normalMap",
+        "roughnessMap",
+        "metalnessMap",
+        "emissiveMap",
+        "aoMap",
+        "alphaMap",
+        "bumpMap",
+        "displacementMap",
+      ].forEach((key) => {
+        if (m[key]?.dispose) m[key].dispose();
+      });
+      m.dispose?.();
+    });
+  });
+}
+
+function fitObjectToRadius(object, targetRadius) {
+  object.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(object);
+  if (box.isEmpty()) return 1;
+  const center = box.getCenter(new THREE.Vector3());
+  object.position.sub(center);
+  box.setFromObject(object);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const radius = Math.max(sphere.radius, 1e-4);
+  const fit = targetRadius / radius;
+  object.scale.multiplyScalar(fit);
+  return fit;
+}
+
+function prepareGltfTextures(root) {
+  root.traverse((obj) => {
+    if (!obj.isMesh) return;
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    mats.forEach((mat) => {
+      if (!mat) return;
+      if (mat.map) {
+        mat.map.colorSpace = THREE.SRGBColorSpace;
+        mat.map.anisotropy = 8;
+      }
+      if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+      mat.needsUpdate = true;
+    });
+    obj.castShadow = false;
+    obj.receiveShadow = false;
+  });
+}
+
+/**
+ * Remplace la sphère stylisée §0 par le GLB Terre + Lune (orbite lunaire locale).
+ * Neptune stylisée reste visible jusqu'au chargement (~2 Mo compressé).
+ */
+async function upgradePlanetWithEarthGltf(entry) {
+  const { data } = entry;
+  if (!data.gltfUrl || !scene) return;
+
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const gltf = await loader.loadAsync(data.gltfUrl);
+  const source = gltf.scene;
+
+  const earthSrc = source.getObjectByName("Sphere.001");
+  const moonSrc = source.getObjectByName("Sphere");
+  if (!earthSrc || !moonSrc) {
+    throw new Error("GLB Earth : nœuds Sphere.001 / Sphere introuvables");
+  }
+
+  earthSrc.parent?.remove(earthSrc);
+  moonSrc.parent?.remove(moonSrc);
+
+  earthSrc.position.set(0, 0, 0);
+  // Conserve l'orientation Blender (tilt) ; recentrage via fitObjectToRadius.
+  earthSrc.scale.set(1, 1, 1);
+
+  const earthSpin = new THREE.Group();
+  earthSpin.add(earthSrc);
+  fitObjectToRadius(earthSrc, data.size);
+
+  moonSrc.position.set(0, 0, 0);
+  moonSrc.rotation.set(0, 0, 0);
+  moonSrc.scale.set(1, 1, 1);
+  fitObjectToRadius(moonSrc, data.size * HERO_MOON_SIZE_MUL);
+  moonSrc.position.set(data.size * HERO_MOON_ORBIT_RADIUS_MUL, 0, 0);
+
+  const moonPivot = new THREE.Group();
+  moonPivot.rotation.x = HERO_MOON_INCLINATION;
+  moonPivot.add(moonSrc);
+
+  const root = new THREE.Group();
+  root.add(earthSpin);
+  root.add(moonPivot);
+
+  prepareGltfTextures(root);
+
+  const oldMesh = entry.mesh;
+  const oldMat = entry.mat;
+  const wasVisible = oldMesh.visible;
+  root.position.copy(oldMesh.position);
+  root.scale.copy(oldMesh.scale);
+  root.visible = wasVisible;
+
+  if (entry.atmMesh) {
+    oldMesh.remove(entry.atmMesh);
+    root.add(entry.atmMesh);
+  }
+
+  scene.remove(oldMesh);
+  disposeObject3D(oldMesh);
+  oldMat?.dispose?.();
+  scene.add(root);
+
+  let earthMat = null;
+  earthSrc.traverse((obj) => {
+    if (earthMat || !obj.isMesh) return;
+    earthMat = Array.isArray(obj.material) ? obj.material[0] : obj.material;
+  });
+
+  entry.mesh = root;
+  entry.mat = earthMat;
+  entry.earthSpin = earthSpin;
+  entry.moonPivot = moonPivot;
+  entry.isGltf = true;
+}
+
 function addPlanetEntry(data) {
   buildOrbitRing(data.orbitRadius);
 
@@ -2061,13 +2212,30 @@ function addPlanetEntry(data) {
     rings = buildSaturnRings(mesh, data.size);
   }
 
-  planetEntries.push({ data, mesh, mat, atmMesh, atmMat, rings });
+  planetEntries.push({
+    data,
+    mesh,
+    mat,
+    atmMesh,
+    atmMat,
+    rings,
+    earthSpin: null,
+    moonPivot: null,
+    isGltf: false,
+  });
 }
 
 function buildPlanets() {
   planetEntries = [];
   PLANETS.forEach((data) => addPlanetEntry(data));
   DECORATIVE_PLANETS.forEach((data) => addPlanetEntry(data));
+
+  const heroEntry = planetEntries.find((e) => e.data.gltfUrl);
+  if (heroEntry) {
+    upgradePlanetWithEarthGltf(heroEntry).catch((err) => {
+      console.warn("[Hakou 3D] Chargement Earth GLB échoué — sphère stylisée conservée.", err);
+    });
+  }
 }
 
 function buildStars() {
@@ -2164,7 +2332,7 @@ function updatePlanets(elapsed, displaySection, glideState) {
   const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
 
   planetEntries.forEach((entry) => {
-    const { data, mesh, mat, rings } = entry;
+    const { data, mesh, mat, rings, earthSpin, moonPivot, isGltf } = entry;
     const isDecorative = data.section == null;
     const isActive = !isDecorative && data.section === activeIndex;
     const proximity = isDecorative
@@ -2174,9 +2342,18 @@ function updatePlanets(elapsed, displaySection, glideState) {
     mesh.position.copy(pos);
     const axial = data.axialScale ?? 1;
     const spinFactor = PLANET_SPIN_SCALE * axial;
-    mesh.rotation.y = elapsed * data.spinSpeed * spinFactor * PLANET_SPIN_MUL;
+    const spinY = elapsed * data.spinSpeed * spinFactor * PLANET_SPIN_MUL;
 
-    if (mat.userData.shaderUniforms) {
+    if (isGltf && earthSpin) {
+      earthSpin.rotation.y = spinY;
+      if (moonPivot) {
+        moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED * PLANET_ORBIT_SPEED_MUL;
+      }
+    } else {
+      mesh.rotation.y = spinY;
+    }
+
+    if (mat?.userData?.shaderUniforms) {
       mat.userData.shaderUniforms.uTime.value = elapsed * PLANET_SPIN_MUL;
     }
 
@@ -2185,7 +2362,9 @@ function updatePlanets(elapsed, displaySection, glideState) {
       : 0;
     const emissiveBoost =
       0.3 + proximity * 0.65 + (isActive ? 0.3 : 0) + decorNearSun;
-    mat.emissiveIntensity = emissiveBoost;
+    if (!isGltf && mat) {
+      mat.emissiveIntensity = emissiveBoost;
+    }
 
     const scale = 1 + proximity * 0.22 + decorNearSun * 0.08;
     mesh.scale.setScalar(scale);
@@ -2885,9 +3064,13 @@ export function disposeScene() {
   window.removeEventListener("resize", onResize);
   disposeRestOrbitInteraction();
   disposeIntroGate();
-  planetEntries.forEach(({ mesh, mat, atmMesh, atmMat, rings }) => {
-    mesh.geometry?.dispose();
-    mat?.dispose();
+  planetEntries.forEach(({ mesh, mat, atmMesh, atmMat, rings, isGltf }) => {
+    if (isGltf) {
+      disposeObject3D(mesh);
+    } else {
+      mesh.geometry?.dispose();
+      mat?.dispose();
+    }
     atmMesh?.geometry?.dispose();
     atmMat?.dispose();
     if (rings) {
