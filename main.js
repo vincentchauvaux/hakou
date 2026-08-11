@@ -4,7 +4,7 @@ import {
   getDisplaySection,
   getGlideState,
 } from "./navigation.js";
-import { initScene, renderScene } from "./scene3d.js?v=20260811earth4";
+import { initScene, renderScene } from "./scene3d.js?v=20260811earth5";
 import { initIntroGate } from "./intro-gate.js";
 
 const canvas = document.querySelector("#three-canvas");

@@ -3,15 +3,19 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Test : Terre + Lune texturées (Blender) à la place de Neptune (§0). */
-const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=4";
-/** Ratio Blender : distance Lune / rayon Terre — rapproché pour le cadrage héro. */
-const HERO_MOON_ORBIT_RADIUS_MUL = 2.65;
-/** Ratio Blender : rayon Lune / rayon Terre (~0,117). */
-const HERO_MOON_SIZE_MUL = 0.117;
-/** Vitesse orbitale Lune autour de la Terre héro (rad/s, × PLANET_ORBIT_SPEED_MUL). */
-const HERO_MOON_ORBIT_SPEED = 0.55;
-/** Inclinaison légère du plan orbital lunaire (rad). */
-const HERO_MOON_INCLINATION = 0.12;
+const HERO_EARTH_GLB_URL = "assets/planets/earth.glb?v=5";
+/** Distance Lune / rayon Terre — proche pour rester dans le cadrage héro. */
+const HERO_MOON_ORBIT_RADIUS_MUL = 1.52;
+/** Rayon Lune / rayon Terre (exagéré pour lisibilité). */
+const HERO_MOON_SIZE_MUL = 0.22;
+/** Orbite Lune (rad/s) — volontairement visible (pas × PLANET_ORBIT_SPEED_MUL). */
+const HERO_MOON_ORBIT_SPEED = 0.38;
+/** Rotation propre Lune (rad/s). */
+const HERO_MOON_SPIN_SPEED = 0.55;
+/** Inclinaison du plan orbital (rad) pour ne pas être pile de profil. */
+const HERO_MOON_INCLINATION = 0.35;
+/** Halo atmosphère / rayon Terre (serré = faux air autour du globe). */
+const HERO_ATM_RADIUS_MUL = 1.06;
 
 const SECTION_COUNT = 9;
 const STAR_COUNT = 2800;
@@ -715,7 +719,7 @@ const atmosphereFragmentShader = `
   }
 `;
 
-function createAtmosphereShell(size, color, intensity) {
+function createAtmosphereShell(size, color, intensity, radiusMul = 1.14) {
   const mat = new THREE.ShaderMaterial({
     vertexShader: atmosphereVertexShader,
     fragmentShader: atmosphereFragmentShader,
@@ -728,7 +732,10 @@ function createAtmosphereShell(size, color, intensity) {
     blending: THREE.AdditiveBlending,
     side: THREE.BackSide,
   });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(size * 1.14, 32, 32), mat);
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(size * radiusMul, 32, 32),
+    mat
+  );
   return { mesh, mat };
 }
 
@@ -2084,16 +2091,32 @@ function disposeObject3D(root) {
 }
 
 function fitObjectToRadius(object, targetRadius) {
-  object.updateWorldMatrix(true, true);
+  const parent = object.parent;
+  if (parent) parent.remove(object);
+
+  object.position.set(0, 0, 0);
+  object.scale.set(1, 1, 1);
+  object.updateMatrixWorld(true);
+
   const box = new THREE.Box3().setFromObject(object);
-  if (box.isEmpty()) return 1;
+  if (box.isEmpty()) {
+    if (parent) parent.add(object);
+    return 1;
+  }
   const center = box.getCenter(new THREE.Vector3());
-  object.position.sub(center);
-  box.setFromObject(object);
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const radius = Math.max(sphere.radius, 1e-4);
+  object.position.copy(center).multiplyScalar(-1);
   const fit = targetRadius / radius;
-  object.scale.multiplyScalar(fit);
+  object.scale.setScalar(fit);
+
+  // Recentre après scale (le pivot n'est pas forcément le centre géométrique).
+  object.updateMatrixWorld(true);
+  box.setFromObject(object);
+  const center2 = box.getCenter(new THREE.Vector3());
+  object.position.sub(center2);
+
+  if (parent) parent.add(object);
   return fit;
 }
 
@@ -2188,23 +2211,20 @@ async function upgradePlanetWithEarthGltf(entry) {
   earthSrc.parent?.remove(earthSrc);
   moonSrc.parent?.remove(moonSrc);
 
-  earthSrc.position.set(0, 0, 0);
-  // Conserve l'orientation Blender (tilt) ; recentrage via fitObjectToRadius.
-  earthSrc.scale.set(1, 1, 1);
-
+  // Conserve l'orientation Blender (tilt).
   const earthSpin = new THREE.Group();
   earthSpin.add(earthSrc);
   fitObjectToRadius(earthSrc, data.size);
 
-  moonSrc.position.set(0, 0, 0);
-  moonSrc.rotation.set(0, 0, 0);
-  moonSrc.scale.set(1, 1, 1);
+  const moonSpin = new THREE.Group();
+  moonSpin.add(moonSrc);
   fitObjectToRadius(moonSrc, data.size * HERO_MOON_SIZE_MUL);
-  moonSrc.position.set(data.size * HERO_MOON_ORBIT_RADIUS_MUL, 0, 0);
+  moonSpin.position.set(data.size * HERO_MOON_ORBIT_RADIUS_MUL, 0, 0);
 
   const moonPivot = new THREE.Group();
   moonPivot.rotation.x = HERO_MOON_INCLINATION;
-  moonPivot.add(moonSrc);
+  moonPivot.rotation.z = 0.22;
+  moonPivot.add(moonSpin);
 
   const root = new THREE.Group();
   root.add(earthSpin);
@@ -2221,16 +2241,19 @@ async function upgradePlanetWithEarthGltf(entry) {
 
   if (entry.atmMesh) {
     oldMesh.remove(entry.atmMesh);
-    // Halo plus discret pour ne pas masquer les continents texturés.
-    entry.atmMesh.scale.setScalar(1.02);
-    if (entry.atmMat?.uniforms?.uIntensity) {
-      entry.atmMat.uniforms.uIntensity.value = 0.45;
-    }
-    if (entry.atmMat?.uniforms?.uColor) {
-      entry.atmMat.uniforms.uColor.value.setHex(0x6eb8ff);
-    }
-    root.add(entry.atmMesh);
+    entry.atmMesh.geometry?.dispose();
+    entry.atmMat?.dispose?.();
   }
+  // Halo serré autour du globe texturé (= fausse atmosphère).
+  const atm = createAtmosphereShell(
+    data.size,
+    0x6eb8ff,
+    0.72,
+    HERO_ATM_RADIUS_MUL
+  );
+  root.add(atm.mesh);
+  entry.atmMesh = atm.mesh;
+  entry.atmMat = atm.mat;
 
   scene.remove(oldMesh);
   disposeObject3D(oldMesh);
@@ -2247,6 +2270,7 @@ async function upgradePlanetWithEarthGltf(entry) {
   entry.mat = earthMat;
   entry.earthSpin = earthSpin;
   entry.moonPivot = moonPivot;
+  entry.moonSpin = moonSpin;
   entry.isGltf = true;
   console.info("[Hakou 3D] Terre GLB chargée (intro §0 + Lune orbitale).");
 }
@@ -2280,6 +2304,7 @@ function addPlanetEntry(data) {
     rings,
     earthSpin: null,
     moonPivot: null,
+    moonSpin: null,
     isGltf: false,
   });
 }
@@ -2391,7 +2416,7 @@ function updatePlanets(elapsed, displaySection, glideState) {
   const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
 
   planetEntries.forEach((entry) => {
-    const { data, mesh, mat, rings, earthSpin, moonPivot, isGltf } = entry;
+    const { data, mesh, mat, rings, earthSpin, moonPivot, moonSpin, isGltf } = entry;
     const isDecorative = data.section == null;
     const isActive = !isDecorative && data.section === activeIndex;
     const proximity = isDecorative
@@ -2406,7 +2431,11 @@ function updatePlanets(elapsed, displaySection, glideState) {
     if (isGltf && earthSpin) {
       earthSpin.rotation.y = spinY;
       if (moonPivot) {
-        moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED * PLANET_ORBIT_SPEED_MUL;
+        // Orbite lisible (indépendante du mul d'ambiance très lent).
+        moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED;
+      }
+      if (moonSpin) {
+        moonSpin.rotation.y = elapsed * HERO_MOON_SPIN_SPEED;
       }
     } else {
       mesh.rotation.y = spinY;
@@ -2430,7 +2459,7 @@ function updatePlanets(elapsed, displaySection, glideState) {
 
     if (entry.atmMat) {
       entry.atmMat.uniforms.uIntensity.value = isGltf
-        ? 0.35 + proximity * 0.35
+        ? 0.55 + proximity * 0.25
         : 0.85 + proximity * 0.9;
     }
 
