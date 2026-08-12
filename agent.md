@@ -118,7 +118,7 @@
 
 - **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement. Focale **42 mm**. Neptune `camDistMul` **2,40**, `distScale` **1,53**, `orbitSunLift` **0,08**. `INTRO_SNAP_FRAMES` 5. Pas de dérive caméra au repos Intro.
 
-- **Ordre planètes / caméra** : 0 Neptune GLB → 1 Saturne GLB (+ anneaux **horizontaux**, tilt axial ~27°) → **2 Pluton stylisée (Stream)** → 3 Jupiter GLB → **4 Uranus GLB** → 5 Mars GLB → **6 Vénus GLB (+ nuages)** → **7 Terre GLB + Lune** → 8 Mercure GLB ; Soleil texturé (`sun.glb`). Voyage caméra 0→8 « vers le Soleil ». **Corps décoratifs** : Cérès + Lune décorative. **Août 2026** : assets WebP 2K ; cache-bust `planets26`.
+- **Ordre planètes / caméra** : 0 Neptune GLB → 1 Saturne GLB (+ anneaux horizontaux, texture UV **−90°** pour bandes concentriques) → **2 Pluton stylisée (Stream)** → 3 Jupiter GLB → **4 Uranus GLB** → 5 Mars GLB → **6 Vénus GLB (+ nuages)** → **7 Terre GLB + Lune** → 8 Mercure GLB ; Soleil texturé (`sun.glb`). Voyage caméra 0→8 « vers le Soleil ». **Corps décoratifs** : Cérès + Lune décorative. **Août 2026** : assets WebP 2K ; cache-bust `planets27`.
 
 - **Échelles / spins / ombres (août 2026)** : rayons relatifs ancrés sur Terre (`EARTH_SCENE_R` 0,5) — terrestres en ratio vrai, géants compressés `^0,48` (Jupiter > Saturne > Uranus ≈ Neptune > Terre ≈ Vénus > Mars > Mercure). Inclinaisons axiales réelles (`axialTilt`, Uranus ~98°, Vénus/Uranus rétrogrades). Spins via périodes sidérales. Lune 0,273 R⊕, orbite compressée ×2,65, rotation synchrone. **Soleil** DirectionalLight partagée (`sunKeyLight`) vers la planète active + ombres ; émissif GLB bas pour lire le terminateur.
 
