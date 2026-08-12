@@ -1427,12 +1427,10 @@ function orbitHasInertia(orbit) {
   return Math.hypot(orbit.azVel, orbit.elVel) >= FOCUS_ORBIT_INERTIA_STOP;
 }
 
-/** Orbite libre uniquement pendant grab / inertie — sinon cadrage héro (comme avant Voir). */
+/** Orbite libre tant que l’utilisateur a déplacé la vue — retour héro uniquement via Retour. */
 function isFocusFreeOrbitActive(sectionIndex = lastAtRestSectionIndex) {
   if (!planetFocusMode) return false;
-  const orbit = sectionUserOrbit[sectionIndex];
-  if (!orbit?.modified) return false;
-  return isFocusManipulating() || orbitHasInertia(orbit);
+  return Boolean(sectionUserOrbit[sectionIndex]?.modified);
 }
 
 /** Gel / reprise sans saut de la rotation propre de la planète observée. */
@@ -1784,7 +1782,7 @@ function onOrbitPointerUp(event) {
       // Tap sans drag : rester en cadrage héro.
       clearSectionUserOrbit(lastAtRestSectionIndex);
     }
-    // Sinon garder azVel / elVel → inertie puis retour héro.
+    // Sinon garder azVel / elVel → inertie, puis rester sur la vue libre.
   }
   syncOrbitGrabbingClass();
 }
@@ -1812,8 +1810,7 @@ function tickFocusOrbitInertia() {
   if (speed < FOCUS_ORBIT_INERTIA_STOP) {
     orbit.azVel = 0;
     orbit.elVel = 0;
-    // Retour au cadrage héro (même vue qu’avec le texte / avant Voir).
-    clearSectionUserOrbit(idx);
+    // Garder la vue libre — le retour héro se fait au clic Retour.
     return;
   }
 

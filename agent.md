@@ -118,7 +118,7 @@
 
 - **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement. Focale **42 mm**. Neptune `camDistMul` **2,40**, `distScale` **1,53**, `orbitSunLift` **0,08**. `INTRO_SNAP_FRAMES` 5. Pas de dérive caméra au repos Intro.
 
-- **Ordre planètes / caméra** : 0 Pluton → 1 Neptune GLB → 2 Uranus GLB → 3 Saturne GLB (+ anneaux) → 4 Jupiter GLB → 5 Mars GLB → **6 Terre GLB + Lune (Sites)** → **7 Vénus GLB (Plugin)** → 8 Mercure GLB ; Soleil au centre. Voyage 0→8 « vers le Soleil ». **Décoratifs** : Cérès (ceinture) + Lune. Terre : texture **N–S inversée**. Mode **Voir** : hors grab = cadrage héro ; grab = orbite libre ; Retour = blend caméra + hub. Cache-bust `focusExit35`.
+- **Ordre planètes / caméra** : 0 Pluton → 1 Neptune GLB → 2 Uranus GLB → 3 Saturne GLB (+ anneaux) → 4 Jupiter GLB → 5 Mars GLB → **6 Terre GLB + Lune (Sites)** → **7 Vénus GLB (Plugin)** → 8 Mercure GLB ; Soleil au centre. Voyage 0→8 « vers le Soleil ». **Décoratifs** : Cérès (ceinture) + Lune. Terre : texture **N–S inversée**. Mode **Voir** : vue libre après grab ; retour héro seulement au Retour (blend). Cache-bust `stayOrbit36`.
 
 - **Échelles / spins / ombres (août 2026)** : rayons relatifs ancrés sur Terre ; géants compressés `^0,48`. Inclinaisons / spins sidéraux. **Soleil** `sunKeyLight` sur planète active.
 
@@ -176,9 +176,9 @@
 
 - Pendant un saut long : orbites planètes continues ; accent / proximité visuelle via `getActiveSectionIndex` / `getSectionProximity` (from/to).
 
-- **Orbit manuelle au repos** : hors mode focus, le canvas reste en `pointer-events: none` (nav / panels prioritaires). **Mode observation planète** (`#planet-focus`) : **au repos (pas de grab) = même cadrage héro qu’avec le texte** (avant Voir) ; grab → orbite libre + inertie puis retour héro ; spin gelé pendant grab ; molette/pinch hors grab = zoom héro (`focusHeroZoomMul`). **Retour** : hub en fondu ~0,65 s + blend caméra `FOCUS_EXIT_MS` (680 ms, smoothstep). Escape / Retour → hub. Exports `setPlanetFocusMode` / `isPlanetFocusMode` ; `setPlanetFocus` / `isPlanetFocusActive`.
+- **Orbit manuelle au repos** : hors mode focus, le canvas reste en `pointer-events: none` (nav / panels prioritaires). **Mode observation planète** (`#planet-focus`) : **avant le premier grab = cadrage héro** (comme avec le texte) ; après grab = **vue libre conservée** (inertie puis repos sur place) ; **Retour** uniquement ramène au héro (fondu hub ~0,65 s + blend caméra `FOCUS_EXIT_MS` 680 ms). Spin gelé pendant grab. Molette/pinch : zoom héro avant grab, zoom rayon après. Exports `setPlanetFocusMode` / `isPlanetFocusMode` ; `setPlanetFocus` / `isPlanetFocusActive`.
 
-- **Orbit manuelle (détail technique)** : free-orbit seulement si `isFocusFreeOrbitActive` (drag / pinch orbite / inertie) via `focusOrbitToPos` (repère Soleil→planète). Sinon `sampleCameraState` héro + zoom optionnel. Spins : `spinSpeedFromPeriodHours` × `PLANET_SPIN_MUL` ; Uranus / Vénus rétrogrades.
+- **Orbit manuelle (détail technique)** : free-orbit si `sectionUserOrbit.modified` via `focusOrbitToPos` (repère Soleil→planète). Clear `modified` seulement à l’entrée Voir (reset) et à la sortie Retour (`beginFocusExitBlend`). Spins : `spinSpeedFromPeriodHours` × `PLANET_SPIN_MUL` ; Uranus / Vénus rétrogrades.
 
 
 
