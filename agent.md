@@ -118,7 +118,7 @@
 
 - **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement. Focale **42 mm**. Neptune `camDistMul` **2,40**, `distScale` **1,53**, `orbitSunLift` **0,08**. `INTRO_SNAP_FRAMES` 5. Pas de dérive caméra au repos Intro.
 
-- **Ordre planètes / caméra** : 0 Pluton → 1 Neptune GLB → 2 Uranus GLB → 3 Saturne GLB (+ anneaux) → 4 Jupiter GLB → 5 Mars GLB → **6 Terre GLB + Lune (Sites)** → **7 Vénus GLB (Plugin)** → 8 Mercure GLB ; Soleil au centre. Voyage 0→8 « vers le Soleil ». **Décoratifs** : Cérès (ceinture) + Lune. Cache-bust `planets28`.
+- **Ordre planètes / caméra** : 0 Pluton → 1 Neptune GLB → 2 Uranus GLB → 3 Saturne GLB (+ anneaux) → 4 Jupiter GLB → 5 Mars GLB → **6 Terre GLB + Lune (Sites)** → **7 Vénus GLB (Plugin)** → 8 Mercure GLB ; Soleil au centre. Voyage 0→8 « vers le Soleil ». **Décoratifs** : Cérès (ceinture) + Lune. Terre : texture **N–S inversée** (`flipTextureNorthSouth`). Cache-bust `earthNS30`.
 
 - **Échelles / spins / ombres (août 2026)** : rayons relatifs ancrés sur Terre ; géants compressés `^0,48`. Inclinaisons / spins sidéraux. **Soleil** `sunKeyLight` sur planète active.
 
