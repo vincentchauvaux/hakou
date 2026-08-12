@@ -118,6 +118,11 @@ const FOCUS_ORBIT_INERTIA_STOP = 0.0012;
 const FOCUS_ORBIT_VEL_SMOOTH = 0.42;
 /** Pinch mobile : sensibilité relative (1 = distance doigts). */
 const FOCUS_ORBIT_PINCH_ZOOM_POW = 1;
+/** Zoom héro en mode Voir (hors grab) — même cadrage que le hub, distance variable. */
+const FOCUS_HERO_ZOOM_MIN = 0.55;
+const FOCUS_HERO_ZOOM_MAX = 2.35;
+/** Retour Voir → hub : blend caméra (ms). */
+const FOCUS_EXIT_MS = 680;
 /** Derniers % du leg : convergence douce vers le cadrage héro destination. */
 const GLIDE_HERO_BLEND_START = 0.88;
 /** Trajectoire glide : mélange courbe Bézier + composante radiale Soleil. */
@@ -747,7 +752,9 @@ const sectionUserOrbit = Array.from({ length: SECTION_COUNT }, () => ({
 }));
 const orbitDrag = {
   active: false,
+  pending: false,
   pinch: false,
+  pinchHero: false,
   pointerId: null,
   lastX: 0,
   lastY: 0,
@@ -764,11 +771,22 @@ let planetFocusMode = false;
 let focusOrbitRadiusMin = 2;
 let focusOrbitRadiusMax = 80;
 let focusOrbitLastTickMs = 0;
+/** Zoom sur le cadrage héro pendant Voir (1 = identique au hub). */
+let focusHeroZoomMul = 1;
+/** Blend souple caméra à la sortie du mode Voir. */
+let focusExitActive = false;
+let focusExitStartMs = 0;
+const focusExitFromPos = new THREE.Vector3();
+const focusExitFromLook = new THREE.Vector3();
+const focusExitLookTarget = new THREE.Vector3();
 /** Pause rotation propre (planète observée) pendant grab / pinch. */
 const sectionSpinClockOffset = Array.from({ length: SECTION_COUNT }, () => 0);
 let focusSpinHoldStart = null;
 let focusSpinHoldSection = -1;
 const tmpFocusPivot = new THREE.Vector3();
+const tmpFocusRadial = new THREE.Vector3();
+const tmpFocusTangent = new THREE.Vector3();
+const tmpFocusNormal = new THREE.Vector3();
 
 let renderer;
 let scene;
@@ -987,13 +1005,9 @@ function getContinuousOrbitAngle(planet, elapsed) {
 /**
  * Angle sur l'orbite : `startAngle + elapsed × orbitSpeed` en permanence.
  * Au repos sur la section active : dérive lente vers heroAngle (chemin court, REST_ORBIT_DRIFT).
- * Mode Voir : Kepler pur (pas de gel, pas de dérive héro) — la caméra suit le mesh.
+ * Mode Voir hors grab : même logique (cadrage héro identique au hub).
  */
 function getOrbitAngleForSection(planet, sectionIndex, elapsed, displaySection, glideState) {
-  if (planetFocusMode) {
-    return getContinuousOrbitAngle(planet, elapsed);
-  }
-
   const base = getContinuousOrbitAngle(planet, elapsed);
   const animating = glideState?.animating && glideState.from !== glideState.to;
   if (animating) {
@@ -1342,11 +1356,83 @@ function orbitToPos(lookAt, radius, azimuth, elevation, out) {
   return out;
 }
 
+/**
+ * Repère d’observation : lié à la position Soleil→planète, pas à la rotation propre.
+ * radial = hors Soleil ; tangent = ⊥ dans le plan ; normal ≈ up.
+ */
+function getFocusOrbitBasis(planetPos, outRadial, outTangent, outNormal) {
+  outRadial.copy(planetPos).sub(sunOrigin);
+  if (outRadial.lengthSq() < 1e-8) {
+    outRadial.set(1, 0, 0);
+  } else {
+    outRadial.normalize();
+  }
+  outTangent.crossVectors(tmpUp, outRadial);
+  if (outTangent.lengthSq() < 1e-8) {
+    outTangent.set(1, 0, 0);
+  } else {
+    outTangent.normalize();
+  }
+  outNormal.crossVectors(outRadial, outTangent);
+  if (outNormal.lengthSq() < 1e-8) {
+    outNormal.copy(tmpUp);
+  } else {
+    outNormal.normalize();
+  }
+  return { radial: outRadial, tangent: outTangent, normal: outNormal };
+}
+
+/** Sphérique caméra dans le repère orbital (évite de tourner avec l’année keplérienne). */
+function posToFocusOrbit(pos, planetPos, out) {
+  getFocusOrbitBasis(planetPos, tmpFocusRadial, tmpFocusTangent, tmpFocusNormal);
+  tmpSeg.copy(pos).sub(planetPos);
+  out.radius = tmpSeg.length();
+  if (out.radius < 1e-4) {
+    out.azimuth = 0;
+    out.elevation = 0;
+    return out;
+  }
+  const x = tmpSeg.dot(tmpFocusTangent);
+  const y = tmpSeg.dot(tmpFocusNormal);
+  const z = tmpSeg.dot(tmpFocusRadial);
+  out.elevation = Math.asin(clamp(y / out.radius, -1, 1));
+  out.azimuth = Math.atan2(x, z);
+  return out;
+}
+
+function focusOrbitToPos(planetPos, radius, azimuth, elevation, out) {
+  getFocusOrbitBasis(planetPos, tmpFocusRadial, tmpFocusTangent, tmpFocusNormal);
+  const cosEl = Math.cos(elevation);
+  const sinEl = Math.sin(elevation);
+  const x = radius * cosEl * Math.sin(azimuth);
+  const y = radius * sinEl;
+  const z = radius * cosEl * Math.cos(azimuth);
+  out.copy(planetPos)
+    .addScaledVector(tmpFocusTangent, x)
+    .addScaledVector(tmpFocusNormal, y)
+    .addScaledVector(tmpFocusRadial, z);
+  return out;
+}
+
 function isFocusManipulating() {
+  // Grab réel (drag / pinch orbite libre) — pas le simple touch ni le pinch zoom héro.
   return (
     planetFocusMode &&
-    (orbitDrag.active || orbitDrag.pinch || orbitDrag.pointers.size > 0)
+    (orbitDrag.active || (orbitDrag.pinch && !orbitDrag.pinchHero))
   );
+}
+
+function orbitHasInertia(orbit) {
+  if (!orbit) return false;
+  return Math.hypot(orbit.azVel, orbit.elVel) >= FOCUS_ORBIT_INERTIA_STOP;
+}
+
+/** Orbite libre uniquement pendant grab / inertie — sinon cadrage héro (comme avant Voir). */
+function isFocusFreeOrbitActive(sectionIndex = lastAtRestSectionIndex) {
+  if (!planetFocusMode) return false;
+  const orbit = sectionUserOrbit[sectionIndex];
+  if (!orbit?.modified) return false;
+  return isFocusManipulating() || orbitHasInertia(orbit);
 }
 
 /** Gel / reprise sans saut de la rotation propre de la planète observée. */
@@ -1424,12 +1510,14 @@ function captureOrbitFromCamera(sectionIndex) {
   const elapsed = clock?.getElapsedTime() ?? 0;
   if (planetFocusMode) {
     getFocusPivot(sectionIndex, tmpFocusPivot, elapsed, sectionIndex, null);
+    posToFocusOrbit(camera.position, tmpFocusPivot, orbit);
   } else if (sectionCameras[sectionIndex]?.lookAt) {
     tmpFocusPivot.copy(sectionCameras[sectionIndex].lookAt);
+    posToOrbit(camera.position, tmpFocusPivot, orbit);
   } else {
     getFocusPivot(sectionIndex, tmpFocusPivot, elapsed, sectionIndex, null);
+    posToOrbit(camera.position, tmpFocusPivot, orbit);
   }
-  posToOrbit(camera.position, tmpFocusPivot, orbit);
   orbit.modified = true;
   updateFocusOrbitRadiusLimits(sectionIndex);
   orbit.radius = clamp(orbit.radius, focusOrbitRadiusMin, focusOrbitRadiusMax);
@@ -1498,7 +1586,9 @@ export function resetRestOrbitOffsets(sectionIndex) {
 function endOrbitDrag() {
   const ids = [...orbitDrag.pointers.keys()];
   orbitDrag.active = false;
+  orbitDrag.pending = false;
   orbitDrag.pinch = false;
+  orbitDrag.pinchHero = false;
   orbitDrag.pointerId = null;
   orbitDrag.pointers.clear();
   orbitDrag.lastPinchDist = 0;
@@ -1527,21 +1617,28 @@ function onOrbitPointerDown(event) {
     /* ignore */
   }
 
-  ensureFocusOrbitCaptured(lastAtRestSectionIndex);
-  clearOrbitVelocity(lastAtRestSectionIndex);
-
   if (orbitDrag.pointers.size >= 2) {
     orbitDrag.pinch = true;
     orbitDrag.active = false;
+    orbitDrag.pending = false;
     orbitDrag.pointerId = null;
+    // Pinch depuis le héro = zoom hub ; sinon zoom rayon orbite libre.
+    orbitDrag.pinchHero = !sectionUserOrbit[lastAtRestSectionIndex]?.modified;
+    if (!orbitDrag.pinchHero) {
+      ensureFocusOrbitCaptured(lastAtRestSectionIndex);
+      clearOrbitVelocity(lastAtRestSectionIndex);
+    }
     orbitDrag.lastPinchDist = pinchDistance();
     syncOrbitGrabbingClass();
     event.preventDefault();
     return;
   }
 
+  // Un doigt : pending jusqu’au vrai drag (reste en cadrage héro tant que pas bougé).
   orbitDrag.pinch = false;
-  orbitDrag.active = true;
+  orbitDrag.pinchHero = false;
+  orbitDrag.pending = true;
+  orbitDrag.active = false;
   orbitDrag.pointerId = event.pointerId;
   orbitDrag.lastX = event.clientX;
   orbitDrag.lastY = event.clientY;
@@ -1562,40 +1659,58 @@ function onOrbitPointerMove(event) {
   if (!orbit) return;
 
   if (orbitDrag.pinch && orbitDrag.pointers.size >= 2) {
-    ensureFocusOrbitCaptured(idx);
     const dist = pinchDistance();
     if (dist > 1 && orbitDrag.lastPinchDist > 1) {
       const ratio = orbitDrag.lastPinchDist / dist;
       const factor = Math.pow(ratio, FOCUS_ORBIT_PINCH_ZOOM_POW);
-      orbit.radius = clamp(
-        orbit.radius * factor,
-        focusOrbitRadiusMin,
-        focusOrbitRadiusMax
-      );
+      if (orbitDrag.pinchHero) {
+        focusHeroZoomMul = clamp(
+          focusHeroZoomMul * factor,
+          FOCUS_HERO_ZOOM_MIN,
+          FOCUS_HERO_ZOOM_MAX
+        );
+      } else {
+        ensureFocusOrbitCaptured(idx);
+        orbit.radius = clamp(
+          orbit.radius * factor,
+          focusOrbitRadiusMin,
+          focusOrbitRadiusMax
+        );
+      }
     }
     orbitDrag.lastPinchDist = dist;
     event.preventDefault();
     return;
   }
 
-  if (!orbitDrag.active || event.pointerId !== orbitDrag.pointerId) return;
+  if (event.pointerId !== orbitDrag.pointerId) return;
+  if (!orbitDrag.active && !orbitDrag.pending) return;
 
   const now = performance.now();
   const dt = Math.max((now - orbitDrag.lastT) / 1000, 1 / 240);
   const dx = event.clientX - orbitDrag.lastX;
   const dy = event.clientY - orbitDrag.lastY;
+  if (dx === 0 && dy === 0) return;
+
+  if (orbitDrag.pending && !orbitDrag.active) {
+    if (Math.hypot(dx, dy) < 3) return;
+    orbitDrag.pending = false;
+    orbitDrag.active = true;
+    ensureFocusOrbitCaptured(idx);
+    clearOrbitVelocity(idx);
+  }
+
+  if (!orbitDrag.active) return;
+
   orbitDrag.lastX = event.clientX;
   orbitDrag.lastY = event.clientY;
   orbitDrag.lastT = now;
-  if (dx === 0 && dy === 0) return;
 
   if (!orbit.modified) {
     captureOrbitFromCamera(idx);
   }
-  const azSens = FOCUS_ORBIT_AZ_SENS;
-  const elSens = FOCUS_ORBIT_EL_SENS;
-  const azDelta = dx * azSens;
-  const elDelta = -dy * elSens;
+  const azDelta = dx * FOCUS_ORBIT_AZ_SENS;
+  const elDelta = -dy * FOCUS_ORBIT_EL_SENS;
   orbit.azimuth += azDelta;
   orbit.elevation = clamp(
     orbit.elevation + elDelta,
@@ -1626,18 +1741,34 @@ function onOrbitPointerUp(event) {
       orbitDrag.lastPinchDist = pinchDistance();
       return;
     }
+    const wasHeroPinch = orbitDrag.pinchHero;
     orbitDrag.pinch = false;
+    orbitDrag.pinchHero = false;
     orbitDrag.lastPinchDist = 0;
-    clearOrbitVelocity(lastAtRestSectionIndex);
+    if (!wasHeroPinch) {
+      clearOrbitVelocity(lastAtRestSectionIndex);
+    }
     if (orbitDrag.pointers.size === 1) {
       const [id, pt] = orbitDrag.pointers.entries().next().value;
-      orbitDrag.active = true;
-      orbitDrag.pointerId = id;
-      orbitDrag.lastX = pt.x;
-      orbitDrag.lastY = pt.y;
-      orbitDrag.lastT = performance.now();
+      // Reprise drag seulement si on était en orbite libre.
+      if (sectionUserOrbit[lastAtRestSectionIndex]?.modified) {
+        orbitDrag.active = true;
+        orbitDrag.pending = false;
+        orbitDrag.pointerId = id;
+        orbitDrag.lastX = pt.x;
+        orbitDrag.lastY = pt.y;
+        orbitDrag.lastT = performance.now();
+      } else {
+        orbitDrag.active = false;
+        orbitDrag.pending = true;
+        orbitDrag.pointerId = id;
+        orbitDrag.lastX = pt.x;
+        orbitDrag.lastY = pt.y;
+        orbitDrag.lastT = performance.now();
+      }
     } else {
       orbitDrag.active = false;
+      orbitDrag.pending = false;
       orbitDrag.pointerId = null;
     }
     syncOrbitGrabbingClass();
@@ -1645,9 +1776,15 @@ function onOrbitPointerUp(event) {
   }
 
   if (event.pointerId === orbitDrag.pointerId) {
+    const wasPending = orbitDrag.pending && !orbitDrag.active;
     orbitDrag.active = false;
+    orbitDrag.pending = false;
     orbitDrag.pointerId = null;
-    // Garder azVel / elVel → inertie jusqu’au freinage.
+    if (wasPending) {
+      // Tap sans drag : rester en cadrage héro.
+      clearSectionUserOrbit(lastAtRestSectionIndex);
+    }
+    // Sinon garder azVel / elVel → inertie puis retour héro.
   }
   syncOrbitGrabbingClass();
 }
@@ -1657,7 +1794,8 @@ function tickFocusOrbitInertia() {
     focusOrbitLastTickMs = performance.now();
     return;
   }
-  const orbit = sectionUserOrbit[lastAtRestSectionIndex];
+  const idx = lastAtRestSectionIndex;
+  const orbit = sectionUserOrbit[idx];
   if (!orbit?.modified) {
     focusOrbitLastTickMs = performance.now();
     return;
@@ -1674,6 +1812,8 @@ function tickFocusOrbitInertia() {
   if (speed < FOCUS_ORBIT_INERTIA_STOP) {
     orbit.azVel = 0;
     orbit.elVel = 0;
+    // Retour au cadrage héro (même vue qu’avec le texte / avant Voir).
+    clearSectionUserOrbit(idx);
     return;
   }
 
@@ -1698,10 +1838,26 @@ function onOrbitWheel(event) {
   if (!planetFocusMode || !canOrbitDrag()) return;
   event.preventDefault();
   const idx = lastAtRestSectionIndex;
-  ensureFocusOrbitCaptured(idx);
-  const orbit = sectionUserOrbit[idx];
+
+  if (isFocusFreeOrbitActive(idx) || isFocusManipulating()) {
+    ensureFocusOrbitCaptured(idx);
+    const orbit = sectionUserOrbit[idx];
+    const factor = Math.exp(event.deltaY * FOCUS_ORBIT_ZOOM_SENS);
+    orbit.radius = clamp(
+      orbit.radius * factor,
+      focusOrbitRadiusMin,
+      focusOrbitRadiusMax
+    );
+    return;
+  }
+
+  // Hors grab : zoom sur le cadrage héro (comportement hub, distance seule).
   const factor = Math.exp(event.deltaY * FOCUS_ORBIT_ZOOM_SENS);
-  orbit.radius = clamp(orbit.radius * factor, focusOrbitRadiusMin, focusOrbitRadiusMax);
+  focusHeroZoomMul = clamp(
+    focusHeroZoomMul * factor,
+    FOCUS_HERO_ZOOM_MIN,
+    FOCUS_HERO_ZOOM_MAX
+  );
 }
 
 function onOrbitLostPointerCapture(event) {
@@ -1733,27 +1889,60 @@ function disposeRestOrbitInteraction() {
 }
 
 export function isRestOrbitDragging() {
-  return orbitDrag.active || orbitDrag.pinch;
+  return (
+    orbitDrag.active ||
+    orbitDrag.pending ||
+    orbitDrag.pinch ||
+    orbitDrag.pointers.size > 0
+  );
+}
+
+function beginFocusExitBlend() {
+  if (!camera) {
+    focusExitActive = false;
+    return;
+  }
+  focusExitFromPos.copy(camera.position);
+  const idx = lastAtRestSectionIndex;
+  const planet = PLANETS[idx];
+  let lookDist = planet ? planet.size * 4 : 4;
+  if (planet) {
+    getFocusPivot(idx, tmpFocusPivot, clock?.getElapsedTime() ?? 0, idx, null);
+    lookDist = Math.max(camera.position.distanceTo(tmpFocusPivot), planet.size * 1.5);
+  }
+  camera.getWorldDirection(tmpSeg);
+  focusExitFromLook.copy(camera.position).addScaledVector(tmpSeg, lookDist);
+  focusExitStartMs = performance.now();
+  focusExitActive = true;
+}
+
+function focusExitEase() {
+  if (!focusExitActive) return 1;
+  const u = clamp((performance.now() - focusExitStartMs) / FOCUS_EXIT_MS, 0, 1);
+  return u * u * (3 - 2 * u);
 }
 
 /** Active le mode observation (drag + zoom caméra autour de la planète). */
 export function setPlanetFocusMode(active) {
   const next = Boolean(active);
   if (next === planetFocusMode) return;
-  planetFocusMode = next;
   if (orbitCanvas) {
-    orbitCanvas.classList.toggle("planet-focus-canvas", planetFocusMode);
+    orbitCanvas.classList.toggle("planet-focus-canvas", next);
   }
-  if (planetFocusMode) {
-    const idx = lastAtRestSectionIndex;
+  if (next) {
+    focusExitActive = false;
+    planetFocusMode = true;
     focusOrbitLastTickMs = performance.now();
-    captureOrbitFromCamera(idx);
-    clearOrbitVelocity(idx);
+    focusHeroZoomMul = 1;
+    // Reste sur le cadrage héro jusqu’au premier grab (comme avec le texte).
+    clearSectionUserOrbit(lastAtRestSectionIndex);
   } else {
+    beginFocusExitBlend();
     endOrbitDrag();
     resetFocusSpinHold();
-    // Retour doux au cadrage héro (lerp caméra au repos).
+    focusHeroZoomMul = 1;
     clearSectionUserOrbit(lastAtRestSectionIndex);
+    planetFocusMode = false;
   }
 }
 
@@ -3584,9 +3773,7 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
   const atRest =
     !inGlide && settleT >= 1 && introSnapFrames >= INTRO_SNAP_FRAMES;
   const focusOrbit =
-    planetFocusMode &&
-    !inGlide &&
-    sectionUserOrbit[sectionIndex]?.modified;
+    planetFocusMode && !inGlide && isFocusFreeOrbitActive(sectionIndex);
   const userOrbit =
     focusOrbit || (atRest && sectionUserOrbit[sectionIndex]?.modified);
   lastAtRestSectionIndex = sectionIndex;
@@ -3648,16 +3835,23 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
       const orbit = sectionUserOrbit[sectionIndex];
       if (focusOrbit) {
         getFocusPivot(sectionIndex, tmpFocusPivot, elapsed, displaySection, glideState);
+        focusOrbitToPos(
+          tmpFocusPivot,
+          orbit.radius,
+          orbit.azimuth,
+          orbit.elevation,
+          tmpCamPos
+        );
       } else {
         tmpFocusPivot.copy(sectionCameras[sectionIndex].lookAt);
+        orbitToPos(
+          tmpFocusPivot,
+          orbit.radius,
+          orbit.azimuth,
+          orbit.elevation,
+          tmpCamPos
+        );
       }
-      orbitToPos(
-        tmpFocusPivot,
-        orbit.radius,
-        orbit.azimuth,
-        orbit.elevation,
-        tmpCamPos
-      );
       camera.position.copy(tmpCamPos);
       smoothedCamPos.copy(tmpCamPos);
     }
@@ -3690,9 +3884,46 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
       camera.lookAt(tmpFocusPivot);
     } else {
       camera.lookAt(cam.lookAt);
+      // Mode Voir au repos : même cadrage héro que le hub, zoom optionnel.
+      if (planetFocusMode && !inGlide && Math.abs(focusHeroZoomMul - 1) > 1e-4) {
+        tmpSeg.copy(camera.position).sub(cam.lookAt);
+        const baseDist = tmpSeg.length();
+        if (baseDist > 1e-5) {
+          const planet = PLANETS[sectionIndex];
+          const minDist = planet ? planet.size * 1.2 : 0.9;
+          const nextDist = clamp(
+            baseDist * focusHeroZoomMul,
+            minDist,
+            baseDist * FOCUS_HERO_ZOOM_MAX
+          );
+          tmpSeg.multiplyScalar(nextDist / baseDist);
+          camera.position.copy(cam.lookAt).add(tmpSeg);
+          smoothedCamPos.copy(camera.position);
+        }
+      }
       // Dutch figé au repos plein — pas pendant le blend (évite un roll qui tremble).
-      if (atRest && activeBlend > 0.92) {
+      if (atRest && activeBlend > 0.92 && !focusExitActive) {
         camera.rotateZ(framing.dutch * 0.65);
+      }
+    }
+
+    // Retour Voir → hub : interpoler position / regard vers le cadrage héro.
+    if (focusExitActive) {
+      const u = focusExitEase();
+      tmpCamPos.copy(camera.position);
+      camera.position.lerpVectors(focusExitFromPos, tmpCamPos, u);
+      smoothedCamPos.copy(camera.position);
+      focusExitLookTarget.copy(cam.lookAt);
+      tmpFocusPivot.lerpVectors(focusExitFromLook, focusExitLookTarget, u);
+      camera.lookAt(tmpFocusPivot);
+      if (u >= 1 - 1e-4) {
+        focusExitActive = false;
+        camera.position.copy(tmpCamPos);
+        smoothedCamPos.copy(tmpCamPos);
+        camera.lookAt(cam.lookAt);
+        if (atRest && activeBlend > 0.92) {
+          camera.rotateZ(framing.dutch * 0.65);
+        }
       }
     }
   }

@@ -276,18 +276,22 @@ body[data-planet-focus="on"] .scroll-gate {
 
 body[data-planet-focus="on"] .side-nav,
 body[data-planet-focus="on"] #solar-scale,
-body[data-planet-focus="on"] #overlay {
+body[data-planet-focus="on"] #overlay,
+body[data-planet-focus="on"] .intro-replay,
+body[data-planet-focus="on"] .scroll-gate {
   transition:
-    opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    visibility 0.55s linear;
+    opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0.65s;
 }
 
 body:not([data-planet-focus="on"]) .side-nav,
 body:not([data-planet-focus="on"]) #solar-scale,
-body:not([data-planet-focus="on"]) #overlay {
+body:not([data-planet-focus="on"]) #overlay,
+body:not([data-planet-focus="on"]) .intro-replay,
+body:not([data-planet-focus="on"]) .scroll-gate {
   transition:
-    opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
-    visibility 0.55s linear;
+    opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0s;
 }
 
 body[data-planet-focus="on"] #overlay .panel {
@@ -313,7 +317,11 @@ body[data-planet-focus="on"]::before,
 body[data-planet-focus="on"]::after {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.45s ease;
+}
+
+body::before,
+body::after {
+  transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Indicateur scroll gate — se remplit avant le changement de section */
