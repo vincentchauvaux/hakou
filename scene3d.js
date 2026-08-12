@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "29";
+const PLANET_GLB_V = "30";
 const PLANET_GLB = {
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
@@ -2583,6 +2583,17 @@ function prepareHeroTexture(tex, { srgb = true } = {}) {
   return tex;
 }
 
+/** Inverse nord ↔ sud (flip V) — Terre Blender montée à l’envers. */
+function flipTextureNorthSouth(tex) {
+  if (!tex) return null;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.y = -1;
+  tex.offset.y = 1;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /** Texture anneaux Saturne : −90° UV pour bandes concentriques (pas d’effet « aiguilles »). */
 function prepareSaturnRingTexture(tex) {
   if (!tex) return null;
@@ -2754,6 +2765,11 @@ async function upgradePlanetWithGltf(entry) {
 
   const bodyR = data.size;
   const isEarth = data.gltfProfile === "earth";
+  if (isEarth) {
+    flipTextureNorthSouth(maps.dayMap);
+    flipTextureNorthSouth(maps.cloudMap);
+    flipTextureNorthSouth(maps.roughnessMap);
+  }
   const bodySpin = new THREE.Group();
   const cloudSpin = new THREE.Group();
   const equator = new THREE.Group();
@@ -2765,6 +2781,9 @@ async function upgradePlanetWithGltf(entry) {
     const waterMaps = maps.roughnessMap
       ? makeOceanWaterMaps(maps.roughnessMap)
       : { roughnessMap: null, clearcoatMap: null };
+    // Maps dérivées : même flip N–S (canvas = image brute, pas l’UV).
+    flipTextureNorthSouth(waterMaps.roughnessMap);
+    flipTextureNorthSouth(waterMaps.clearcoatMap);
     bodyMat = new THREE.MeshPhysicalMaterial({
       map: maps.dayMap,
       color: 0xffffff,
