@@ -109,6 +109,14 @@ const REST_ORBIT_AZ_SENS = 0.0052;
 const REST_ORBIT_EL_SENS = 0.004;
 const REST_ORBIT_ELEV_MIN = -0.35;
 const REST_ORBIT_ELEV_MAX = 0.45;
+/** Mode observation : angles plus libres + zoom molette. */
+const FOCUS_ORBIT_AZ_SENS = 0.0064;
+const FOCUS_ORBIT_EL_SENS = 0.0052;
+const FOCUS_ORBIT_ELEV_MIN = -1.15;
+const FOCUS_ORBIT_ELEV_MAX = 1.25;
+const FOCUS_ORBIT_ZOOM_SENS = 0.00155;
+const FOCUS_ORBIT_RADIUS_MIN_MUL = 1.85;
+const FOCUS_ORBIT_RADIUS_MAX_MUL = 4.2;
 /** Derniers % du leg : convergence douce vers le cadrage héro destination. */
 const GLIDE_HERO_BLEND_START = 0.88;
 /** Trajectoire glide : mélange courbe Bézier + composante radiale Soleil. */
@@ -744,6 +752,9 @@ let orbitCanvas = null;
 let lastSettleT = 1;
 let lastGlideAnimating = false;
 let lastAtRestSectionIndex = 0;
+let planetFocusMode = false;
+let focusOrbitRadiusMin = 2;
+let focusOrbitRadiusMax = 80;
 
 let renderer;
 let scene;
@@ -1314,6 +1325,7 @@ function orbitToPos(lookAt, radius, azimuth, elevation, out) {
 
 function canOrbitDrag() {
   return (
+    planetFocusMode &&
     !introGateActive &&
     !lastGlideAnimating &&
     lastSettleT >= 1 &&
@@ -1321,10 +1333,28 @@ function canOrbitDrag() {
   );
 }
 
+function updateFocusOrbitRadiusLimits(sectionIndex) {
+  const planet = PLANETS[sectionIndex];
+  if (!planet) {
+    focusOrbitRadiusMin = 2;
+    focusOrbitRadiusMax = 80;
+    return;
+  }
+  const hero = sectionCameras[sectionIndex];
+  const heroRadius = hero?.position?.distanceTo(hero.lookAt) || planet.size * 6;
+  focusOrbitRadiusMin = Math.max(planet.size * FOCUS_ORBIT_RADIUS_MIN_MUL, 0.8);
+  focusOrbitRadiusMax = Math.max(
+    heroRadius * FOCUS_ORBIT_RADIUS_MAX_MUL,
+    focusOrbitRadiusMin * 2.5
+  );
+}
+
 function captureOrbitFromCamera(sectionIndex) {
   const orbit = sectionUserOrbit[sectionIndex];
   posToOrbit(camera.position, sectionCameras[sectionIndex].lookAt, orbit);
   orbit.modified = true;
+  updateFocusOrbitRadiusLimits(sectionIndex);
+  orbit.radius = clamp(orbit.radius, focusOrbitRadiusMin, focusOrbitRadiusMax);
 }
 
 function clearSectionUserOrbit(sectionIndex) {
@@ -1394,11 +1424,15 @@ function onOrbitPointerMove(event) {
   if (!orbit.modified) {
     captureOrbitFromCamera(lastAtRestSectionIndex);
   }
-  orbit.azimuth += dx * REST_ORBIT_AZ_SENS;
+  const azSens = planetFocusMode ? FOCUS_ORBIT_AZ_SENS : REST_ORBIT_AZ_SENS;
+  const elSens = planetFocusMode ? FOCUS_ORBIT_EL_SENS : REST_ORBIT_EL_SENS;
+  const elMin = planetFocusMode ? FOCUS_ORBIT_ELEV_MIN : REST_ORBIT_ELEV_MIN;
+  const elMax = planetFocusMode ? FOCUS_ORBIT_ELEV_MAX : REST_ORBIT_ELEV_MAX;
+  orbit.azimuth += dx * azSens;
   orbit.elevation = clamp(
-    orbit.elevation - dy * REST_ORBIT_EL_SENS,
-    REST_ORBIT_ELEV_MIN,
-    REST_ORBIT_ELEV_MAX
+    orbit.elevation - dy * elSens,
+    elMin,
+    elMax
   );
   event.preventDefault();
 }
@@ -1411,6 +1445,20 @@ function onOrbitPointerUp(event) {
   endOrbitDrag();
 }
 
+function onOrbitWheel(event) {
+  if (!planetFocusMode || !canOrbitDrag()) return;
+  event.preventDefault();
+  const idx = lastAtRestSectionIndex;
+  const orbit = sectionUserOrbit[idx];
+  if (!orbit.modified) {
+    captureOrbitFromCamera(idx);
+  } else {
+    updateFocusOrbitRadiusLimits(idx);
+  }
+  const factor = Math.exp(event.deltaY * FOCUS_ORBIT_ZOOM_SENS);
+  orbit.radius = clamp(orbit.radius * factor, focusOrbitRadiusMin, focusOrbitRadiusMax);
+}
+
 function initRestOrbitInteraction(canvas) {
   orbitCanvas = canvas;
   canvas.addEventListener("pointerdown", onOrbitPointerDown);
@@ -1418,6 +1466,7 @@ function initRestOrbitInteraction(canvas) {
   canvas.addEventListener("pointerup", onOrbitPointerUp);
   canvas.addEventListener("pointercancel", onOrbitPointerUp);
   canvas.addEventListener("lostpointercapture", endOrbitDrag);
+  canvas.addEventListener("wheel", onOrbitWheel, { passive: false });
 }
 
 function disposeRestOrbitInteraction() {
@@ -1427,12 +1476,40 @@ function disposeRestOrbitInteraction() {
   orbitCanvas.removeEventListener("pointerup", onOrbitPointerUp);
   orbitCanvas.removeEventListener("pointercancel", onOrbitPointerUp);
   orbitCanvas.removeEventListener("lostpointercapture", endOrbitDrag);
+  orbitCanvas.removeEventListener("wheel", onOrbitWheel);
   endOrbitDrag();
   orbitCanvas = null;
 }
 
 export function isRestOrbitDragging() {
   return orbitDrag.active;
+}
+
+/** Active le mode observation (drag + zoom caméra autour de la planète). */
+export function setPlanetFocusMode(active) {
+  const next = Boolean(active);
+  if (next === planetFocusMode) return;
+  planetFocusMode = next;
+  if (orbitCanvas) {
+    orbitCanvas.classList.toggle("planet-focus-canvas", planetFocusMode);
+  }
+  if (planetFocusMode) {
+    if (!lastGlideAnimating && lastSettleT >= 1) {
+      if (!sectionUserOrbit[lastAtRestSectionIndex]?.modified) {
+        captureOrbitFromCamera(lastAtRestSectionIndex);
+      } else {
+        updateFocusOrbitRadiusLimits(lastAtRestSectionIndex);
+      }
+    }
+  } else {
+    endOrbitDrag();
+    // Retour doux au cadrage héro (lerp caméra au repos).
+    clearSectionUserOrbit(lastAtRestSectionIndex);
+  }
+}
+
+export function isPlanetFocusMode() {
+  return planetFocusMode;
 }
 
 /** Pousse la caméra tangentiellement (et légèrement vers l'extérieur) jusqu'à dégager le Soleil. */

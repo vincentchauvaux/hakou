@@ -175,12 +175,21 @@ body[data-intro="done"] .intro-gate,
   display: none !important;
 }
 
-/* Bouton revenir à l’intro (bas gauche, discret) */
-.intro-replay {
+/* Actions bas gauche : Intro + focus planète */
+.chrome-actions {
   position: fixed;
   z-index: var(--chrome-z);
   left: max(12px, env(safe-area-inset-left));
   bottom: max(12px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.intro-replay,
+.planet-focus {
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -201,32 +210,191 @@ body[data-intro="done"] .intro-gate,
     background 0.2s ease,
     border-color 0.2s ease,
     color 0.2s ease,
-    opacity 0.25s ease;
+    opacity 0.45s ease,
+    visibility 0.45s ease,
+    transform 0.35s ease;
 }
 
-.intro-replay svg {
+.intro-replay svg,
+.planet-focus svg {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
   opacity: 0.9;
 }
 
-.intro-replay__label {
+.intro-replay__label,
+.planet-focus__label {
   line-height: 1;
 }
 
 .intro-replay:hover,
-.intro-replay:focus-visible {
+.intro-replay:focus-visible,
+.planet-focus:hover,
+.planet-focus:focus-visible {
   color: #fff;
   background: rgba(127, 157, 255, 0.22);
   border-color: rgba(255, 255, 255, 0.42);
   outline: none;
 }
 
-body:not([data-intro="done"]) .intro-replay {
+body:not([data-intro="done"]) .chrome-actions {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+body[data-webgl="unavailable"] .planet-focus {
+  display: none;
+}
+
+.planet-focus[aria-pressed="true"] {
+  color: #fff;
+  background: rgba(127, 157, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.planet-focus[aria-pressed="true"] .planet-focus__icon--enter,
+.planet-focus:not([aria-pressed="true"]) .planet-focus__icon--exit {
+  display: none;
+}
+
+.planet-focus[aria-pressed="true"] .planet-focus__icon--exit {
+  display: block;
+}
+
+/* Mode observation planète — hub (textes / chrome) qui s’efface */
+body[data-planet-focus="on"] .side-nav,
+body[data-planet-focus="on"] #solar-scale,
+body[data-planet-focus="on"] #overlay,
+body[data-planet-focus="on"] .intro-replay,
+body[data-planet-focus="on"] .scroll-gate {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body[data-planet-focus="on"] .side-nav,
+body[data-planet-focus="on"] #solar-scale,
+body[data-planet-focus="on"] #overlay {
+  transition:
+    opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0.55s linear;
+}
+
+body:not([data-planet-focus="on"]) .side-nav,
+body:not([data-planet-focus="on"]) #solar-scale,
+body:not([data-planet-focus="on"]) #overlay {
+  transition:
+    opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0.55s linear;
+}
+
+body[data-planet-focus="on"] #overlay .panel {
+  pointer-events: none;
+}
+
+body[data-planet-focus="on"] #three-canvas {
+  pointer-events: auto;
+  cursor: grab;
+  z-index: 1;
+}
+
+body[data-planet-focus="on"] #three-canvas.orbit-grabbing {
+  cursor: grabbing;
+}
+
+body[data-planet-focus="on"] .chrome-actions {
+  z-index: calc(var(--chrome-z) + 2);
+}
+
+body[data-planet-focus="on"]::before,
+body[data-planet-focus="on"]::after {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+
+/* Indicateur scroll gate — se remplit avant le changement de section */
+.scroll-gate {
+  --gate-progress: 0;
+  position: fixed;
+  left: 50%;
+  z-index: calc(var(--chrome-z) + 1);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: rgba(232, 237, 247, 0.92);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) scale(0.86);
+  transition:
+    opacity 0.22s ease,
+    visibility 0.22s linear,
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.28s ease,
+    bottom 0.28s ease;
+}
+
+.scroll-gate[data-dir="1"] {
+  bottom: max(28px, calc(env(safe-area-inset-bottom) + 18px));
+  top: auto;
+}
+
+.scroll-gate[data-dir="-1"] {
+  top: max(28px, calc(env(safe-area-inset-top) + 18px));
+  bottom: auto;
+}
+
+.scroll-gate.is-active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+}
+
+.scroll-gate__ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.scroll-gate__track,
+.scroll-gate__fill {
+  fill: none;
+  stroke-width: 2.25;
+}
+
+.scroll-gate__track {
+  stroke: rgba(255, 255, 255, 0.16);
+}
+
+.scroll-gate__fill {
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--gate-progress) * 100);
+  transition: stroke-dashoffset 0.08s linear;
+  filter: drop-shadow(0 0 6px rgba(127, 157, 255, 0.35));
+}
+
+.scroll-gate__chevron {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  opacity: 0.9;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.scroll-gate[data-dir="-1"] .scroll-gate__chevron {
+  transform: rotate(180deg);
+}
+
+.scroll-gate[data-dir="1"] .scroll-gate__chevron {
+  transform: rotate(0deg);
 }
 
 body[data-webgl="unavailable"][data-intro="pending"] .side-nav,
@@ -3029,15 +3197,27 @@ body.youtube-video-modal-open {
     border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
-  .intro-replay {
+  .chrome-actions {
     bottom: calc(var(--mobile-chrome-bottom) + 10px);
     left: max(10px, env(safe-area-inset-left));
   }
 
-  /* Sur Radio, INTRO recouvrait le champ message — on le range */
+  .scroll-gate[data-dir="1"] {
+    bottom: calc(var(--mobile-chrome-bottom) + 14px);
+  }
+
+  .scroll-gate[data-dir="-1"] {
+    top: calc(var(--mobile-chrome-top) + 14px);
+  }
+
+  /* Sur Stream, INTRO recouvrait le champ message — on le range */
   body:has(#stream.panel.is-active) .intro-replay {
     opacity: 0;
     pointer-events: none;
+  }
+
+  body[data-planet-focus="on"] .chrome-actions {
+    bottom: max(12px, env(safe-area-inset-bottom));
   }
 
   .solar-scale {

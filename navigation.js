@@ -3,11 +3,13 @@ import {
   spacecraftEase,
   isRestOrbitDragging,
   resetRestOrbitOffsets,
+  setPlanetFocusMode,
 } from "./scene3d.js";
 
 let sectionCount = 9;
 let scaleSectionMax = 8;
 let navigationLocked = false;
+let planetFocusActive = false;
 const TRANSITION_MS = 3200;
 const LONG_JUMP_MS_PER_STEP = 900;
 const GATE_WHEEL_TOTAL = 140;
@@ -51,11 +53,14 @@ let touchPanelScrollTop = 0;
 let touchScrollStallSteps = 0;
 let mobileEdgeCharge = 0;
 let mobileEdgeChargeDir = 0;
+let mobileEdgeChargeThreshold = MOBILE_EDGE_CHARGE_WHEEL_TOTAL;
 
 let overlay = null;
 let solarScaleEl = null;
 let solarScaleMarker = null;
 let solarScaleGauge = null;
+let scrollGateEl = null;
+let planetFocusBtn = null;
 
 /** Couleurs marqueur échelle = planète d’ancre (alignées scene3d.js / --scale-marker-N). */
 const SCALE_MARKER_COLORS = [
@@ -214,7 +219,7 @@ function releaseSolarScalePointerCapture(pointerId) {
 }
 
 function beginSolarScaleDrag(event) {
-  if (isAnimating || solarScaleDragActive) return;
+  if (isNavInputBlocked() || isAnimating || solarScaleDragActive) return;
   const raw = progressFromPointer(event.clientX, event.clientY);
   if (raw == null) return;
 
@@ -322,9 +327,92 @@ function canMove(dir) {
   return dir > 0 ? currentSection < sectionCount - 1 : currentSection > 0;
 }
 
+function isNavInputBlocked() {
+  return navigationLocked || planetFocusActive;
+}
+
+function getScrollGateVisualProgress() {
+  const dir = lastGateDir || mobileEdgeChargeDir;
+  if (!dir) return 0;
+
+  const gatePart = clamp(gateProgress, 0, 1);
+  if (needsMobileEdgeCharge(dir) && mobileEdgeChargeDir === dir) {
+    const edgePart = clamp(
+      mobileEdgeCharge / Math.max(mobileEdgeChargeThreshold, 1),
+      0,
+      1
+    );
+    // Première moitié = charge bord ; seconde = feedGate.
+    return clamp(edgePart * 0.5 + gatePart * 0.5, 0, 1);
+  }
+  return gatePart;
+}
+
+function syncScrollGate() {
+  if (!scrollGateEl || planetFocusActive || navigationLocked || isAnimating) {
+    if (scrollGateEl) {
+      scrollGateEl.classList.remove("is-active");
+      scrollGateEl.dataset.dir = "0";
+      scrollGateEl.style.setProperty("--gate-progress", "0");
+    }
+    return;
+  }
+
+  const dir = lastGateDir || mobileEdgeChargeDir;
+  const progress = getScrollGateVisualProgress();
+  if (!dir || progress <= 0.02) {
+    scrollGateEl.classList.remove("is-active");
+    scrollGateEl.dataset.dir = "0";
+    scrollGateEl.style.setProperty("--gate-progress", "0");
+    return;
+  }
+
+  scrollGateEl.dataset.dir = String(dir);
+  scrollGateEl.style.setProperty("--gate-progress", String(clamp(progress, 0, 1)));
+  scrollGateEl.classList.add("is-active");
+}
+
+function syncPlanetFocusButton() {
+  if (!planetFocusBtn) return;
+  const on = planetFocusActive;
+  planetFocusBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  planetFocusBtn.setAttribute(
+    "aria-label",
+    on ? "Revenir au contenu" : "Observer la planète"
+  );
+  planetFocusBtn.title = on ? "Revenir au contenu" : "Observer la planète";
+  const label = planetFocusBtn.querySelector(".planet-focus__label");
+  if (label) label.textContent = on ? "Retour" : "Voir";
+  planetFocusBtn.disabled =
+    !on && (navigationLocked || isAnimating || document.body.dataset.intro !== "done");
+}
+
+function setPlanetFocusActive(active) {
+  const next = Boolean(active);
+  if (next === planetFocusActive) return;
+  if (next) {
+    if (navigationLocked || isAnimating || document.body.dataset.intro !== "done") {
+      return;
+    }
+    if (document.body.dataset.webgl === "unavailable") return;
+  }
+
+  planetFocusActive = next;
+  document.body.dataset.planetFocus = next ? "on" : "off";
+  setPlanetFocusMode(next);
+  resetGate();
+  syncPlanetFocusButton();
+  syncScrollGate();
+}
+
+function togglePlanetFocus() {
+  setPlanetFocusActive(!planetFocusActive);
+}
+
 function resetMobileEdgeCharge() {
   mobileEdgeCharge = 0;
   mobileEdgeChargeDir = 0;
+  syncScrollGate();
 }
 
 function resetGate() {
@@ -333,6 +421,7 @@ function resetGate() {
   touchGateAcc = 0;
   resetTouchScrollStall();
   resetMobileEdgeCharge();
+  syncScrollGate();
 }
 
 function isCompactPanelChrome() {
@@ -479,14 +568,21 @@ function accumulateMobileEdgeCharge(dir, amount, { touch = false } = {}) {
     mobileEdgeCharge = 0;
   }
 
-  mobileEdgeCharge += amount;
-  const threshold = touch
+  mobileEdgeChargeThreshold = touch
     ? MOBILE_EDGE_CHARGE_TOUCH_TOTAL
     : MOBILE_EDGE_CHARGE_WHEEL_TOTAL;
+  mobileEdgeCharge += amount;
 
-  if (mobileEdgeCharge < threshold) return false;
+  window.clearTimeout(gateResetTimer);
+  gateResetTimer = window.setTimeout(resetGate, 280);
 
-  mobileEdgeCharge -= threshold;
+  if (mobileEdgeCharge < mobileEdgeChargeThreshold) {
+    syncScrollGate();
+    return false;
+  }
+
+  mobileEdgeCharge -= mobileEdgeChargeThreshold;
+  syncScrollGate();
   return true;
 }
 
@@ -669,6 +765,7 @@ function applyPanelFraming() {
 }
 
 function startGlide(toIndex, fromSection) {
+  if (planetFocusActive) setPlanetFocusActive(false);
   resetRestOrbitOffsets();
   animFrom = displaySection;
   animTo = toIndex;
@@ -680,10 +777,12 @@ function startGlide(toIndex, fromSection) {
     span <= 1 ? TRANSITION_MS : TRANSITION_MS + (span - 1) * LONG_JUMP_MS_PER_STEP;
   animStartMs = performance.now();
   isAnimating = true;
+  syncPlanetFocusButton();
+  syncScrollGate();
 }
 
 function goToSection(index) {
-  if (navigationLocked) return;
+  if (isNavInputBlocked()) return;
   const target = clamp(index, 0, sectionCount - 1);
   if (target === currentSection) {
     resetGate();
@@ -718,6 +817,8 @@ function feedGate(dir, amount) {
   window.clearTimeout(gateResetTimer);
   gateResetTimer = window.setTimeout(resetGate, 220);
 
+  syncScrollGate();
+
   if (gateProgress >= 1) {
     goToSection(currentSection + dir);
   }
@@ -734,7 +835,7 @@ function sectionDirFromContentDelta(deltaY) {
 }
 
 function onWheel(event) {
-  if (navigationLocked) {
+  if (isNavInputBlocked()) {
     event.preventDefault();
     return;
   }
@@ -774,7 +875,13 @@ function onWheel(event) {
 }
 
 function onKeyDown(event) {
-  if (navigationLocked || solarScaleDragActive || isAnimating) return;
+  if (planetFocusActive && event.key === "Escape") {
+    event.preventDefault();
+    setPlanetFocusActive(false);
+    return;
+  }
+
+  if (isNavInputBlocked() || solarScaleDragActive || isAnimating) return;
 
   let contentDelta = 0;
   if (["ArrowDown", "PageDown", " "].includes(event.key)) {
@@ -810,9 +917,10 @@ function onKeyDown(event) {
 }
 
 function onTouchStart(event) {
-  if (navigationLocked) return;
+  if (isNavInputBlocked()) return;
   if (event.target?.closest?.("#solar-scale")) return;
   if (event.target?.closest?.(".side-nav")) return;
+  if (event.target?.closest?.(".chrome-actions")) return;
 
   touchStartY = event.touches[0]?.clientY ?? 0;
   touchGateAcc = 0;
@@ -823,8 +931,9 @@ function onTouchStart(event) {
 }
 
 function onTouchMove(event) {
-  if (navigationLocked) return;
+  if (isNavInputBlocked()) return;
   if (event.target?.closest?.(".side-nav")) return;
+  if (event.target?.closest?.(".chrome-actions")) return;
 
   if (solarScaleDragActive) {
     event.preventDefault();
@@ -1078,6 +1187,8 @@ export function initNavigation(root) {
   overlay = root.querySelector("#overlay");
   solarScaleEl = root.querySelector("#solar-scale");
   solarScaleMarker = root.querySelector("#solar-scale-marker");
+  scrollGateEl = root.querySelector("#scroll-gate");
+  planetFocusBtn = root.querySelector("#planet-focus");
   panels = [...root.querySelectorAll(".panel")];
   sectionCount = panels.length;
   scaleSectionMax = Math.max(sectionCount - 1, 1);
@@ -1086,12 +1197,20 @@ export function initNavigation(root) {
   navLinks.forEach((link) => {
     link.addEventListener("click", (event) => {
       event.preventDefault();
+      if (isNavInputBlocked()) return;
       const idx = Number(link.dataset.zoneLink);
       if (!Number.isNaN(idx)) {
         goToSection(idx);
       }
     });
   });
+
+  if (planetFocusBtn) {
+    planetFocusBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      togglePlanetFocus();
+    });
+  }
 
   initSolarScaleInteraction();
   initEmbedPanelScroll(root);
@@ -1105,6 +1224,8 @@ export function initNavigation(root) {
   displaySection = 0;
   applyPanelFraming();
   syncUI();
+  syncPlanetFocusButton();
+  syncScrollGate();
   if (overlay) {
     overlay.style.transform = "translate3d(0, 0, 0)";
   }
@@ -1127,6 +1248,7 @@ export function tickNavigation(now) {
       glideT = 1;
       resetActivePanelScroll();
       resetGlideDepartingPanelScroll();
+      syncPlanetFocusButton();
     }
   } else {
     displaySection = currentSection;
@@ -1174,11 +1296,22 @@ export function goToSectionIndex(index) {
 export function setNavigationLocked(locked) {
   navigationLocked = Boolean(locked);
   if (navigationLocked) {
+    if (planetFocusActive) setPlanetFocusActive(false);
     gateProgress = 0;
     lastGateDir = 0;
+    syncScrollGate();
   }
+  syncPlanetFocusButton();
 }
 
 export function isNavigationLocked() {
   return navigationLocked;
+}
+
+export function isPlanetFocusActive() {
+  return planetFocusActive;
+}
+
+export function setPlanetFocus(active) {
+  setPlanetFocusActive(active);
 }

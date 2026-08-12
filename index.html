@@ -46,26 +46,73 @@
       <p id="intro-hint" class="intro-hint">Cliquer le logo pour entrer</p>
     </div>
 
-    <button
-      type="button"
-      id="intro-replay"
-      class="intro-replay"
-      aria-label="Revoir la présentation"
-      title="Revoir la présentation"
+    <div
+      id="scroll-gate"
+      class="scroll-gate"
+      aria-hidden="true"
+      data-dir="0"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="3.25"/>
-        <path d="M12 3.5v2.2"/>
-        <path d="M12 18.3v2.2"/>
-        <path d="M3.5 12h2.2"/>
-        <path d="M18.3 12h2.2"/>
-        <path d="M6.1 6.1l1.55 1.55"/>
-        <path d="M16.35 16.35l1.55 1.55"/>
-        <path d="M17.9 6.1l-1.55 1.55"/>
-        <path d="M7.65 16.35l-1.55 1.55"/>
+      <svg class="scroll-gate__ring" viewBox="0 0 40 40" aria-hidden="true">
+        <circle class="scroll-gate__track" cx="20" cy="20" r="15.5" />
+        <circle class="scroll-gate__fill" cx="20" cy="20" r="15.5" pathLength="100" />
       </svg>
-      <span class="intro-replay__label">Intro</span>
-    </button>
+      <svg
+        class="scroll-gate__chevron"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M7 10l5 5 5-5" />
+      </svg>
+    </div>
+
+    <div class="chrome-actions" aria-label="Actions">
+      <button
+        type="button"
+        id="intro-replay"
+        class="intro-replay"
+        aria-label="Revoir la présentation"
+        title="Revoir la présentation"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.25"/>
+          <path d="M12 3.5v2.2"/>
+          <path d="M12 18.3v2.2"/>
+          <path d="M3.5 12h2.2"/>
+          <path d="M18.3 12h2.2"/>
+          <path d="M6.1 6.1l1.55 1.55"/>
+          <path d="M16.35 16.35l1.55 1.55"/>
+          <path d="M17.9 6.1l-1.55 1.55"/>
+          <path d="M7.65 16.35l-1.55 1.55"/>
+        </svg>
+        <span class="intro-replay__label">Intro</span>
+      </button>
+      <button
+        type="button"
+        id="planet-focus"
+        class="planet-focus"
+        aria-label="Observer la planète"
+        aria-pressed="false"
+        title="Observer la planète"
+      >
+        <svg class="planet-focus__icon planet-focus__icon--enter" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.2"/>
+          <ellipse cx="12" cy="12" rx="9.5" ry="3.6" transform="rotate(-22 12 12)"/>
+          <path d="M12 5.2v1.4"/>
+          <path d="M12 17.4v1.4"/>
+        </svg>
+        <svg class="planet-focus__icon planet-focus__icon--exit" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 6l12 12"/>
+          <path d="M18 6L6 18"/>
+        </svg>
+        <span class="planet-focus__label">Voir</span>
+      </button>
+    </div>
 
     <div id="solar-scale" class="solar-scale" aria-hidden="true">
       <div class="solar-scale-track">
