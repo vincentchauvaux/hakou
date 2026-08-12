@@ -764,6 +764,10 @@ let planetFocusMode = false;
 let focusOrbitRadiusMin = 2;
 let focusOrbitRadiusMax = 80;
 let focusOrbitLastTickMs = 0;
+/** Pause rotation propre (planète observée) pendant grab / pinch. */
+const sectionSpinClockOffset = Array.from({ length: SECTION_COUNT }, () => 0);
+let focusSpinHoldStart = null;
+let focusSpinHoldSection = -1;
 const tmpFocusPivot = new THREE.Vector3();
 
 let renderer;
@@ -1338,6 +1342,46 @@ function orbitToPos(lookAt, radius, azimuth, elevation, out) {
   return out;
 }
 
+function isFocusManipulating() {
+  return (
+    planetFocusMode &&
+    (orbitDrag.active || orbitDrag.pinch || orbitDrag.pointers.size > 0)
+  );
+}
+
+/** Gel / reprise sans saut de la rotation propre de la planète observée. */
+function syncFocusSpinHold(elapsed) {
+  const shouldHold = isFocusManipulating();
+  if (shouldHold) {
+    if (focusSpinHoldStart == null) {
+      focusSpinHoldStart = elapsed;
+      focusSpinHoldSection = lastAtRestSectionIndex;
+    }
+    return;
+  }
+  if (focusSpinHoldStart == null) return;
+  const idx = focusSpinHoldSection;
+  if (idx >= 0 && idx < sectionSpinClockOffset.length) {
+    sectionSpinClockOffset[idx] += elapsed - focusSpinHoldStart;
+  }
+  focusSpinHoldStart = null;
+  focusSpinHoldSection = -1;
+}
+
+function getPlanetSpinElapsed(elapsed, sectionIndex) {
+  if (sectionIndex == null || sectionIndex < 0) return elapsed;
+  const offset = sectionSpinClockOffset[sectionIndex] || 0;
+  if (focusSpinHoldStart != null && sectionIndex === focusSpinHoldSection) {
+    return focusSpinHoldStart - offset;
+  }
+  return elapsed - offset;
+}
+
+function resetFocusSpinHold() {
+  focusSpinHoldStart = null;
+  focusSpinHoldSection = -1;
+}
+
 function canOrbitDrag() {
   return planetFocusMode && !introGateActive && !lastGlideAnimating;
 }
@@ -1707,6 +1751,7 @@ export function setPlanetFocusMode(active) {
     clearOrbitVelocity(idx);
   } else {
     endOrbitDrag();
+    resetFocusSpinHold();
     // Retour doux au cadrage héro (lerp caméra au repos).
     clearSectionUserOrbit(lastAtRestSectionIndex);
   }
@@ -3321,6 +3366,7 @@ function updateOrbitRings(displaySection, glideState) {
 }
 
 function updatePlanets(elapsed, displaySection, glideState) {
+  syncFocusSpinHold(elapsed);
   const activeIndex = getActiveSectionIndex(displaySection, glideState);
   const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
   let activeEntry = null;
@@ -3343,8 +3389,9 @@ function updatePlanets(elapsed, displaySection, glideState) {
     }
 
     const axial = data.axialScale ?? 1;
+    const spinElapsed = getPlanetSpinElapsed(elapsed, data.section);
     // spinSpeed déjà calibré (période sidérale) — plus de facteur axialScale « fake ».
-    const spinY = elapsed * data.spinSpeed * PLANET_SPIN_MUL * axial;
+    const spinY = spinElapsed * data.spinSpeed * PLANET_SPIN_MUL * axial;
 
     if (entry.equator && data.axialTilt != null) {
       entry.equator.rotation.z = data.axialTilt;
@@ -3356,7 +3403,7 @@ function updatePlanets(elapsed, displaySection, glideState) {
         if (data.name === "Venus") {
           // Super-rotation atmosphère ~4 j (rétrograde), calée sur PLANET_SPIN_MUL.
           cloudSpin.rotation.y =
-            elapsed *
+            spinElapsed *
             spinSpeedFromPeriodHours(96, { retrograde: true }) *
             PLANET_SPIN_MUL;
         } else {
@@ -3364,6 +3411,7 @@ function updatePlanets(elapsed, displaySection, glideState) {
         }
       }
       if (moonPivot) {
+        // Orbite lunaire continue même pendant le grab (pas une rotation propre).
         moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED;
         // Rotation synchrone (face cachée).
         if (moonSpin) moonSpin.rotation.y = moonPivot.rotation.y;
@@ -3376,7 +3424,8 @@ function updatePlanets(elapsed, displaySection, glideState) {
     }
 
     if (mat?.userData?.shaderUniforms) {
-      mat.userData.shaderUniforms.uTime.value = elapsed * PLANET_SPIN_MUL;
+      mat.userData.shaderUniforms.uTime.value =
+        spinElapsed * PLANET_SPIN_MUL;
     }
 
     const decorNearSun = isDecorative
@@ -3409,12 +3458,12 @@ function updatePlanets(elapsed, displaySection, glideState) {
     }
 
     if (rings?.gltf && rings.root) {
-      // Anneaux coplanaires : pas de spin propre fort (poussière Kepler).
-      rings.root.rotation.y = elapsed * 0.04 * PLANET_SPIN_MUL;
+      // Anneaux : figés avec la planète observée pendant le grab.
+      rings.root.rotation.y = spinElapsed * 0.04 * PLANET_SPIN_MUL;
     } else if (rings) {
       const ringSpin = PLANET_SPIN_SCALE * axial;
-      rings.inner.rotation.z = elapsed * 0.4 * ringSpin * PLANET_SPIN_MUL;
-      rings.outer.rotation.z = elapsed * 0.28 * ringSpin * PLANET_SPIN_MUL;
+      rings.inner.rotation.z = spinElapsed * 0.4 * ringSpin * PLANET_SPIN_MUL;
+      rings.outer.rotation.z = spinElapsed * 0.28 * ringSpin * PLANET_SPIN_MUL;
     }
   });
 
