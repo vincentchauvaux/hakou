@@ -59,14 +59,14 @@ let solarScaleGauge = null;
 
 /** Couleurs marqueur échelle = planète d’ancre (alignées scene3d.js / --scale-marker-N). */
 const SCALE_MARKER_COLORS = [
-  "#3060b0", /* 0 Neptune */
-  "#d4b878", /* 1 Saturne */
-  "#a090b8", /* 2 Pluton (Radio) */
-  "#c87848", /* 3 Jupiter */
-  "#60c8b8", /* 4 Uranus */
+  "#a090b8", /* 0 Pluton */
+  "#3060b0", /* 1 Neptune */
+  "#60c8b8", /* 2 Uranus */
+  "#d4b878", /* 3 Saturne */
+  "#c87848", /* 4 Jupiter */
   "#c86048", /* 5 Mars */
-  "#e8d8a8", /* 6 Vénus */
-  "#48a878", /* 7 Plugin (orbite Terre décorative) */
+  "#48a878", /* 6 Terre */
+  "#e8d8a8", /* 7 Vénus */
   "#a0a098", /* 8 Mercure */
 ];
 let panels = [];

@@ -58,7 +58,7 @@
 
 - **9 sections** (indices 0–8), scroll gating via molette / clavier / touch. `sectionCount` et `scaleSectionMax` dérivés de `panels.length` à l’init.
 
-- **Modèle spatial** : section **0 = Intro / Neptune (loin)**, section **8 = Contact / Mercure (proche Soleil)**. Avancer = index++ = vers le Soleil. **Stream** = §2 (Pluton) entre Son et Video. **Étapes intermédiaires intérieures** : §6 **Sites** (orbite 3D : Vénus), §7 **Plugin** (orbite 3D : Terre GLB + Lune, avant Contact).
+- **Modèle spatial** : section **0 = Intro / Pluton (loin)**, section **8 = Contact / Mercure (proche Soleil)**. Avancer = index++ = vers le Soleil. **Ordre réel** : Pluton → Neptune → Uranus → Saturne → Jupiter → Mars → Terre → Vénus → Mercure. **Sites** = §6 Terre ; **Plugin** = §7 Vénus.
 
 - **Entrées scroll (alignées page / overlay)** :
 
@@ -118,9 +118,9 @@
 
 - **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement. Focale **42 mm**. Neptune `camDistMul` **2,40**, `distScale` **1,53**, `orbitSunLift` **0,08**. `INTRO_SNAP_FRAMES` 5. Pas de dérive caméra au repos Intro.
 
-- **Ordre planètes / caméra** : 0 Neptune GLB → 1 Saturne GLB (+ anneaux horizontaux, texture UV **−90°** pour bandes concentriques) → **2 Pluton stylisée (Stream)** → 3 Jupiter GLB → **4 Uranus GLB** → 5 Mars GLB → **6 Vénus GLB (+ nuages)** → **7 Terre GLB + Lune** → 8 Mercure GLB ; Soleil texturé (`sun.glb`). Voyage caméra 0→8 « vers le Soleil ». **Corps décoratifs** : Cérès + Lune décorative. **Août 2026** : assets WebP 2K ; cache-bust `planets27`.
+- **Ordre planètes / caméra** : 0 Pluton → 1 Neptune GLB → 2 Uranus GLB → 3 Saturne GLB (+ anneaux) → 4 Jupiter GLB → 5 Mars GLB → **6 Terre GLB + Lune (Sites)** → **7 Vénus GLB (Plugin)** → 8 Mercure GLB ; Soleil au centre. Voyage 0→8 « vers le Soleil ». **Décoratifs** : Cérès (ceinture) + Lune. Cache-bust `planets28`.
 
-- **Échelles / spins / ombres (août 2026)** : rayons relatifs ancrés sur Terre (`EARTH_SCENE_R` 0,5) — terrestres en ratio vrai, géants compressés `^0,48` (Jupiter > Saturne > Uranus ≈ Neptune > Terre ≈ Vénus > Mars > Mercure). Inclinaisons axiales réelles (`axialTilt`, Uranus ~98°, Vénus/Uranus rétrogrades). Spins via périodes sidérales. Lune 0,273 R⊕, orbite compressée ×2,65, rotation synchrone. **Soleil** DirectionalLight partagée (`sunKeyLight`) vers la planète active + ombres ; émissif GLB bas pour lire le terminateur.
+- **Échelles / spins / ombres (août 2026)** : rayons relatifs ancrés sur Terre ; géants compressés `^0,48`. Inclinaisons / spins sidéraux. **Soleil** `sunKeyLight` sur planète active.
 
 - **Échelle orbitale** (`PLANETS`, juin 2026) : facteur global **`ORBIT_SCALE` 1,2** (~+20 %) — Neptune **69,6**, Saturne **50,4**, Pluton **43,2**, Jupiter **33,6**, Uranus **42**, Mars **24** (3D, §5), Vénus **12,2** (§6), Terre **9,1** (§7), Mercure **15,6** (Contact, §8). Caméra far **864**, lumière Soleil portée **480**, brouillard initial **0,005**.
 
@@ -234,21 +234,21 @@
 
 |-------|--------|---------|-------|
 
-| 0 | Intro | Neptune (GLB) | dark |
+| 0 | Intro | Pluton (stylisée) | dark |
 
-| 1 | Son | Saturne (GLB + anneaux) | light |
+| 1 | Son | Neptune (GLB) | light |
 
-| 2 | Stream (`#stream`) | Pluton (stylisée) | mid |
+| 2 | Stream (`#stream`) | Uranus (GLB) | mid |
 
-| 3 | Video | Jupiter (GLB) | mid |
+| 3 | Video | Saturne (GLB + anneaux) | mid |
 
-| 4 | Visuel | Uranus (GLB) | mid |
+| 4 | Visuel | Jupiter (GLB) | mid |
 
 | 5 | 3D | Mars (GLB) | mid |
 
-| 6 | Sites (`#venus`) | Vénus (GLB + nuages) | mid |
+| 6 | Sites (`#venus`) | Terre (GLB + Lune) | mid |
 
-| 7 | Plugin (`#plugin`) | Terre (GLB + Lune) | mid |
+| 7 | Plugin (`#plugin`) | Vénus (GLB + nuages) | mid |
 
 | 8 | Contact | Mercure (GLB) | mercury |
 
@@ -368,7 +368,7 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 
 ## Intro gate (juil. 2026 — Étape 1 + 2)
 
-Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Neptune (§0).
+Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Pluton (§0).
 
 - **Assets** : [`assets/logo-hakou.svg`](assets/logo-hakou.svg) chargé via **`SVGLoader`** → formes `ShapeGeometry` (vrai vectoriel 3D, pas une texture bitmap) ; PNG `logo-hakou.png` conservé en secours. **Favicon** (5 août 2026) : [`assets/favicon.svg`](assets/favicon.svg) (+ `favicon-32.png`, `apple-touch-icon.png`) — logo blanc sur fond `#05070d` ; branché dans `index.html`, pages `legal/`, studio. Anciennes nébuleuses `assets/nebula/*.png` non utilisées (retirées de l’intro).
 - **Scène** (`scene3d.js`) : groupe `introGate` — logo SVG vectoriel (stable, **sans bounce**). Au repos : fond `#000` + **univers masqué** (pas de plan-voile). Pendant `startIntroGateZoom` (~3,4 s) : univers réaffiché ; **destination caméra = cadrage §0 live** chaque frame ; fond **reste noir** (pas de lerp couleur / wash) ; brouillard qui s’éclaircit ; logo fondu ; **pas de nébuleuses** ; à la fin `finishIntroZoomToLive` aligne caméra / FOV / `introSnapFrames` sans reset brutal.

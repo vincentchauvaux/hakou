@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "27";
+const PLANET_GLB_V = "28";
 const PLANET_GLB = {
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
@@ -67,15 +67,15 @@ const SUN_HEAT_SPAN = 2.15;
 const ORBIT_SCALE = 1.2;
 
 const zoneAccent = [
-  0x6d93ff,
-  0xc9b896,
-  0xb898d0,
-  0xff9a5c,
-  0x66d8e8,
-  0xff6b6b,
-  0xf0c878,
-  0x5cb870,
-  0xc4b8a8,
+  0xa090b8, // Pluton
+  0x5c8fd4, // Neptune
+  0x66d8e8, // Uranus
+  0xc9b896, // Saturne
+  0xff9a5c, // Jupiter
+  0xff6b6b, // Mars
+  0x5cb870, // Terre
+  0xf0c878, // Vénus
+  0xc4b8a8, // Mercure
 ];
 
 /** Arches caméra entre sections — base lift/side, × distance dynamique (sin π·pathT) */
@@ -118,7 +118,7 @@ const GLIDE_RADIAL_Y_BREATHE = 0;
 /** Demi-angle max du disque Soleil (rad) — évite le Soleil plein écran hors Contact. */
 /** Plafond angulaire Soleil (rad) — plus élevé en orbites intérieures pour ne pas repousser la caméra hors limite. */
 const SUN_MAX_ANGULAR_BY_SECTION = [
-  0.042, 0.055, 0.038, 0.044, 0.046, 0.055, 0.1, 0.07, 0.11,
+  0.042, 0.05, 0.048, 0.055, 0.06, 0.055, 0.07, 0.09, 0.11,
 ];
 /** Rotation propre planète sur son axe (× spinSpeed × axialScale) — distincte de REST_ORBIT_DRIFT */
 const PLANET_SPIN_SCALE = 0.025;
@@ -168,16 +168,17 @@ const BODY_PUSH_MAX_ITER = 8;
  */
 const SECTION_FRAMING = [
   {
+    /* §0 Intro / Pluton */
     planetSide: 1,
-    distScale: 1.53,
+    distScale: 1.35,
     tangentMul: 1.02,
     compositionSlide: 1.04,
     elevation: 0.3,
     limbElevation: 0.11,
     horizonLimbOut: 0.97,
     horizonSkyLift: 0.17,
-    horizonSunBias: 0.36,
-    sunFrameBias: 0.48,
+    horizonSunBias: 0.28,
+    sunFrameBias: 0.4,
     orbitSunLift: 0.08,
     dutch: -0.014,
     textAlign: "left",
@@ -185,9 +186,9 @@ const SECTION_FRAMING = [
     safeSide: "west",
   },
   {
-    /* §1 Son / Saturne — plus de globe, moins de Soleil */
+    /* §1 Son / Neptune */
     planetSide: -1,
-    distScale: 0.86,
+    distScale: 0.9,
     tangentMul: 1.02,
     compositionSlide: 0.82,
     elevation: 0.18,
@@ -203,54 +204,54 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
-    /* §2 Stream / Pluton — corps petit → caméra très proche + focale télé */
+    /* §2 Stream / Uranus */
     planetSide: 1,
-    distScale: 0.52,
-    tangentMul: 0.78,
-    compositionSlide: 0.62,
-    elevation: 0.14,
-    limbElevation: 0.08,
-    horizonLimbOut: 0.98,
-    horizonSkyLift: 0.12,
-    horizonSunBias: 0.08,
-    sunFrameBias: 0.16,
-    orbitSunLift: 0.03,
+    distScale: 0.78,
+    tangentMul: 0.88,
+    compositionSlide: 0.75,
+    elevation: 0.16,
+    limbElevation: 0.09,
+    horizonLimbOut: 0.97,
+    horizonSkyLift: 0.13,
+    horizonSunBias: 0.14,
+    sunFrameBias: 0.28,
+    orbitSunLift: 0.05,
     dutch: -0.008,
     textAlign: "left",
     panelOffset: "left",
     safeSide: "west",
   },
   {
-    /* §3 Video / Jupiter */
+    /* §3 Video / Saturne */
     planetSide: 1,
-    distScale: 0.97,
+    distScale: 0.88,
     tangentMul: 1.0,
-    compositionSlide: 1.18,
-    elevation: 0.22,
+    compositionSlide: 0.9,
+    elevation: 0.2,
     limbElevation: 0.1,
     horizonLimbOut: 0.96,
     horizonSkyLift: 0.14,
-    horizonSunBias: 0.32,
-    sunFrameBias: 0.4,
-    orbitSunLift: 0.07,
+    horizonSunBias: 0.18,
+    sunFrameBias: 0.3,
+    orbitSunLift: 0.06,
     dutch: -0.01,
     textAlign: "left",
     panelOffset: "left",
     safeSide: "west",
   },
   {
-    /* §4 Visuel / Uranus */
+    /* §4 Visuel / Jupiter */
     planetSide: -1,
-    distScale: 1.0,
+    distScale: 0.92,
     tangentMul: 0.96,
-    compositionSlide: 1.12,
+    compositionSlide: 0.95,
     elevation: 0.19,
     limbElevation: 0.09,
     horizonLimbOut: 0.95,
     horizonSkyLift: 0.13,
-    horizonSunBias: 0.38,
-    sunFrameBias: 0.56,
-    orbitSunLift: 0.1,
+    horizonSunBias: 0.22,
+    sunFrameBias: 0.36,
+    orbitSunLift: 0.08,
     dutch: 0.011,
     textAlign: "right",
     panelOffset: "right",
@@ -275,26 +276,8 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
-    /* §6 Sites / Vénus */
+    /* §6 Sites / Terre — masse dominante + bande de ciel */
     planetSide: 1,
-    distScale: 0.9,
-    tangentMul: 0.92,
-    compositionSlide: 1.06,
-    elevation: 0.16,
-    limbElevation: 0.08,
-    horizonLimbOut: 0.94,
-    horizonSkyLift: 0.11,
-    horizonSunBias: 0.32,
-    sunFrameBias: 0.54,
-    orbitSunLift: 0.11,
-    dutch: -0.01,
-    textAlign: "left",
-    panelOffset: "left",
-    safeSide: "west",
-  },
-  {
-    /* §7 Plugin / Terre — masse dominante + bande de ciel / fond */
-    planetSide: -1,
     distScale: 0.8,
     tangentMul: 0.82,
     compositionSlide: 0.78,
@@ -305,7 +288,25 @@ const SECTION_FRAMING = [
     horizonSunBias: 0.16,
     sunFrameBias: 0.26,
     orbitSunLift: 0.05,
-    dutch: 0.006,
+    dutch: -0.01,
+    textAlign: "left",
+    panelOffset: "left",
+    safeSide: "west",
+  },
+  {
+    /* §7 Plugin / Vénus */
+    planetSide: -1,
+    distScale: 0.82,
+    tangentMul: 0.85,
+    compositionSlide: 0.8,
+    elevation: 0.14,
+    limbElevation: 0.08,
+    horizonLimbOut: 0.95,
+    horizonSkyLift: 0.11,
+    horizonSunBias: 0.18,
+    sunFrameBias: 0.3,
+    orbitSunLift: 0.06,
+    dutch: 0.009,
     textAlign: "right",
     panelOffset: "right",
     safeSide: "east",
@@ -331,8 +332,8 @@ const SECTION_FRAMING = [
   },
 ];
 
-/** Focale repos (mm) — Plugin un peu moins télé pour laisser du ciel derrière la Terre. */
-const FOCAL_REST_MM = [42, 34, 52, 32, 36, 48, 46, 50, 54];
+/** Focale repos (mm) — ordre réel Pluton→Mercure. */
+const FOCAL_REST_MM = [42, 36, 40, 34, 36, 48, 50, 48, 54];
 const GLIDE_FOV_DIRECT_START = 0.9;
 const SENSOR_HEIGHT_MM = 24;
 /** Lissage exponentiel FOV — constant pour éviter un saut quand le glide s'arrête. */
@@ -367,20 +368,20 @@ function getSunVisualRadius(sectionIndex) {
 /** Biais regard vers le Soleil — léger : la planète reste la masse dominante. */
 function getHeroSunBiasScale(sectionIndex) {
   if (sectionIndex === 8) return 0.7;
-  if (sectionIndex === 7) return 0.38;
+  if (sectionIndex === 6) return 0.38; // Terre
   if (sectionIndex === 5) return 0.4;
-  if (sectionIndex === 2 || sectionIndex === 1) return 0.32;
-  if (sectionIndex >= 6) return 0.55;
+  if (sectionIndex === 1 || sectionIndex === 2) return 0.32;
+  if (sectionIndex >= 7) return 0.45;
   return 0.58;
 }
 
-/** Lerp lookAt → Soleil — faible sur Son / Stream / 3D / Plugin / Contact. */
+/** Lerp lookAt → Soleil — faible sur Son / Stream / 3D / Sites(Terre) / Contact. */
 function getHeroLookSunLerp(sectionIndex) {
   if (sectionIndex === 8) return 0.05;
-  if (sectionIndex === 7) return 0.03;
+  if (sectionIndex === 6) return 0.03; // Terre
   if (sectionIndex === 5) return 0.04;
-  if (sectionIndex === 2 || sectionIndex === 1) return 0.02;
-  if (sectionIndex >= 6) return 0.07;
+  if (sectionIndex === 1 || sectionIndex === 2) return 0.02;
+  if (sectionIndex >= 7) return 0.05;
   return 0.06 + sectionIndex * 0.008;
 }
 
@@ -416,54 +417,8 @@ function enforceMinSunViewDistance(sectionIndex, point) {
 
 const PLANETS = [
   {
-    name: "Neptune",
+    name: "Pluto", // §0 Intro — plus loin ; taille scénique exagérée
     orbitRadius: scaledOrbit(58),
-    size: sceneRadiusFromEarthRadii(3.883),
-    color: 0x1e3a8a,
-    emissive: 0x081428,
-    accentColor: 0x5c8fd4,
-    atmosphereColor: 0x3060b0,
-    roughness: 0.82,
-    noiseScale: 5.5,
-    orbitSpeed: 0.08,
-    spinSpeed: spinSpeedFromPeriodHours(16.11),
-    axialTilt: 28.32 * DEG,
-    axialScale: 1,
-    heroAngle: 0.78,
-    startAngle: 0.78,
-    section: 0,
-    camDistMul: 2.35,
-    camLift: 0.1,
-    camTangent: 0.34,
-    gltfUrl: PLANET_GLB.neptune,
-  },
-  {
-    name: "Saturn",
-    orbitRadius: scaledOrbit(42),
-    size: sceneRadiusFromEarthRadii(9.449),
-    color: 0xc4b078,
-    emissive: 0x383020,
-    accentColor: 0xe8dcb0,
-    atmosphereColor: 0xf0e4c8,
-    roughness: 0.78,
-    noiseScale: 3.2,
-    orbitSpeed: 0.14,
-    spinSpeed: spinSpeedFromPeriodHours(10.66),
-    axialTilt: 26.73 * DEG,
-    axialScale: 1,
-    heroAngle: 2.14,
-    startAngle: 2.14,
-    hasRings: true,
-    section: 1,
-    camDistMul: 1.12,
-    camLift: 0.06,
-    camTangent: 0.6,
-    ringView: true,
-    gltfUrl: PLANET_GLB.saturn,
-  },
-  {
-    name: "Pluto", // panel UI §2 Stream — rayon scénique exagéré (réel trop petit pour le héro)
-    orbitRadius: scaledOrbit(36),
     size: 0.48,
     color: 0x9080a8,
     emissive: 0x201828,
@@ -471,18 +426,86 @@ const PLANETS = [
     atmosphereColor: 0xa090b8,
     roughness: 0.88,
     noiseScale: 7.2,
-    orbitSpeed: 0.18,
+    orbitSpeed: 0.08,
     spinSpeed: spinSpeedFromPeriodHours(153.3),
     axialTilt: 122.53 * DEG,
+    axialScale: 1,
+    heroAngle: 0.78,
+    startAngle: 0.78,
+    section: 0,
+    camDistMul: 2.1,
+    camLift: 0.1,
+    camTangent: 0.34,
+    atmRadiusMul: 1.012,
+    atmIntensity: 0.05,
+  },
+  {
+    name: "Neptune",
+    orbitRadius: scaledOrbit(50),
+    size: sceneRadiusFromEarthRadii(3.883),
+    color: 0x1e3a8a,
+    emissive: 0x081428,
+    accentColor: 0x5c8fd4,
+    atmosphereColor: 0x3060b0,
+    roughness: 0.82,
+    noiseScale: 5.5,
+    orbitSpeed: 0.1,
+    spinSpeed: spinSpeedFromPeriodHours(16.11),
+    axialTilt: 28.32 * DEG,
+    axialScale: 1,
+    heroAngle: 2.14,
+    startAngle: 2.14,
+    section: 1,
+    camDistMul: 1.35,
+    camLift: 0.08,
+    camTangent: 0.45,
+    gltfUrl: PLANET_GLB.neptune,
+  },
+  {
+    name: "Uranus",
+    orbitRadius: scaledOrbit(43),
+    size: sceneRadiusFromEarthRadii(4.007),
+    color: 0x48b0a8,
+    emissive: 0x123838,
+    accentColor: 0x78e0d0,
+    atmosphereColor: 0x60c8b8,
+    roughness: 0.75,
+    noiseScale: 4.0,
+    orbitSpeed: 0.14,
+    spinSpeed: spinSpeedFromPeriodHours(17.24, { retrograde: true }),
+    axialTilt: 97.77 * DEG,
     axialScale: 1,
     heroAngle: 2.78,
     startAngle: 2.78,
     section: 2,
-    camDistMul: 0.78,
-    camLift: 0.06,
-    camTangent: 0.32,
-    atmRadiusMul: 1.012,
-    atmIntensity: 0.05,
+    camDistMul: 1.2,
+    camLift: 0.08,
+    camTangent: 0.42,
+    gltfUrl: PLANET_GLB.uranus,
+  },
+  {
+    name: "Saturn",
+    orbitRadius: scaledOrbit(36),
+    size: sceneRadiusFromEarthRadii(9.449),
+    color: 0xc4b078,
+    emissive: 0x383020,
+    accentColor: 0xe8dcb0,
+    atmosphereColor: 0xf0e4c8,
+    roughness: 0.78,
+    noiseScale: 3.2,
+    orbitSpeed: 0.18,
+    spinSpeed: spinSpeedFromPeriodHours(10.66),
+    axialTilt: 26.73 * DEG,
+    axialScale: 1,
+    heroAngle: 3.42,
+    startAngle: 3.42,
+    hasRings: true,
+    section: 3,
+    camDistMul: 1.2,
+    camLift: 0.08,
+    camTangent: 0.55,
+    ringView: true,
+    gltfUrl: PLANET_GLB.saturn,
   },
   {
     name: "Jupiter",
@@ -498,35 +521,13 @@ const PLANETS = [
     spinSpeed: spinSpeedFromPeriodHours(9.93),
     axialTilt: 3.13 * DEG,
     axialScale: 1,
-    heroAngle: 3.42,
-    startAngle: 3.42,
-    section: 3,
-    camDistMul: 1.38,
-    camLift: 0.1,
-    camTangent: 0.5,
-    gltfUrl: PLANET_GLB.jupiter,
-  },
-  {
-    name: "Uranus",
-    orbitRadius: scaledOrbit(35),
-    size: sceneRadiusFromEarthRadii(4.007),
-    color: 0x48b0a8,
-    emissive: 0x123838,
-    accentColor: 0x78e0d0,
-    atmosphereColor: 0x60c8b8,
-    roughness: 0.75,
-    noiseScale: 4.0,
-    orbitSpeed: 0.26,
-    spinSpeed: spinSpeedFromPeriodHours(17.24, { retrograde: true }),
-    axialTilt: 97.77 * DEG,
-    axialScale: 1,
     heroAngle: 4.1,
     startAngle: 4.1,
     section: 4,
-    camDistMul: 1.18,
-    camLift: 0.09,
-    camTangent: 0.45,
-    gltfUrl: PLANET_GLB.uranus,
+    camDistMul: 1.28,
+    camLift: 0.1,
+    camTangent: 0.48,
+    gltfUrl: PLANET_GLB.jupiter,
   },
   {
     name: "Mars",
@@ -551,8 +552,31 @@ const PLANETS = [
     gltfUrl: PLANET_GLB.mars,
   },
   {
-    name: "Venus", // panel UI §6 : Sites
-    orbitRadius: scaledOrbit(10.2),
+    name: "Earth", // §6 Sites — GLB + Lune
+    orbitRadius: scaledOrbit(13),
+    size: sceneRadiusFromEarthRadii(1),
+    color: 0x286858,
+    emissive: 0x0c2820,
+    accentColor: 0x58c080,
+    atmosphereColor: 0x68b8d0,
+    roughness: 0.72,
+    noiseScale: 5.0,
+    orbitSpeed: 0.5,
+    spinSpeed: spinSpeedFromPeriodHours(23.93),
+    axialTilt: 23.44 * DEG,
+    axialScale: 1,
+    heroAngle: 5.42,
+    startAngle: 4.65,
+    section: 6,
+    camDistMul: 0.94,
+    camLift: 0.05,
+    camTangent: 0.32,
+    gltfUrl: PLANET_GLB.earth,
+    gltfProfile: "earth",
+  },
+  {
+    name: "Venus", // §7 Plugin
+    orbitRadius: scaledOrbit(9),
     size: sceneRadiusFromEarthRadii(0.949),
     color: 0xe8d8a8,
     emissive: 0x484028,
@@ -564,40 +588,17 @@ const PLANETS = [
     spinSpeed: spinSpeedFromPeriodHours(5832.6, { retrograde: true }),
     axialTilt: 2.64 * DEG,
     axialScale: 1,
-    heroAngle: 5.42,
+    heroAngle: 5.78,
     startAngle: 1.85,
-    section: 6,
-    camDistMul: 1.05,
-    camLift: 0.06,
-    camTangent: 0.38,
+    section: 7,
+    camDistMul: 1.0,
+    camLift: 0.05,
+    camTangent: 0.35,
     gltfUrl: PLANET_GLB.venus,
   },
   {
-    name: "Earth", // panel UI §7 Plugin — GLB texturé + Lune orbitale
-    orbitRadius: scaledOrbit(7.6),
-    size: sceneRadiusFromEarthRadii(1),
-    color: 0x286858,
-    emissive: 0x0c2820,
-    accentColor: 0x58c080,
-    atmosphereColor: 0x68b8d0,
-    roughness: 0.72,
-    noiseScale: 5.0,
-    orbitSpeed: 0.68,
-    spinSpeed: spinSpeedFromPeriodHours(23.93),
-    axialTilt: 23.44 * DEG,
-    axialScale: 1,
-    heroAngle: 5.78,
-    startAngle: 4.65,
-    section: 7,
-    camDistMul: 0.94,
-    camLift: 0.05,
-    camTangent: 0.32,
-    gltfUrl: PLANET_GLB.earth,
-    gltfProfile: "earth",
-  },
-  {
     name: "Mercury",
-    orbitRadius: scaledOrbit(13),
+    orbitRadius: scaledOrbit(5.8),
     size: sceneRadiusFromEarthRadii(0.383),
     color: 0x909088,
     emissive: 0x282420,
@@ -605,7 +606,7 @@ const PLANETS = [
     atmosphereColor: 0xa0a098,
     roughness: 0.9,
     noiseScale: 8.0,
-    orbitSpeed: 0.55,
+    orbitSpeed: 0.72,
     spinSpeed: spinSpeedFromPeriodHours(1407.5),
     axialTilt: 0.03 * DEG,
     axialScale: 1,
@@ -620,11 +621,11 @@ const PLANETS = [
   },
 ];
 
-/** Corps décoratifs entre Mars et orbites intérieures — étale l'approche visuelle. */
+/** Ceinture d’astéroïdes (Cérès) entre Mars et Terre ; Lune décorative près de la Terre. */
 const DECORATIVE_PLANETS = [
   {
     name: "Ceres",
-    orbitRadius: scaledOrbit(17),
+    orbitRadius: scaledOrbit(16.5),
     size: sceneRadiusFromEarthRadii(0.074),
     color: 0x687868,
     emissive: 0x181c14,
@@ -642,7 +643,7 @@ const DECORATIVE_PLANETS = [
   },
   {
     name: "Moon",
-    orbitRadius: scaledOrbit(14),
+    orbitRadius: scaledOrbit(14.2),
     size: sceneRadiusFromEarthRadii(0.273),
     color: 0xb0b0b8,
     emissive: 0x1c1c22,
@@ -1013,7 +1014,7 @@ function getPlanetPosition(planet, elapsed, displaySection, out = tmpPlanetPos, 
 /** Rayon apparent planète (anneaux inclus) pour test d'occlusion Soleil. */
 function getPlanetOcclusionRadius(planet, sectionIndex) {
   const size = planet.size;
-  if (planet.hasRings && sectionIndex === 1) {
+  if (planet.hasRings) {
     return size * 1.62;
   }
   return size * 1.08;
@@ -1023,7 +1024,7 @@ function getPlanetOcclusionRadius(planet, sectionIndex) {
 function getPlanetCollisionRadius(planet, sectionIndex) {
   const size = planet.size;
   const margin = PLANET_COLLISION_MARGIN;
-  if (planet.hasRings && sectionIndex === 1) {
+  if (planet.hasRings) {
     return size * 1.55 * margin;
   }
   return size * 1.12 * margin;
@@ -1448,7 +1449,7 @@ function resolveSunOcclusion(
   const occRadius = getPlanetOcclusionRadius(planet, sectionIndex);
   const side = planetSide >= 0 ? 1 : -1;
   const intro = sectionIndex === 0;
-  const surfaceLand = planet.nearSun && sectionIndex === 7;
+  const surfaceLand = planet.nearSun && sectionIndex === 8;
   const tangentStep = size * (intro ? 0.12 : surfaceLand ? 0.16 : 0.22);
   const outwardStep = size * (intro ? 0.11 : surfaceLand ? 0.025 : 0.06);
   const maxIter = intro ? 8 : surfaceLand ? 20 : 16;
@@ -1496,7 +1497,7 @@ function computeSectionCamera(sectionIndex, planet, planetPos, elapsed, out) {
   out.position.y += size * (planet.camLift + framing.elevation);
   out.position.y += size * (framing.limbElevation ?? 0.08);
 
-  if (planet.ringView && sectionIndex === 1) {
+  if (planet.ringView) {
     out.position.y -= size * 0.04;
     out.position.addScaledVector(tmpTangent, size * 0.16 * framing.planetSide);
     out.position.addScaledVector(tmpToSun, size * 0.12);
@@ -3008,9 +3009,9 @@ function updateOrbitRings(displaySection, glideState) {
       opacity = 0.1 + sectionDist * 0.06;
     }
 
-    // §7 Terre : l’anneau d’orbite coupe le globe en gros plan → quasi masqué.
-    if (i === 7 && Math.abs(effectiveSection - 7) < 0.45) {
-      opacity *= clamp(Math.abs(effectiveSection - 7) / 0.45, 0, 1) * 0.15;
+    // §6 Terre : l’anneau d’orbite coupe le globe en gros plan → quasi masqué.
+    if (i === 6 && Math.abs(effectiveSection - 6) < 0.45) {
+      opacity *= clamp(Math.abs(effectiveSection - 6) / 0.45, 0, 1) * 0.15;
     }
 
     ring.material.opacity = clamp(opacity, 0.0, 0.22);

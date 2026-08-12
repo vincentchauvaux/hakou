@@ -13,14 +13,14 @@
   /* Échelle solaire fixe à gauche (labels + rail) */
   --solar-scale-gutter: clamp(72px, 11vw, 108px);
   /* Marqueur échelle : une teinte par section (planète d’ancre) */
-  --scale-marker-0: #3060b0;
-  --scale-marker-1: #d4b878;
-  --scale-marker-2: #a090b8;
-  --scale-marker-3: #c87848;
-  --scale-marker-4: #60c8b8;
+  --scale-marker-0: #a090b8;
+  --scale-marker-1: #3060b0;
+  --scale-marker-2: #60c8b8;
+  --scale-marker-3: #d4b878;
+  --scale-marker-4: #c87848;
   --scale-marker-5: #c86048;
-  --scale-marker-6: #e8d8a8;
-  --scale-marker-7: #48a878;
+  --scale-marker-6: #48a878;
+  --scale-marker-7: #e8d8a8;
   --scale-marker-8: #a0a098;
   /* Menu latéral : verre + ombres texte (lisibilité sur fond 3D variable) */
   --nav-glass-bg: rgba(5, 8, 18, 0.75);
