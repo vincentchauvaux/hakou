@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "26";
+const PLANET_GLB_V = "27";
 const PLANET_GLB = {
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
@@ -2463,6 +2463,18 @@ function prepareHeroTexture(tex, { srgb = true } = {}) {
   return tex;
 }
 
+/** Texture anneaux Saturne : −90° UV pour bandes concentriques (pas d’effet « aiguilles »). */
+function prepareSaturnRingTexture(tex) {
+  if (!tex) return null;
+  prepareHeroTexture(tex, { srgb: true });
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.center.set(0.5, 0.5);
+  tex.rotation = -Math.PI / 2;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 function createGltfAtmosphere(radius, hexColor, opacity = 0.32) {
   const atmMat = new THREE.MeshBasicMaterial({
     color: hexColor ?? 0x6eb8ff,
@@ -2513,7 +2525,7 @@ function buildGltfSaturnRings(source, planetR, ringMap) {
     torus.traverse((obj) => {
       if (!obj.isMesh) return;
       const map = obj.material?.map || ringMap;
-      if (map) prepareHeroTexture(map, { srgb: true });
+      if (map) prepareSaturnRingTexture(map);
       obj.material = new THREE.MeshBasicMaterial({
         map: map || null,
         color: 0xffffff,
@@ -2535,12 +2547,11 @@ function buildGltfSaturnRings(source, planetR, ringMap) {
     const major = Math.max(size.x, size.z, size.y) * 0.5;
     const targetMajor = planetR * SATURN_RING_OUTER_MUL;
     torus.scale.setScalar(targetMajor / Math.max(major, 1e-4));
-    // Blender Torus est déjà dans le plan équatorial (XZ après glTF Y-up).
-    // Ne pas faire rotation.x = π/2 — ça le mettait à la verticale.
+    // Plan équatorial ; texture déjà −90° UV (bandes concentriques).
     torus.rotation.set(0, 0, 0);
     root.add(torus);
   } else if (ringMap) {
-    prepareHeroTexture(ringMap, { srgb: true });
+    prepareSaturnRingTexture(ringMap);
     const geo = new THREE.RingGeometry(planetR * 1.45, planetR * SATURN_RING_OUTER_MUL, 96);
     const mat = new THREE.MeshBasicMaterial({
       map: ringMap,
@@ -2618,7 +2629,7 @@ async function upgradePlanetWithGltf(entry) {
   prepareHeroTexture(maps.dayMap, { srgb: true });
   prepareHeroTexture(maps.cloudMap, { srgb: true });
   prepareHeroTexture(maps.moonMap, { srgb: true });
-  prepareHeroTexture(maps.ringMap, { srgb: true });
+  // Anneaux : préparé dans buildGltfSaturnRings (rotation UV −90°).
   if (maps.roughnessMap) prepareHeroTexture(maps.roughnessMap, { srgb: false });
 
   const bodyR = data.size;
