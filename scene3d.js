@@ -104,12 +104,7 @@ const REST_ORBIT_DRIFT = 0.06 * PLANET_ORBIT_SPEED_MUL;
 /** Après fin de glide : rampe dérive orbitale uniquement (pas position / FOV). */
 const REST_SETTLE_MS = 280;
 
-/** Orbit manuelle au repos — sensibilité pointeur (rad/px) et limites d'élévation. */
-const REST_ORBIT_AZ_SENS = 0.0052;
-const REST_ORBIT_EL_SENS = 0.004;
-const REST_ORBIT_ELEV_MIN = -0.35;
-const REST_ORBIT_ELEV_MAX = 0.45;
-/** Mode observation : orbite libre autour du centre planète + zoom. */
+/** Mode observation : orbite libre autour du centre planète + zoom + inertie. */
 const FOCUS_ORBIT_AZ_SENS = 0.008;
 const FOCUS_ORBIT_EL_SENS = 0.0065;
 const FOCUS_ORBIT_ELEV_MIN = -1.4;
@@ -117,6 +112,12 @@ const FOCUS_ORBIT_ELEV_MAX = 1.4;
 const FOCUS_ORBIT_ZOOM_SENS = 0.0017;
 const FOCUS_ORBIT_RADIUS_MIN_MUL = 2.15;
 const FOCUS_ORBIT_RADIUS_MAX_MUL = 16;
+/** Inertie caméra après drag (mode Voir) — décroissance expo → repos. */
+const FOCUS_ORBIT_INERTIA_DAMP = 3.6;
+const FOCUS_ORBIT_INERTIA_STOP = 0.0012;
+const FOCUS_ORBIT_VEL_SMOOTH = 0.42;
+/** Pinch mobile : sensibilité relative (1 = distance doigts). */
+const FOCUS_ORBIT_PINCH_ZOOM_POW = 1;
 /** Derniers % du leg : convergence douce vers le cadrage héro destination. */
 const GLIDE_HERO_BLEND_START = 0.88;
 /** Trajectoire glide : mélange courbe Bézier + composante radiale Soleil. */
@@ -741,12 +742,19 @@ const sectionUserOrbit = Array.from({ length: SECTION_COUNT }, () => ({
   azimuth: 0,
   elevation: 0,
   modified: false,
+  azVel: 0,
+  elVel: 0,
 }));
 const orbitDrag = {
   active: false,
+  pinch: false,
   pointerId: null,
   lastX: 0,
   lastY: 0,
+  lastT: 0,
+  lastPinchDist: 0,
+  /** @type {Map<number, { x: number, y: number }>} */
+  pointers: new Map(),
 };
 let orbitCanvas = null;
 let lastSettleT = 1;
@@ -755,9 +763,7 @@ let lastAtRestSectionIndex = 0;
 let planetFocusMode = false;
 let focusOrbitRadiusMin = 2;
 let focusOrbitRadiusMax = 80;
-/** Angle orbital figé pendant le mode Voir (planète stable sous la caméra). */
-let focusFrozenSection = -1;
-let focusFrozenAngle = null;
+let focusOrbitLastTickMs = 0;
 const tmpFocusPivot = new THREE.Vector3();
 
 let renderer;
@@ -977,14 +983,11 @@ function getContinuousOrbitAngle(planet, elapsed) {
 /**
  * Angle sur l'orbite : `startAngle + elapsed × orbitSpeed` en permanence.
  * Au repos sur la section active : dérive lente vers heroAngle (chemin court, REST_ORBIT_DRIFT).
+ * Mode Voir : Kepler pur (pas de gel, pas de dérive héro) — la caméra suit le mesh.
  */
 function getOrbitAngleForSection(planet, sectionIndex, elapsed, displaySection, glideState) {
-  if (
-    planetFocusMode &&
-    focusFrozenSection === sectionIndex &&
-    focusFrozenAngle != null
-  ) {
-    return focusFrozenAngle;
+  if (planetFocusMode) {
+    return getContinuousOrbitAngle(planet, elapsed);
   }
 
   const base = getContinuousOrbitAngle(planet, elapsed);
@@ -1395,6 +1398,42 @@ function clearSectionUserOrbit(sectionIndex) {
   orbit.azimuth = 0;
   orbit.elevation = 0;
   orbit.modified = false;
+  orbit.azVel = 0;
+  orbit.elVel = 0;
+}
+
+function clearOrbitVelocity(sectionIndex = lastAtRestSectionIndex) {
+  const orbit = sectionUserOrbit[sectionIndex];
+  if (!orbit) return;
+  orbit.azVel = 0;
+  orbit.elVel = 0;
+}
+
+function ensureFocusOrbitCaptured(sectionIndex = lastAtRestSectionIndex) {
+  const orbit = sectionUserOrbit[sectionIndex];
+  if (!orbit) return;
+  if (!orbit.modified) {
+    captureOrbitFromCamera(sectionIndex);
+  } else {
+    updateFocusOrbitRadiusLimits(sectionIndex);
+  }
+}
+
+function pinchDistance() {
+  const pts = [...orbitDrag.pointers.values()];
+  if (pts.length < 2) return 0;
+  const dx = pts[0].x - pts[1].x;
+  const dy = pts[0].y - pts[1].y;
+  return Math.hypot(dx, dy);
+}
+
+function syncOrbitGrabbingClass() {
+  if (!orbitCanvas) return;
+  const grabbing =
+    planetFocusMode &&
+    (orbitDrag.active || orbitDrag.pinch || orbitDrag.pointers.size > 0);
+  orbitCanvas.classList.toggle("orbit-grabbing", grabbing);
+  document.body.style.userSelect = grabbing ? "none" : "";
 }
 
 /** Réinitialise les offsets d'orbit manuelle (toutes sections ou une seule). */
@@ -1413,15 +1452,17 @@ export function resetRestOrbitOffsets(sectionIndex) {
 }
 
 function endOrbitDrag() {
-  const pointerId = orbitDrag.pointerId;
+  const ids = [...orbitDrag.pointers.keys()];
   orbitDrag.active = false;
+  orbitDrag.pinch = false;
   orbitDrag.pointerId = null;
+  orbitDrag.pointers.clear();
+  orbitDrag.lastPinchDist = 0;
   if (orbitCanvas) {
-    if (
-      pointerId != null &&
-      orbitCanvas.hasPointerCapture(pointerId)
-    ) {
-      orbitCanvas.releasePointerCapture(pointerId);
+    for (const id of ids) {
+      if (orbitCanvas.hasPointerCapture(id)) {
+        orbitCanvas.releasePointerCapture(id);
+      }
     }
     orbitCanvas.classList.remove("orbit-grabbing");
   }
@@ -1429,65 +1470,200 @@ function endOrbitDrag() {
 }
 
 function onOrbitPointerDown(event) {
-  if (event.button !== 0 || !canOrbitDrag()) return;
+  if (!canOrbitDrag()) return;
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+
+  orbitDrag.pointers.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY,
+  });
+  try {
+    event.currentTarget.setPointerCapture(event.pointerId);
+  } catch {
+    /* ignore */
+  }
+
+  ensureFocusOrbitCaptured(lastAtRestSectionIndex);
+  clearOrbitVelocity(lastAtRestSectionIndex);
+
+  if (orbitDrag.pointers.size >= 2) {
+    orbitDrag.pinch = true;
+    orbitDrag.active = false;
+    orbitDrag.pointerId = null;
+    orbitDrag.lastPinchDist = pinchDistance();
+    syncOrbitGrabbingClass();
+    event.preventDefault();
+    return;
+  }
+
+  orbitDrag.pinch = false;
   orbitDrag.active = true;
   orbitDrag.pointerId = event.pointerId;
   orbitDrag.lastX = event.clientX;
   orbitDrag.lastY = event.clientY;
-  if (!sectionUserOrbit[lastAtRestSectionIndex].modified) {
-    captureOrbitFromCamera(lastAtRestSectionIndex);
-  }
-  event.currentTarget.setPointerCapture(event.pointerId);
-  event.currentTarget.classList.add("orbit-grabbing");
-  document.body.style.userSelect = "none";
+  orbitDrag.lastT = performance.now();
+  syncOrbitGrabbingClass();
   event.preventDefault();
 }
 
 function onOrbitPointerMove(event) {
+  if (!orbitDrag.pointers.has(event.pointerId)) return;
+  orbitDrag.pointers.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY,
+  });
+
+  const idx = lastAtRestSectionIndex;
+  const orbit = sectionUserOrbit[idx];
+  if (!orbit) return;
+
+  if (orbitDrag.pinch && orbitDrag.pointers.size >= 2) {
+    ensureFocusOrbitCaptured(idx);
+    const dist = pinchDistance();
+    if (dist > 1 && orbitDrag.lastPinchDist > 1) {
+      const ratio = orbitDrag.lastPinchDist / dist;
+      const factor = Math.pow(ratio, FOCUS_ORBIT_PINCH_ZOOM_POW);
+      orbit.radius = clamp(
+        orbit.radius * factor,
+        focusOrbitRadiusMin,
+        focusOrbitRadiusMax
+      );
+    }
+    orbitDrag.lastPinchDist = dist;
+    event.preventDefault();
+    return;
+  }
+
   if (!orbitDrag.active || event.pointerId !== orbitDrag.pointerId) return;
+
+  const now = performance.now();
+  const dt = Math.max((now - orbitDrag.lastT) / 1000, 1 / 240);
   const dx = event.clientX - orbitDrag.lastX;
   const dy = event.clientY - orbitDrag.lastY;
   orbitDrag.lastX = event.clientX;
   orbitDrag.lastY = event.clientY;
+  orbitDrag.lastT = now;
   if (dx === 0 && dy === 0) return;
 
-  const orbit = sectionUserOrbit[lastAtRestSectionIndex];
   if (!orbit.modified) {
-    captureOrbitFromCamera(lastAtRestSectionIndex);
+    captureOrbitFromCamera(idx);
   }
-  const azSens = planetFocusMode ? FOCUS_ORBIT_AZ_SENS : REST_ORBIT_AZ_SENS;
-  const elSens = planetFocusMode ? FOCUS_ORBIT_EL_SENS : REST_ORBIT_EL_SENS;
-  const elMin = planetFocusMode ? FOCUS_ORBIT_ELEV_MIN : REST_ORBIT_ELEV_MIN;
-  const elMax = planetFocusMode ? FOCUS_ORBIT_ELEV_MAX : REST_ORBIT_ELEV_MAX;
-  orbit.azimuth += dx * azSens;
+  const azSens = FOCUS_ORBIT_AZ_SENS;
+  const elSens = FOCUS_ORBIT_EL_SENS;
+  const azDelta = dx * azSens;
+  const elDelta = -dy * elSens;
+  orbit.azimuth += azDelta;
   orbit.elevation = clamp(
-    orbit.elevation - dy * elSens,
-    elMin,
-    elMax
+    orbit.elevation + elDelta,
+    FOCUS_ORBIT_ELEV_MIN,
+    FOCUS_ORBIT_ELEV_MAX
   );
+  const azV = azDelta / dt;
+  const elV = elDelta / dt;
+  const s = FOCUS_ORBIT_VEL_SMOOTH;
+  orbit.azVel = orbit.azVel * (1 - s) + azV * s;
+  orbit.elVel = orbit.elVel * (1 - s) + elV * s;
   event.preventDefault();
 }
 
 function onOrbitPointerUp(event) {
-  if (event.pointerId !== orbitDrag.pointerId) return;
-  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-    event.currentTarget.releasePointerCapture(event.pointerId);
+  if (!orbitDrag.pointers.has(event.pointerId)) return;
+  orbitDrag.pointers.delete(event.pointerId);
+  if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* ignore */
+    }
   }
-  endOrbitDrag();
+
+  if (orbitDrag.pinch) {
+    if (orbitDrag.pointers.size >= 2) {
+      orbitDrag.lastPinchDist = pinchDistance();
+      return;
+    }
+    orbitDrag.pinch = false;
+    orbitDrag.lastPinchDist = 0;
+    clearOrbitVelocity(lastAtRestSectionIndex);
+    if (orbitDrag.pointers.size === 1) {
+      const [id, pt] = orbitDrag.pointers.entries().next().value;
+      orbitDrag.active = true;
+      orbitDrag.pointerId = id;
+      orbitDrag.lastX = pt.x;
+      orbitDrag.lastY = pt.y;
+      orbitDrag.lastT = performance.now();
+    } else {
+      orbitDrag.active = false;
+      orbitDrag.pointerId = null;
+    }
+    syncOrbitGrabbingClass();
+    return;
+  }
+
+  if (event.pointerId === orbitDrag.pointerId) {
+    orbitDrag.active = false;
+    orbitDrag.pointerId = null;
+    // Garder azVel / elVel → inertie jusqu’au freinage.
+  }
+  syncOrbitGrabbingClass();
+}
+
+function tickFocusOrbitInertia() {
+  if (!planetFocusMode || orbitDrag.active || orbitDrag.pinch) {
+    focusOrbitLastTickMs = performance.now();
+    return;
+  }
+  const orbit = sectionUserOrbit[lastAtRestSectionIndex];
+  if (!orbit?.modified) {
+    focusOrbitLastTickMs = performance.now();
+    return;
+  }
+  const now = performance.now();
+  const dt = Math.min(
+    Math.max((now - (focusOrbitLastTickMs || now)) / 1000, 0),
+    0.05
+  );
+  focusOrbitLastTickMs = now;
+  if (dt <= 0) return;
+
+  const speed = Math.hypot(orbit.azVel, orbit.elVel);
+  if (speed < FOCUS_ORBIT_INERTIA_STOP) {
+    orbit.azVel = 0;
+    orbit.elVel = 0;
+    return;
+  }
+
+  orbit.azimuth += orbit.azVel * dt;
+  orbit.elevation = clamp(
+    orbit.elevation + orbit.elVel * dt,
+    FOCUS_ORBIT_ELEV_MIN,
+    FOCUS_ORBIT_ELEV_MAX
+  );
+  if (
+    orbit.elevation <= FOCUS_ORBIT_ELEV_MIN + 1e-4 ||
+    orbit.elevation >= FOCUS_ORBIT_ELEV_MAX - 1e-4
+  ) {
+    orbit.elVel = 0;
+  }
+  const damp = Math.exp(-FOCUS_ORBIT_INERTIA_DAMP * dt);
+  orbit.azVel *= damp;
+  orbit.elVel *= damp;
 }
 
 function onOrbitWheel(event) {
   if (!planetFocusMode || !canOrbitDrag()) return;
   event.preventDefault();
   const idx = lastAtRestSectionIndex;
+  ensureFocusOrbitCaptured(idx);
   const orbit = sectionUserOrbit[idx];
-  if (!orbit.modified) {
-    captureOrbitFromCamera(idx);
-  } else {
-    updateFocusOrbitRadiusLimits(idx);
-  }
   const factor = Math.exp(event.deltaY * FOCUS_ORBIT_ZOOM_SENS);
   orbit.radius = clamp(orbit.radius * factor, focusOrbitRadiusMin, focusOrbitRadiusMax);
+}
+
+function onOrbitLostPointerCapture(event) {
+  if (orbitDrag.pointers.has(event.pointerId)) {
+    onOrbitPointerUp(event);
+  }
 }
 
 function initRestOrbitInteraction(canvas) {
@@ -1496,7 +1672,7 @@ function initRestOrbitInteraction(canvas) {
   canvas.addEventListener("pointermove", onOrbitPointerMove, { passive: false });
   canvas.addEventListener("pointerup", onOrbitPointerUp);
   canvas.addEventListener("pointercancel", onOrbitPointerUp);
-  canvas.addEventListener("lostpointercapture", endOrbitDrag);
+  canvas.addEventListener("lostpointercapture", onOrbitLostPointerCapture);
   canvas.addEventListener("wheel", onOrbitWheel, { passive: false });
 }
 
@@ -1506,14 +1682,14 @@ function disposeRestOrbitInteraction() {
   orbitCanvas.removeEventListener("pointermove", onOrbitPointerMove);
   orbitCanvas.removeEventListener("pointerup", onOrbitPointerUp);
   orbitCanvas.removeEventListener("pointercancel", onOrbitPointerUp);
-  orbitCanvas.removeEventListener("lostpointercapture", endOrbitDrag);
+  orbitCanvas.removeEventListener("lostpointercapture", onOrbitLostPointerCapture);
   orbitCanvas.removeEventListener("wheel", onOrbitWheel);
   endOrbitDrag();
   orbitCanvas = null;
 }
 
 export function isRestOrbitDragging() {
-  return orbitDrag.active;
+  return orbitDrag.active || orbitDrag.pinch;
 }
 
 /** Active le mode observation (drag + zoom caméra autour de la planète). */
@@ -1526,23 +1702,11 @@ export function setPlanetFocusMode(active) {
   }
   if (planetFocusMode) {
     const idx = lastAtRestSectionIndex;
-    const planet = PLANETS[idx];
-    const elapsed = clock?.getElapsedTime() ?? 0;
-    if (planet) {
-      focusFrozenSection = idx;
-      focusFrozenAngle = getOrbitAngleForSection(
-        planet,
-        idx,
-        elapsed,
-        idx,
-        null
-      );
-    }
+    focusOrbitLastTickMs = performance.now();
     captureOrbitFromCamera(idx);
+    clearOrbitVelocity(idx);
   } else {
     endOrbitDrag();
-    focusFrozenSection = -1;
-    focusFrozenAngle = null;
     // Retour doux au cadrage héro (lerp caméra au repos).
     clearSectionUserOrbit(lastAtRestSectionIndex);
   }
@@ -3190,8 +3354,11 @@ function updatePlanets(elapsed, displaySection, glideState) {
       bodySpin.rotation.y = spinY;
       if (cloudSpin) {
         if (data.name === "Venus") {
-          // Super-rotation atmosphère ~4 j (rétrograde), pas le corps ~243 j.
-          cloudSpin.rotation.y = elapsed * spinSpeedFromPeriodHours(96, { retrograde: true });
+          // Super-rotation atmosphère ~4 j (rétrograde), calée sur PLANET_SPIN_MUL.
+          cloudSpin.rotation.y =
+            elapsed *
+            spinSpeedFromPeriodHours(96, { retrograde: true }) *
+            PLANET_SPIN_MUL;
         } else {
           cloudSpin.rotation.y = spinY * 0.78;
         }
@@ -3953,6 +4120,7 @@ export function renderScene(displaySection, glideState = null) {
       getActiveSectionIndex(displaySection, glideState)
     );
   }
+  tickFocusOrbitInertia();
   updatePlanets(elapsed, displaySection, glideState);
   updateOrbitRings(displaySection, glideState);
   updateStars(elapsed, camera.position, displaySection, glideState);

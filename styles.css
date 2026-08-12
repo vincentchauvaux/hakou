@@ -298,6 +298,7 @@ body[data-planet-focus="on"] #three-canvas {
   pointer-events: auto;
   cursor: grab;
   z-index: 1;
+  touch-action: none;
 }
 
 body[data-planet-focus="on"] #three-canvas.orbit-grabbing {
