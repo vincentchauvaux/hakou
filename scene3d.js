@@ -109,14 +109,14 @@ const REST_ORBIT_AZ_SENS = 0.0052;
 const REST_ORBIT_EL_SENS = 0.004;
 const REST_ORBIT_ELEV_MIN = -0.35;
 const REST_ORBIT_ELEV_MAX = 0.45;
-/** Mode observation : angles plus libres + zoom molette. */
-const FOCUS_ORBIT_AZ_SENS = 0.0064;
-const FOCUS_ORBIT_EL_SENS = 0.0052;
-const FOCUS_ORBIT_ELEV_MIN = -1.15;
-const FOCUS_ORBIT_ELEV_MAX = 1.25;
-const FOCUS_ORBIT_ZOOM_SENS = 0.00155;
-const FOCUS_ORBIT_RADIUS_MIN_MUL = 1.85;
-const FOCUS_ORBIT_RADIUS_MAX_MUL = 4.2;
+/** Mode observation : orbite libre autour du centre planète + zoom. */
+const FOCUS_ORBIT_AZ_SENS = 0.008;
+const FOCUS_ORBIT_EL_SENS = 0.0065;
+const FOCUS_ORBIT_ELEV_MIN = -1.4;
+const FOCUS_ORBIT_ELEV_MAX = 1.4;
+const FOCUS_ORBIT_ZOOM_SENS = 0.0017;
+const FOCUS_ORBIT_RADIUS_MIN_MUL = 2.15;
+const FOCUS_ORBIT_RADIUS_MAX_MUL = 16;
 /** Derniers % du leg : convergence douce vers le cadrage héro destination. */
 const GLIDE_HERO_BLEND_START = 0.88;
 /** Trajectoire glide : mélange courbe Bézier + composante radiale Soleil. */
@@ -755,6 +755,10 @@ let lastAtRestSectionIndex = 0;
 let planetFocusMode = false;
 let focusOrbitRadiusMin = 2;
 let focusOrbitRadiusMax = 80;
+/** Angle orbital figé pendant le mode Voir (planète stable sous la caméra). */
+let focusFrozenSection = -1;
+let focusFrozenAngle = null;
+const tmpFocusPivot = new THREE.Vector3();
 
 let renderer;
 let scene;
@@ -975,6 +979,14 @@ function getContinuousOrbitAngle(planet, elapsed) {
  * Au repos sur la section active : dérive lente vers heroAngle (chemin court, REST_ORBIT_DRIFT).
  */
 function getOrbitAngleForSection(planet, sectionIndex, elapsed, displaySection, glideState) {
+  if (
+    planetFocusMode &&
+    focusFrozenSection === sectionIndex &&
+    focusFrozenAngle != null
+  ) {
+    return focusFrozenAngle;
+  }
+
   const base = getContinuousOrbitAngle(planet, elapsed);
   const animating = glideState?.animating && glideState.from !== glideState.to;
   if (animating) {
@@ -1324,13 +1336,26 @@ function orbitToPos(lookAt, radius, azimuth, elevation, out) {
 }
 
 function canOrbitDrag() {
-  return (
-    planetFocusMode &&
-    !introGateActive &&
-    !lastGlideAnimating &&
-    lastSettleT >= 1 &&
-    introSnapFrames >= INTRO_SNAP_FRAMES
-  );
+  return planetFocusMode && !introGateActive && !lastGlideAnimating;
+}
+
+/** Pivot d’observation = centre de la planète (mesh live ou position orbitale). */
+function getFocusPivot(sectionIndex, out, elapsed = 0, displaySection = sectionIndex, glideState = null) {
+  const entry = planetEntries[sectionIndex];
+  if (entry?.mesh) {
+    out.copy(entry.mesh.position);
+    return out;
+  }
+  const planet = PLANETS[sectionIndex];
+  if (planet) {
+    return getPlanetPosition(planet, elapsed, displaySection, out, glideState);
+  }
+  if (sectionCameras[sectionIndex]?.lookAt) {
+    out.copy(sectionCameras[sectionIndex].lookAt);
+    return out;
+  }
+  out.set(0, 0, 0);
+  return out;
 }
 
 function updateFocusOrbitRadiusLimits(sectionIndex) {
@@ -1340,18 +1365,24 @@ function updateFocusOrbitRadiusLimits(sectionIndex) {
     focusOrbitRadiusMax = 80;
     return;
   }
-  const hero = sectionCameras[sectionIndex];
-  const heroRadius = hero?.position?.distanceTo(hero.lookAt) || planet.size * 6;
-  focusOrbitRadiusMin = Math.max(planet.size * FOCUS_ORBIT_RADIUS_MIN_MUL, 0.8);
+  focusOrbitRadiusMin = Math.max(planet.size * FOCUS_ORBIT_RADIUS_MIN_MUL, 0.9);
   focusOrbitRadiusMax = Math.max(
-    heroRadius * FOCUS_ORBIT_RADIUS_MAX_MUL,
-    focusOrbitRadiusMin * 2.5
+    planet.size * FOCUS_ORBIT_RADIUS_MAX_MUL,
+    focusOrbitRadiusMin * 3
   );
 }
 
 function captureOrbitFromCamera(sectionIndex) {
   const orbit = sectionUserOrbit[sectionIndex];
-  posToOrbit(camera.position, sectionCameras[sectionIndex].lookAt, orbit);
+  const elapsed = clock?.getElapsedTime() ?? 0;
+  if (planetFocusMode) {
+    getFocusPivot(sectionIndex, tmpFocusPivot, elapsed, sectionIndex, null);
+  } else if (sectionCameras[sectionIndex]?.lookAt) {
+    tmpFocusPivot.copy(sectionCameras[sectionIndex].lookAt);
+  } else {
+    getFocusPivot(sectionIndex, tmpFocusPivot, elapsed, sectionIndex, null);
+  }
+  posToOrbit(camera.position, tmpFocusPivot, orbit);
   orbit.modified = true;
   updateFocusOrbitRadiusLimits(sectionIndex);
   orbit.radius = clamp(orbit.radius, focusOrbitRadiusMin, focusOrbitRadiusMax);
@@ -1494,15 +1525,24 @@ export function setPlanetFocusMode(active) {
     orbitCanvas.classList.toggle("planet-focus-canvas", planetFocusMode);
   }
   if (planetFocusMode) {
-    if (!lastGlideAnimating && lastSettleT >= 1) {
-      if (!sectionUserOrbit[lastAtRestSectionIndex]?.modified) {
-        captureOrbitFromCamera(lastAtRestSectionIndex);
-      } else {
-        updateFocusOrbitRadiusLimits(lastAtRestSectionIndex);
-      }
+    const idx = lastAtRestSectionIndex;
+    const planet = PLANETS[idx];
+    const elapsed = clock?.getElapsedTime() ?? 0;
+    if (planet) {
+      focusFrozenSection = idx;
+      focusFrozenAngle = getOrbitAngleForSection(
+        planet,
+        idx,
+        elapsed,
+        idx,
+        null
+      );
     }
+    captureOrbitFromCamera(idx);
   } else {
     endOrbitDrag();
+    focusFrozenSection = -1;
+    focusFrozenAngle = null;
     // Retour doux au cadrage héro (lerp caméra au repos).
     clearSectionUserOrbit(lastAtRestSectionIndex);
   }
@@ -3308,7 +3348,12 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
   const restPosAlpha = 0.16 + activeBlend * 0.48;
   const atRest =
     !inGlide && settleT >= 1 && introSnapFrames >= INTRO_SNAP_FRAMES;
-  const userOrbit = atRest && sectionUserOrbit[sectionIndex]?.modified;
+  const focusOrbit =
+    planetFocusMode &&
+    !inGlide &&
+    sectionUserOrbit[sectionIndex]?.modified;
+  const userOrbit =
+    focusOrbit || (atRest && sectionUserOrbit[sectionIndex]?.modified);
   lastAtRestSectionIndex = sectionIndex;
 
   if (introSnapFrames < INTRO_SNAP_FRAMES) {
@@ -3355,7 +3400,7 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
     }
     const introAtRest = sectionIndex === 0 && atRestFrame && !settling;
     // Dérive repos très légère — plus de sin haute fréquence qui « tremble ».
-    const driftScale = introAtRest || inGlide
+    const driftScale = introAtRest || inGlide || focusOrbit
       ? 0
       : 0.012 * activeBlend * driftRamp;
     const driftPhase = elapsed * 0.09 * SCENE_AMBIENT_MOTION_MUL + sectionIndex * 1.7;
@@ -3366,8 +3411,13 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 
     if (userOrbit) {
       const orbit = sectionUserOrbit[sectionIndex];
+      if (focusOrbit) {
+        getFocusPivot(sectionIndex, tmpFocusPivot, elapsed, displaySection, glideState);
+      } else {
+        tmpFocusPivot.copy(sectionCameras[sectionIndex].lookAt);
+      }
       orbitToPos(
-        sectionCameras[sectionIndex].lookAt,
+        tmpFocusPivot,
         orbit.radius,
         orbit.azimuth,
         orbit.elevation,
@@ -3377,22 +3427,38 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
       smoothedCamPos.copy(tmpCamPos);
     }
 
-    // Collision douce uniquement hors glide (évite le combat path vs push).
-    if (!inGlide) {
+    // Collision douce uniquement hors glide / hors observation libre.
+    if (!inGlide && !focusOrbit) {
       pushPointOutsideSun(
         camera.position,
         getSunPushExtraMargin(sectionIndex, sectionIndex, displaySection) * 0.5
       );
       enforceMinSunViewDistance(sectionIndex, camera.position);
+    } else if (focusOrbit && activePlanet) {
+      // Garde une distance mini à la surface pendant le zoom.
+      const minDist = activePlanet.size * 1.2;
+      tmpSeg.copy(camera.position).sub(tmpFocusPivot);
+      const dist = tmpSeg.length();
+      if (dist > 1e-5 && dist < minDist) {
+        tmpSeg.multiplyScalar(minDist / dist);
+        camera.position.copy(tmpFocusPivot).add(tmpSeg);
+        smoothedCamPos.copy(camera.position);
+        const focusOrbitState = sectionUserOrbit[sectionIndex];
+        if (focusOrbitState) focusOrbitState.radius = minDist;
+      }
     }
     if (userOrbit) {
       smoothedCamPos.copy(camera.position);
     }
 
-    camera.lookAt(cam.lookAt);
-    // Dutch figé au repos plein — pas pendant le blend (évite un roll qui tremble).
-    if (atRest && activeBlend > 0.92) {
-      camera.rotateZ(framing.dutch * 0.65);
+    if (focusOrbit) {
+      camera.lookAt(tmpFocusPivot);
+    } else {
+      camera.lookAt(cam.lookAt);
+      // Dutch figé au repos plein — pas pendant le blend (évite un roll qui tremble).
+      if (atRest && activeBlend > 0.92) {
+        camera.rotateZ(framing.dutch * 0.65);
+      }
     }
   }
 
@@ -3538,6 +3604,10 @@ function buildIntroLogoFromSvg(data) {
   introGateLogoBaseScale = s;
   introLogoMesh = root;
   introGateGroup.add(introLogoMesh);
+  if (introGateActive) {
+    introGateGroup.visible = true;
+    setIntroLogoOpacity(1);
+  }
   layoutIntroGate();
 }
 
