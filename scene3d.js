@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "28";
+const PLANET_GLB_V = "29";
 const PLANET_GLB = {
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
@@ -118,7 +118,7 @@ const GLIDE_RADIAL_Y_BREATHE = 0;
 /** Demi-angle max du disque Soleil (rad) — évite le Soleil plein écran hors Contact. */
 /** Plafond angulaire Soleil (rad) — plus élevé en orbites intérieures pour ne pas repousser la caméra hors limite. */
 const SUN_MAX_ANGULAR_BY_SECTION = [
-  0.042, 0.05, 0.048, 0.055, 0.06, 0.055, 0.07, 0.09, 0.11,
+  0.042, 0.05, 0.048, 0.055, 0.06, 0.055, 0.065, 0.09, 0.16,
 ];
 /** Rotation propre planète sur son axe (× spinSpeed × axialScale) — distincte de REST_ORBIT_DRIFT */
 const PLANET_SPIN_SCALE = 0.025;
@@ -276,18 +276,18 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
-    /* §6 Sites / Terre — masse dominante + bande de ciel */
+    /* §6 Sites / Terre — globe lisible + bande d’espace autour */
     planetSide: 1,
-    distScale: 0.8,
-    tangentMul: 0.82,
-    compositionSlide: 0.78,
-    elevation: 0.13,
-    limbElevation: 0.075,
-    horizonLimbOut: 0.96,
-    horizonSkyLift: 0.12,
-    horizonSunBias: 0.16,
-    sunFrameBias: 0.26,
-    orbitSunLift: 0.05,
+    distScale: 1.22,
+    tangentMul: 0.88,
+    compositionSlide: 0.85,
+    elevation: 0.16,
+    limbElevation: 0.09,
+    horizonLimbOut: 0.95,
+    horizonSkyLift: 0.14,
+    horizonSunBias: 0.14,
+    sunFrameBias: 0.28,
+    orbitSunLift: 0.06,
     dutch: -0.01,
     textAlign: "left",
     panelOffset: "left",
@@ -312,19 +312,19 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
-    /* §8 Contact / Mercure */
+    /* §8 Contact / Mercure — gros plan (corps petit) */
     planetSide: 1,
-    distScale: 0.66,
-    tangentMul: 0.68,
-    compositionSlide: 0.7,
-    elevation: 0.06,
-    limbElevation: 0.04,
-    horizonLimbOut: 0.95,
-    horizonSkyLift: 0.09,
-    horizonSunBias: 0.2,
-    lookSunLift: 0.03,
-    sunFrameBias: 0.28,
-    orbitSunLift: 0.055,
+    distScale: 1.35,
+    tangentMul: 0.72,
+    compositionSlide: 0.75,
+    elevation: 0.08,
+    limbElevation: 0.05,
+    horizonLimbOut: 0.96,
+    horizonSkyLift: 0.1,
+    horizonSunBias: 0.14,
+    lookSunLift: 0.02,
+    sunFrameBias: 0.22,
+    orbitSunLift: 0.04,
     dutch: -0.008,
     textAlign: "left",
     panelOffset: "left",
@@ -332,8 +332,8 @@ const SECTION_FRAMING = [
   },
 ];
 
-/** Focale repos (mm) — ordre réel Pluton→Mercure. */
-const FOCAL_REST_MM = [42, 36, 40, 34, 36, 48, 50, 48, 54];
+/** Focale repos (mm) — Sites un peu plus large ; Contact télé pour Mercure. */
+const FOCAL_REST_MM = [42, 36, 40, 34, 36, 48, 42, 48, 58];
 const GLIDE_FOV_DIRECT_START = 0.9;
 const SENSOR_HEIGHT_MM = 24;
 /** Lissage exponentiel FOV — constant pour éviter un saut quand le glide s'arrête. */
@@ -568,9 +568,9 @@ const PLANETS = [
     heroAngle: 5.42,
     startAngle: 4.65,
     section: 6,
-    camDistMul: 0.94,
-    camLift: 0.05,
-    camTangent: 0.32,
+    camDistMul: 1.18,
+    camLift: 0.06,
+    camTangent: 0.34,
     gltfUrl: PLANET_GLB.earth,
     gltfProfile: "earth",
   },
@@ -599,7 +599,7 @@ const PLANETS = [
   {
     name: "Mercury",
     orbitRadius: scaledOrbit(5.8),
-    size: sceneRadiusFromEarthRadii(0.383),
+    size: Math.max(0.34, sceneRadiusFromEarthRadii(0.383)),
     color: 0x909088,
     emissive: 0x282420,
     accentColor: 0xb0aca4,
@@ -613,9 +613,9 @@ const PLANETS = [
     heroAngle: 6.02,
     startAngle: 6.02,
     section: 8,
-    camDistMul: 0.78,
-    camLift: 0.04,
-    camTangent: 0.28,
+    camDistMul: 1.25,
+    camLift: 0.05,
+    camTangent: 0.3,
     nearSun: true,
     gltfUrl: PLANET_GLB.mercury,
   },
@@ -1536,8 +1536,9 @@ function computeSectionCamera(sectionIndex, planet, planetPos, elapsed, out) {
   if (planet.nearSun) {
     tmpSeg.copy(out.position).sub(planetPos);
     const dist = tmpSeg.length();
-    const minD = size * CAM_SURFACE_OFFSET * distScale * 0.58;
-    const maxD = size * CAM_SURFACE_OFFSET * distScale * 1.05;
+    const base = size * planet.camDistMul * CAM_SURFACE_OFFSET * distScale;
+    const minD = base * 0.82;
+    const maxD = base * 1.12;
     if (dist > 1e-6) {
       tmpSeg.multiplyScalar(1 / dist);
       const clamped = clamp(dist, minD, maxD);
@@ -1551,13 +1552,14 @@ function computeSectionCamera(sectionIndex, planet, planetPos, elapsed, out) {
   if (planet.nearSun) {
     tmpSeg.copy(out.position).sub(planetPos);
     const dist = tmpSeg.length();
-    const minD = size * CAM_SURFACE_OFFSET * distScale * 0.58;
-    const maxD = size * CAM_SURFACE_OFFSET * distScale * 1.05;
+    const base = size * planet.camDistMul * CAM_SURFACE_OFFSET * distScale;
+    const minD = base * 0.82;
+    const maxD = base * 1.12;
     if (dist > 1e-6) {
       tmpSeg.multiplyScalar(1 / dist);
       out.position.copy(planetPos).addScaledVector(tmpSeg, clamp(dist, minD, maxD));
     }
-    pushPointOutsideSun(out.position, getSunPushExtraMargin(sectionIndex, sectionIndex, sectionIndex));
+    pushPointOutsideSun(out.position, getSunPushExtraMargin(sectionIndex, sectionIndex, sectionIndex) * 0.55);
   }
 
   return out;

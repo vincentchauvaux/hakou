@@ -112,7 +112,7 @@
 
 
 
-- **Cadrage héro unifié (juin 2026, orbite basse ISS)** : au repos (et convergence glide ≥ `GLIDE_HERO_BLEND_START` **0,88**), modèle satellite en orbite basse. **Août 2026** : Son / Stream / 3D / Plugin / Contact — caméra plus proche, biais Soleil ↓ ; **Plugin** bande de ciel ; **Stream / Pluton** taille scénique **0,48** (réel trop petit) + focale **52 mm** / `distScale` **0,52**. **Glide** : Bézier + radiale 28 %, anti-tremblement.
+- **Cadrage Contact / Sites (août 2026)** : Mercure §8 — caméra collée (`camDistMul` 1,25 / `distScale` 1,35 / focale 58 / taille min 0,34) ; clamp `nearSun` aligné sur `camDistMul`. Terre §6 Sites — recul (`distScale` 1,22 / `camDistMul` 1,18 / focale 42) pour laisser de l’espace autour du globe.
 
 - **Proximité planète (juin 2026)** : `camDistMul` **×~0,85** sur les 9 planètes ; `distScale` **×~0,88** (`SECTION_FRAMING`) — sections intérieures **≤ Mars** subjectivement (Vénus/Terre `distScale` **0,90 / 0,86**). Ex. Neptune **2,40** / **1,53** ; Mars **1,21** / **1,07** ; Vénus **1,05** / **0,90** ; Terre **1,00** / **0,86** ; Mercure **0,87** / **0,81**.
 
