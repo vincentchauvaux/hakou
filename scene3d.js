@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "25";
+const PLANET_GLB_V = "26";
 const PLANET_GLB = {
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
@@ -2535,8 +2535,9 @@ function buildGltfSaturnRings(source, planetR, ringMap) {
     const major = Math.max(size.x, size.z, size.y) * 0.5;
     const targetMajor = planetR * SATURN_RING_OUTER_MUL;
     torus.scale.setScalar(targetMajor / Math.max(major, 1e-4));
-    // Anneau dans le plan XZ (même convention que les orbites).
-    torus.rotation.x = Math.PI / 2;
+    // Blender Torus est déjà dans le plan équatorial (XZ après glTF Y-up).
+    // Ne pas faire rotation.x = π/2 — ça le mettait à la verticale.
+    torus.rotation.set(0, 0, 0);
     root.add(torus);
   } else if (ringMap) {
     prepareHeroTexture(ringMap, { srgb: true });
