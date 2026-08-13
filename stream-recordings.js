@@ -42,6 +42,23 @@ function downloadUrl(name) {
   return `${playUrl(name)}?download=1`;
 }
 
+async function deleteRecording(name) {
+  const label = String(name || "").replace(/\.mp4$/i, "");
+  const ok = window.confirm(`Supprimer « ${label} » du VPS ?`);
+  if (!ok) return false;
+  const res = await fetch(
+    `${apiBase}/api/studio/recordings/${encodeURIComponent(name)}`,
+    { method: "DELETE", credentials: "include" }
+  );
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    window.alert(body.error || "Suppression impossible.");
+    return false;
+  }
+  await refresh();
+  return true;
+}
+
 function renderCard(item) {
   const article = document.createElement("article");
   article.className = "stream-rec-card";
@@ -84,12 +101,23 @@ function renderCard(item) {
   info.textContent = [item.sizeLabel, formatWhen(item.mtime)]
     .filter(Boolean)
     .join(" · ");
+  const actions = document.createElement("div");
+  actions.className = "stream-rec-card__actions";
   const dl = document.createElement("a");
   dl.className = "panel-btn panel-btn--secondary stream-rec-card__dl";
   dl.href = downloadUrl(item.name);
   dl.textContent = "Télécharger";
   dl.setAttribute("download", item.name);
-  meta.append(title, info, dl);
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "panel-btn panel-btn--secondary stream-rec-card__del";
+  del.textContent = "Supprimer";
+  del.addEventListener("click", () => {
+    video.pause();
+    deleteRecording(item.name).catch((err) => console.warn(LOG, err));
+  });
+  actions.append(dl, del);
+  meta.append(title, info, actions);
 
   article.append(frame, meta);
   return article;

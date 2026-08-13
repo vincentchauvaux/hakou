@@ -2172,7 +2172,14 @@ audio {
   color: var(--panel-muted, var(--muted));
 }
 
-.stream-rec-card__dl {
+.stream-rec-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.stream-rec-card__dl,
+.stream-rec-card__del {
   align-self: flex-start;
   padding: 0.35rem 0.7rem;
   font-size: 0.78rem;

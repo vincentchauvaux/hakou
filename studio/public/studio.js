@@ -316,6 +316,8 @@ async function loadRecordings() {
 }
 
 async function deleteRecording(name) {
+  const label = String(name || "").replace(/\.mp4$/i, "");
+  if (!window.confirm(`Supprimer « ${label} » du VPS ?`)) return;
   const res = await fetch(
     `./api/studio/recordings/${encodeURIComponent(name)}`,
     { method: "DELETE", credentials: "include" }
