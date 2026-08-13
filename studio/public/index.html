@@ -11,7 +11,7 @@
   </head>
   <body class="studio-body">
     <header class="studio-top">
-      <p class="tag">Studio Stream</p>
+      <p class="tag">Studio</p>
       <div class="studio-top__actions">
         <span id="studio-user" class="studio-user"></span>
         <button type="button" id="studio-logout" class="studio-btn studio-btn--ghost">
@@ -21,14 +21,12 @@
     </header>
 
     <main class="studio-card studio-card--wide">
-      <h1>Diffuser vers le Stream</h1>
+      <h1>Capture fenêtre / app</h1>
       <p>
-        Partage ton écran <strong>avec le son</strong> : le flux part en WHIP,
-        puis s’écoute sur
-        <a href="https://hakou.be/#stream" target="_blank" rel="noopener noreferrer"
-          >hakou.be → Stream</a
-        >
-        (bouton <em>Activer le son</em> côté spectateur).
+        Deux actions <strong>indépendantes</strong> : le live Stream, et
+        l’enregistrement MP4 sur le VPS (vidéo compressée, audio 256 kb/s).
+        Tu peux faire l’un, l’autre, ou les deux — ce n’est pas le live qui
+        est enregistré, c’est la capture.
         <br />
         <strong>Chrome (recommandé)</strong> : partage un <em>onglet</em> et
         coche « Partager l’audio » pour le son de l’appli / DJ.
@@ -39,8 +37,9 @@
       <div class="studio-preview">
         <video id="studio-preview" playsinline muted autoplay></video>
         <p id="studio-preview-empty" class="studio-preview__empty">
-          Aucun flux — lance « Passer en direct ».
+          Aucune capture — lance un live ou un enregistrement.
         </p>
+        <span id="studio-rec-badge" class="studio-rec-badge" hidden>REC</span>
       </div>
 
       <div class="studio-actions">
@@ -50,9 +49,21 @@
         <button type="button" id="studio-stop" class="studio-btn studio-btn--ghost" disabled>
           Couper l’antenne
         </button>
+        <button type="button" id="studio-rec-start" class="studio-btn studio-btn--record">
+          Enregistrer sur le VPS
+        </button>
+        <button type="button" id="studio-rec-stop" class="studio-btn studio-btn--ghost" disabled>
+          Arrêter l’enregistrement
+        </button>
       </div>
       <p id="studio-status" class="muted" role="status"></p>
     </main>
+
+    <section class="studio-card studio-card--wide studio-recordings" aria-labelledby="studio-recordings-title">
+      <h2 id="studio-recordings-title">Enregistrements VPS</h2>
+      <p class="muted">Fichiers MP4 de la capture — sans lien avec le live Stream.</p>
+      <ul id="studio-recordings-list" class="studio-recordings__list"></ul>
+    </section>
 
     <script type="module" src="./studio.js"></script>
   </body>

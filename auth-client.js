@@ -61,7 +61,7 @@ function ensureGisInitialized(clientId) {
 }
 
 /**
- * Session studio (cookie cross-site, allowlist Vincent / Anaïs).
+ * Session studio (cookie cross-site, allowlist Google).
  * @returns {Promise<null | { email: string, name?: string|null, picture?: string|null }>}
  */
 export async function fetchStudioSession() {

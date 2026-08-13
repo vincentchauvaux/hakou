@@ -5,7 +5,8 @@
 ## Stream + Twitch (août 2026)
 
 - UI : zone **Stream** (`#stream`, nav « Stream ») — ex-Radio.
-- **Accès restreint** (4 août 2026) : player + chat uniquement si session Google allowlist (Vincent / Anaïs). Gate [`stream-gate.js`](stream-gate.js) + login Google ; API `GET /api/stream/status` et WebSocket chat exigent le cookie studio. Contenu masqué (`#stream-lock` / `#stream-content`) tant que non connecté.
+- **Accès restreint** (4 août 2026) : player + chat uniquement si session Google allowlist. Gate [`stream-gate.js`](stream-gate.js) + login Google ; API `GET /api/stream/status` et WebSocket chat exigent le cookie studio. Contenu masqué (`#stream-lock` / `#stream-content`) tant que non connecté. **Noms des comptes** : plus affichés dans l’UI publique (lock, messages « Connecté », aria-label e-mail) — allowlist reste `ALLOWED_EMAILS` côté VPS. Mentions légales / responsable RGPD conservent l’identité éditeur (obligation BE/UE).
+- **Enregistrement VPS** (13 août 2026) : **indépendant du live**. Studio : bouton **Enregistrer sur le VPS** (MediaRecorder → chunks → ffmpeg MP4 H.264 CRF 28 + AAC 256k). Le live WHIP/MediaMTX n’est ni la source ni une condition. Même capture possible pour les deux. Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`. Module [`studio/record.mjs`](studio/record.mjs). Lien **Diffuser et enregistrer** dans `#stream` une fois connecté.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET /hakou-studio/api/stream/status` (alias `/api/radio/status`) — **auth requise**.
@@ -206,6 +207,7 @@
 
 | `stream-gate.js` | Auth allowlist pour `#stream` : session `/api/auth/me`, login Google, déverrouille `radio.js` / `radio-chat.js` |
 | `radio.js` | Zone **Stream** (`#stream`) : démarre **après** auth ; priorité **studio** → **Twitch live** → live YouTube ; **hors antenne** = logo `assets/logo-hakou.svg` (plus de playlist YouTube) ; poll ~20 s ; status API `credentials: include` |
+| `studio/record.mjs` | Enregistrement VPS de la **capture** (chunks MediaRecorder + ffmpeg MP4) — **pas** le live MediaMTX |
 | `radio-chat.js` | Chat public Stream (WebSocket VPS) : pseudo `Visiteur-xxxx` dérivé IP (éditable), messages texte/emoji, présence. **Téléphone (≤680px)** : composer 1 ligne (champ + Envoyer), chat plus court, padding bas Stream renforcé, bouton INTRO masqué sur Stream |
 
 | `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |
@@ -270,14 +272,18 @@ node --check youtube-videos.js
 
 node --check instagram-gallery.js
 
+node --check studio/public/studio.js
+
 node --check scripts/refresh-radio-status.mjs
 
 node --input-type=module --check < intro-gate.js
 
-# modules ES (navigation / scene3d / main) :
+# modules ES (navigation / scene3d / main / studio) :
 node --input-type=module --check < navigation.js
 node --input-type=module --check < scene3d.js
 node --input-type=module --check < main.js
+node --input-type=module --check < studio/server.mjs
+node --input-type=module --check < studio/record.mjs
 
 ```
 
@@ -387,7 +393,7 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Pl
 - **Live studio (Étape 3)** :
   - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.
   - Nginx : `/hakou-live/whip/` → WHIP/WHEP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **cookieCheck** : ne **pas** injecter `Cookie: cookieCheck=1` (sinon playlists sans `?session=` + 401 enfants si `Set-Cookie` masqué). Client : `?cookieCheck=1` → `?session=` dans les m3u8. CORS HLS `*` sans credentials (`hls.js` `withCredentials: false`).
-  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP **H264** (`setCodecPreferences`). **Son** : Chrome onglet + « Partager l’audio » (`systemAudio: include`) ; sinon **micro obligatoire** (Safari / fenêtre macOS). Spectateurs Radio : autoplay **muet** + bouton **Activer le son** ; piste audio HLS sélectionnée explicitement.
+  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP **H264** (`setCodecPreferences`). **Son** : Chrome onglet + « Partager l’audio » (`systemAudio: include`) ; sinon **micro obligatoire** (Safari / fenêtre macOS). **Enregistrement VPS** : bouton séparé, MediaRecorder → `/api/studio/record/*` (pas MediaMTX). Spectateurs Radio : autoplay **muet** + bouton **Activer le son** ; piste audio HLS sélectionnée explicitement.
   - Spectateurs : [`radio.js`](radio.js) si auth Stream + `studioLive` / Twitch / YouTube. Hors antenne : **logo Hakou**. Priorité studio > Twitch live > YouTube live.
   - Nginx WHIP/WHEP : CORS origines hakou.be (+ localhost / VPS), headers `Content-Type` / `Accept` pour SDP ; ICE UDP **8189** ouvert (média WebRTC hors nginx).
   - Install : [`studio/deploy/install-mediamtx.sh`](studio/deploy/install-mediamtx.sh) + secrets `MEDIAMTX_PUBLISH_PASS` / `MEDIAMTX_API_PASS` dans `/opt/hakou-studio/.env` et `mediamtx.yml`.
@@ -398,5 +404,5 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Pl
 - **Publish** : `git push git@github.com:vincentchauvaux/hakou.git main` (SSH ; le remote HTTPS `origin` peut échouer sans token). Déploiement Pages automatique après push sur `main` (délai cache ~1–10 min).
 - **Build optionnel** : `node scripts/refresh-instagram-posts.mjs --refresh` — met à jour `content/instagram-posts.json` + `assets/instagram/thumb-*.jpg` ; `node scripts/refresh-radio-status.mjs` — live + archives Radio. Pas de bundler / compile JS.
 - **Dev local** : `npx serve .` (pas `file://`).
-- **VPS OVH Hakou** : `vps-e09ed6db.vps.ovh.net` → `51.178.44.114` (SSH `root`, nginx + pm2). Services sous préfixe : `/hirakana/`, `/rpg-cr/`, **`/hakou-studio/`**. Ne pas confondre avec **djgoons / nexroof** (`54.76.151.62`, autres projets ; SSH parfois timeout depuis l’agent).
+- **VPS OVH Hakou** : `vps-e09ed6db.vps.ovh.net` → `51.178.44.114` (SSH `root`, nginx + pm2). Services sous préfixe : `/hirakana/`, `/rpg-cr/`, **`/hakou-studio/`**. Enregistrements capture : `RECORD_DIR=/var/lib/hakou-recordings` + `ffmpeg` (indépendant de MediaMTX). Ne pas confondre avec **djgoons / nexroof** (`54.76.151.62`, autres projets ; SSH parfois timeout depuis l’agent).
 

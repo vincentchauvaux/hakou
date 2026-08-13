@@ -2,6 +2,7 @@
 .env
 studio/.env
 studio/data/
+studio/recordings/
 **/client_secret*.json
 *.apps.googleusercontent.com.json
 .DS_Store

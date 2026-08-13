@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRadioStatus } from "./radio-status.mjs";
 import { attachRadioChat } from "./radio-chat.mjs";
+import { createRecordController } from "./record.mjs";
 import {
   appendContactInbox,
   checkRateLimit,
@@ -82,6 +83,16 @@ const WHEP_PUBLIC_URL =
 const HLS_PUBLIC_URL =
   env.HLS_PUBLIC_URL ||
   `https://vps-e09ed6db.vps.ovh.net/hakou-live/hls/${MEDIAMTX_PATH}/index.m3u8`;
+const RECORD_DIR =
+  env.RECORD_DIR || join(__dirname, "recordings");
+const recorder = createRecordController({
+  dir: RECORD_DIR,
+  ffmpegBin: env.FFMPEG_BIN || "ffmpeg",
+  videoMode: env.RECORD_VIDEO_MODE || "compress",
+  audioBitrate: env.RECORD_AUDIO_BITRATE || "256k",
+  retentionDays: Number(env.RECORD_RETENTION_DAYS || 60),
+  maxBytes: Number(env.RECORD_MAX_BYTES || 20 * 1024 * 1024 * 1024),
+});
 
 const SESSION_SECRET = requireStrongSecret(env, {
   label: "SESSION_SECRET",
@@ -159,10 +170,10 @@ function applyCors(req, res) {
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Vary", "Origin");
   }
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
+    "Content-Type, Authorization, X-Hakou-Record-Session"
   );
 }
 
@@ -435,6 +446,128 @@ app.get("/api/studio/ingest", (req, res) => {
   });
 });
 
+app.get("/api/studio/record", async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const ffmpeg = await recorder.ffmpegAvailable();
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ ok: true, ffmpeg, ...recorder.status() });
+});
+
+app.post("/api/studio/record/start", async (req, res) => {
+  const ip = getClientIp(req);
+  if (
+    !checkRateLimit(ip, {
+      max: 12,
+      windowMs: 60 * 1000,
+      key: "record-start",
+    })
+  ) {
+    res.status(429).json({ ok: false, error: "trop de requêtes" });
+    return;
+  }
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    const state = await recorder.start({
+      mimeType: req.body?.mimeType,
+    });
+    res.json({ ok: true, ...state });
+  } catch (err) {
+    console.warn("[Hakou Studio] record start", err.message || err);
+    res.status(503).json({
+      ok: false,
+      error: err.message || "enregistrement indisponible",
+    });
+  }
+});
+
+app.post(
+  "/api/studio/record/chunk",
+  express.raw({ type: "*/*", limit: "20mb" }),
+  (req, res) => {
+    const ip = getClientIp(req);
+    if (
+      !checkRateLimit(ip, {
+        max: 90,
+        windowMs: 60 * 1000,
+        key: "record-chunk",
+      })
+    ) {
+      res.status(429).json({ ok: false, error: "trop de requêtes" });
+      return;
+    }
+    const session = requireSession(req, res);
+    if (!session) return;
+    const sessionId = String(req.headers["x-hakou-record-session"] || "");
+    try {
+      const buf = Buffer.isBuffer(req.body)
+        ? req.body
+        : Buffer.from(req.body || []);
+      const state = recorder.appendChunk(sessionId, buf);
+      res.json({ ok: true, ...state });
+    } catch (err) {
+      res.status(400).json({
+        ok: false,
+        error: err.message || "chunk refusé",
+      });
+    }
+  }
+);
+
+app.post("/api/studio/record/stop", async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    const state = await recorder.stop(req.body?.sessionId);
+    res.json({ ok: true, ...state });
+  } catch (err) {
+    console.warn("[Hakou Studio] record stop", err.message || err);
+    res.status(500).json({
+      ok: false,
+      error: err.message || "arrêt enregistrement impossible",
+    });
+  }
+});
+
+app.get("/api/studio/recordings", (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ok: true, items: recorder.list() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || "liste impossible" });
+  }
+});
+
+app.get("/api/studio/recordings/:name", (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const full = recorder.filePath(req.params.name);
+  if (!full) {
+    res.status(404).json({ ok: false, error: "introuvable" });
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.download(full, req.params.name, (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).json({ ok: false, error: "téléchargement impossible" });
+    }
+  });
+});
+
+app.delete("/api/studio/recordings/:name", (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const result = recorder.remove(req.params.name);
+  if (!result.ok) {
+    res.status(result.error === "introuvable" ? 404 : 400).json(result);
+    return;
+  }
+  res.json(result);
+});
+
 app.get("/api/auth/config", (_req, res) => {
   res.json({
     googleClientId: GOOGLE_CLIENT_ID || null,
@@ -576,6 +709,18 @@ httpServer.listen(PORT, () => {
   console.log(
     `[Hakou Studio] http://127.0.0.1:${PORT} — Google=${
       GOOGLE_CLIENT_ID ? "ok" : "MISSING"
-    } allow=${ALLOWED_EMAILS.size} media-gate=on`
+    } allow=${ALLOWED_EMAILS.size} media-gate=on record=${RECORD_DIR}`
   );
 });
+
+async function shutdown(signal) {
+  console.info(`[Hakou Studio] ${signal} — abort record`);
+  try {
+    recorder.abort();
+  } catch (err) {
+    console.warn("[Hakou Studio] record shutdown", err.message || err);
+  }
+  process.exit(0);
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

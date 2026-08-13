@@ -51,4 +51,11 @@ if command -v ufw >/dev/null 2>&1; then
   ufw allow 8189/udp comment 'MediaMTX WebRTC ICE' || true
 fi
 
+# Enregistrements studio (ffmpeg) — capture fenêtre, pas le live MediaMTX
+if command -v apt-get >/dev/null 2>&1; then
+  apt-get install -y ffmpeg >/dev/null
+fi
+mkdir -p /var/lib/hakou-recordings
+chmod 750 /var/lib/hakou-recordings
+
 echo "MediaMTX ${MTX_VERSION} OK — HLS :8888 WHIP :8889 ICE :8189/udp API :9997"

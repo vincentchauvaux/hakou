@@ -1,5 +1,5 @@
 /**
- * Stream réservé aux comptes Google allowlist (Vincent / Anaïs).
+ * Stream réservé aux comptes Google allowlist.
  * Déverrouille radio.js / radio-chat.js + contenu #stream.
  */
 import { fetchStudioSession, initGoogleLogin } from "./auth-client.js";
@@ -83,7 +83,7 @@ async function init() {
   }
 
   setLocked(
-    "Réservé aux comptes autorisés (Vincent, Anaïs). Connecte-toi avec Google."
+    "Réservé aux comptes autorisés. Connecte-toi avec Google."
   );
 
   if (!loginBtn) return;
@@ -93,7 +93,7 @@ async function init() {
       onSuccess: ({ email, name }) => {
         setAllowed({ email, name: name || null });
         const status = document.getElementById("stream-lock-status");
-        if (status) status.textContent = `Connecté : ${email}`;
+        if (status) status.textContent = "Connecté.";
       },
       onError: (message) => {
         const status = document.getElementById("stream-lock-status");

@@ -124,8 +124,8 @@ function bindIntroUi() {
     };
 
     initGoogleLogin(loginBtn, {
-      onSuccess: ({ email, studioUrl }) => {
-        setLoginMessage(`Connecté : ${email}`);
+      onSuccess: ({ studioUrl }) => {
+        setLoginMessage("Connecté");
         playEnterZoom(() =>
           finishIntro({
             redirectUrl: studioUrl || undefined,

@@ -59,3 +59,27 @@ Durcissement : CORS, maxPayload, rate-limits, sanitisation, kick.
 2. Nginx live avec **auth_request** (snippet à jour).
 3. UDP 8189 (ICE).
 4. Studio connecté → « Passer en direct » ; Stream hakou.be lit HLS **avec credentials**.
+
+## Enregistrement VPS (indépendant du live)
+
+Le live Stream (WHIP → MediaMTX) et l’enregistrement VPS sont **deux actions séparées**.
+
+- **Passer en direct** : diffusion spectateurs uniquement.
+- **Enregistrer sur le VPS** : la capture fenêtre/app est envoyée (MediaRecorder) puis encodée en MP4 — **même si tu n’es pas en live**.
+- Tu peux faire les deux en même temps : même capture, deux pipelines.
+- Fichier : **vidéo H.264 compressée** (max 1280 px, CRF 28) + **audio AAC 256 kb/s**.
+- Liste / téléchargement / suppression : page studio (auth allowlist).
+- Rétention : 60 jours / plafond ~20 Go.
+
+VPS (une fois) :
+
+```bash
+sudo apt-get install -y ffmpeg
+sudo mkdir -p /var/lib/hakou-recordings
+sudo chmod 750 /var/lib/hakou-recordings
+# Dans /opt/hakou-studio/.env :
+# RECORD_DIR=/var/lib/hakou-recordings
+```
+
+Nginx : snippet à jour (`client_max_body_size 25m` pour les chunks, timeout 30 min sur les téléchargements).
+

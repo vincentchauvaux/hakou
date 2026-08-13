@@ -1923,6 +1923,11 @@ audio {
   .radio-chat__send {
     padding: 0.55rem 0.75rem;
   }
+
+  .stream-studio-link {
+    margin-left: 0;
+    width: 100%;
+  }
 }
 
 @media (max-width: 680px) {
@@ -2071,6 +2076,12 @@ audio {
   margin: 0;
   font-size: 0.95rem;
   color: var(--panel-text, var(--text));
+}
+
+.stream-studio-link {
+  margin-left: auto;
+  padding: 0.42rem 0.85rem;
+  font-size: 0.78rem;
 }
 
 .radio-player__frame {
