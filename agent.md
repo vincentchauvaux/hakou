@@ -49,7 +49,7 @@
 
 - **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
 - **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
-- **Dernier redéploiement** : 4 août 2026 (soir) — rsync `studio/` + snippets nginx `auth_request` HLS, `pm2 restart hakou-studio` ; health 200, HLS/media-gate **401** sans cookie.
+- **Dernier redéploiement** : 13 août 2026 — rsync `studio/` (record.mjs + UI capture/live séparés), nginx `client_max_body_size 25m` + location recordings, `ffmpeg`, `RECORD_DIR=/var/lib/hakou-recordings`, `pm2 restart hakou-studio` ; health 200.
 
 
 
