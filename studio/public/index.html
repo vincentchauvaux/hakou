@@ -42,6 +42,37 @@
         <span id="studio-rec-badge" class="studio-rec-badge" hidden>REC</span>
       </div>
 
+      <div class="studio-transport" id="studio-transport" hidden>
+        <div class="studio-transport__meta">
+          <span id="studio-rec-state" class="studio-rec-state">REC</span>
+          <time id="studio-chrono" class="studio-chrono" datetime="PT0S">00:00:00</time>
+        </div>
+        <div
+          class="studio-timeline"
+          id="studio-timeline"
+          role="meter"
+          aria-label="Durée d’enregistrement"
+          aria-valuemin="0"
+          aria-valuenow="0"
+          aria-valuetext="0 secondes"
+        >
+          <div class="studio-timeline__track">
+            <div class="studio-timeline__fill" id="studio-timeline-fill"></div>
+            <div class="studio-timeline__marks" id="studio-timeline-marks"></div>
+            <div class="studio-timeline__head" id="studio-timeline-head"></div>
+          </div>
+          <div class="studio-timeline__ticks" id="studio-timeline-ticks"></div>
+        </div>
+        <div class="studio-transport__actions">
+          <button type="button" id="studio-rec-pause" class="studio-btn studio-btn--ghost" disabled>
+            Pause
+          </button>
+          <button type="button" id="studio-rec-stop" class="studio-btn studio-btn--ghost" disabled>
+            Stop
+          </button>
+        </div>
+      </div>
+
       <div class="studio-actions">
         <button type="button" id="studio-start" class="studio-btn studio-btn--primary">
           Passer en direct
@@ -51,9 +82,6 @@
         </button>
         <button type="button" id="studio-rec-start" class="studio-btn studio-btn--record">
           Enregistrer sur le VPS
-        </button>
-        <button type="button" id="studio-rec-stop" class="studio-btn studio-btn--ghost" disabled>
-          Arrêter l’enregistrement
         </button>
       </div>
       <p id="studio-status" class="muted" role="status"></p>

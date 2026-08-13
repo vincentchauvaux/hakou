@@ -6,8 +6,17 @@ const startBtn = document.getElementById("studio-start");
 const stopBtn = document.getElementById("studio-stop");
 const recStartBtn = document.getElementById("studio-rec-start");
 const recStopBtn = document.getElementById("studio-rec-stop");
+const recPauseBtn = document.getElementById("studio-rec-pause");
 const logoutBtn = document.getElementById("studio-logout");
 const recBadge = document.getElementById("studio-rec-badge");
+const recStateEl = document.getElementById("studio-rec-state");
+const chronoEl = document.getElementById("studio-chrono");
+const transportEl = document.getElementById("studio-transport");
+const timelineEl = document.getElementById("studio-timeline");
+const timelineFill = document.getElementById("studio-timeline-fill");
+const timelineHead = document.getElementById("studio-timeline-head");
+const timelineMarks = document.getElementById("studio-timeline-marks");
+const timelineTicks = document.getElementById("studio-timeline-ticks");
 const recordingsList = document.getElementById("studio-recordings-list");
 
 let localStream = null;
@@ -23,6 +32,11 @@ let mediaRecorder = null;
 let recordSessionId = null;
 let chunkQueue = Promise.resolve();
 let captureEndedBound = false;
+let recPaused = false;
+let recElapsedMs = 0;
+let recTickAt = 0;
+let recTimer = null;
+let recMarks = [];
 
 /** Safari / iOS : pas de son système via getDisplayMedia — audio:true peut bloquer la Promise. */
 function isAppleWebKit() {
@@ -41,15 +55,127 @@ function setStatus(msg) {
   if (statusEl) statusEl.textContent = msg || "";
 }
 
-function setRecBadge(on) {
-  if (recBadge) recBadge.hidden = !on;
+function setRecBadge(on, paused = false) {
+  if (recBadge) {
+    recBadge.hidden = !on;
+    recBadge.textContent = paused ? "PAUSE" : "REC";
+    recBadge.classList.toggle("is-paused", Boolean(paused));
+  }
+  if (recStateEl) recStateEl.textContent = paused ? "PAUSE" : "REC";
+  transportEl?.classList.toggle("is-paused", Boolean(paused));
+}
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function formatHms(ms) {
+  const total = Math.max(0, Math.floor(Number(ms) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+}
+
+function formatTick(ms) {
+  const total = Math.max(0, Math.floor(Number(ms) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (h > 0) return `${h}h${pad2(m)}`;
+  return `${m}:${pad2(total % 60)}`;
+}
+
+function elapsedNow() {
+  if (!recording) return recElapsedMs;
+  if (recPaused) return recElapsedMs;
+  return recElapsedMs + (Date.now() - recTickAt);
+}
+
+function timelineScale(ms) {
+  const steps = [5, 10, 15, 30, 45, 60, 90, 120, 180, 240, 360, 480, 720].map(
+    (min) => min * 60 * 1000
+  );
+  return steps.find((step) => ms <= step * 0.92) || steps[steps.length - 1];
+}
+
+function renderTransport() {
+  const ms = elapsedNow();
+  const scale = timelineScale(ms);
+  const pct = Math.min(100, (ms / scale) * 100);
+  if (chronoEl) {
+    chronoEl.textContent = formatHms(ms);
+    chronoEl.setAttribute("datetime", `PT${Math.floor(ms / 1000)}S`);
+  }
+  if (timelineFill) timelineFill.style.width = `${pct}%`;
+  if (timelineHead) timelineHead.style.left = `${pct}%`;
+  if (timelineEl) {
+    timelineEl.setAttribute("aria-valuenow", String(Math.floor(ms / 1000)));
+    timelineEl.setAttribute("aria-valuemax", String(Math.floor(scale / 1000)));
+    timelineEl.setAttribute("aria-valuetext", formatHms(ms));
+  }
+  if (timelineTicks) {
+    const labels = [0, 0.25, 0.5, 0.75, 1].map((t) => formatTick(scale * t));
+    if (timelineTicks.dataset.scale !== String(scale)) {
+      timelineTicks.dataset.scale = String(scale);
+      timelineTicks.replaceChildren();
+      for (const label of labels) {
+        const span = document.createElement("span");
+        span.textContent = label;
+        timelineTicks.append(span);
+      }
+    }
+  }
+  if (timelineMarks) {
+    timelineMarks.replaceChildren();
+    for (const mark of recMarks) {
+      const el = document.createElement("span");
+      el.className = "studio-timeline__mark";
+      el.style.left = `${Math.min(100, (mark / scale) * 100)}%`;
+      el.title = `Pause ${formatHms(mark)}`;
+      timelineMarks.append(el);
+    }
+  }
+}
+
+function startChrono() {
+  recElapsedMs = 0;
+  recTickAt = Date.now();
+  recPaused = false;
+  recMarks = [];
+  if (transportEl) transportEl.hidden = false;
+  renderTransport();
+  if (recTimer) clearInterval(recTimer);
+  recTimer = setInterval(renderTransport, 250);
+}
+
+function stopChrono() {
+  if (recTimer) {
+    clearInterval(recTimer);
+    recTimer = null;
+  }
+  recElapsedMs = 0;
+  recTickAt = 0;
+  recPaused = false;
+  recMarks = [];
+  if (transportEl) transportEl.hidden = true;
+  renderTransport();
+}
+
+function pauseSupported() {
+  return Boolean(mediaRecorder && typeof mediaRecorder.pause === "function");
 }
 
 function syncButtons() {
   if (startBtn) startBtn.disabled = streaming || startInFlight;
   if (stopBtn) stopBtn.disabled = !streaming;
   if (recStartBtn) recStartBtn.disabled = recording || recInFlight || !recordAvailable;
-  if (recStopBtn) recStopBtn.disabled = !recording;
+  if (recStopBtn) recStopBtn.disabled = !recording || recInFlight;
+  if (recPauseBtn) {
+    const canPause = pauseSupported();
+    recPauseBtn.hidden = recording && !canPause;
+    recPauseBtn.disabled = !recording || recInFlight || !canPause;
+    recPauseBtn.textContent = recPaused ? "Reprendre" : "Pause";
+  }
 }
 
 function withTimeout(promise, ms, label) {
@@ -501,7 +627,9 @@ async function startRecord() {
     });
     mediaRecorder.start(2000);
     recording = true;
-    setRecBadge(true);
+    recPaused = false;
+    startChrono();
+    setRecBadge(true, false);
     setStatus(
       streaming
         ? "Enregistrement VPS en cours (le live continue à part)."
@@ -513,6 +641,7 @@ async function startRecord() {
     recordSessionId = null;
     recording = false;
     setRecBadge(false);
+    stopChrono();
     releaseCapture();
     const name = err?.name || "";
     if (name === "NotAllowedError" || name === "AbortError") {
@@ -529,6 +658,7 @@ async function startRecord() {
 async function stopRecord({ keepCapture = true } = {}) {
   if (!recording && !mediaRecorder) {
     setRecBadge(false);
+    stopChrono();
     if (!keepCapture) releaseCapture();
     syncButtons();
     return;
@@ -577,11 +707,62 @@ async function stopRecord({ keepCapture = true } = {}) {
     recording = false;
     recInFlight = false;
     setRecBadge(false);
+    stopChrono();
     releaseCapture();
     syncButtons();
     loadRecordings().catch(() => {});
     window.setTimeout(() => loadRecordings().catch(() => {}), 8000);
   }
+}
+
+function pauseRecord() {
+  if (!recording || recInFlight || !mediaRecorder) return;
+  if (mediaRecorder.state !== "recording") return;
+  try {
+    mediaRecorder.pause();
+    try {
+      mediaRecorder.requestData();
+    } catch {
+      /* ignore */
+    }
+  } catch (err) {
+    console.warn("[Hakou Studio] pause", err);
+    setStatus("Pause indisponible sur ce navigateur — utilise Stop.");
+    return;
+  }
+  recElapsedMs = elapsedNow();
+  recPaused = true;
+  recMarks.push(recElapsedMs);
+  setRecBadge(true, true);
+  syncButtons();
+  renderTransport();
+  setStatus(
+    streaming
+      ? "Enregistrement en pause — le live continue."
+      : "Enregistrement en pause."
+  );
+}
+
+function resumeRecord() {
+  if (!recording || recInFlight || !mediaRecorder) return;
+  if (mediaRecorder.state !== "paused") return;
+  try {
+    mediaRecorder.resume();
+  } catch (err) {
+    console.warn("[Hakou Studio] resume", err);
+    setStatus("Impossible de reprendre l’enregistrement.");
+    return;
+  }
+  recPaused = false;
+  recTickAt = Date.now();
+  setRecBadge(true, false);
+  syncButtons();
+  setStatus("Enregistrement repris.");
+}
+
+function togglePause() {
+  if (recPaused) resumeRecord();
+  else pauseRecord();
 }
 
 async function startStream() {
@@ -651,6 +832,9 @@ stopBtn?.addEventListener("click", () => {
 });
 recStartBtn?.addEventListener("click", () => {
   startRecord().catch((err) => console.warn("[Hakou Studio]", err));
+});
+recPauseBtn?.addEventListener("click", () => {
+  togglePause();
 });
 recStopBtn?.addEventListener("click", () => {
   stopRecord().catch((err) => console.warn("[Hakou Studio]", err));
