@@ -240,7 +240,8 @@
           <p class="stream-lock__status" id="stream-lock-status" role="status"></p>
         </div>
 
-        <div class="radio-layout" id="stream-content" hidden>
+        <div id="stream-content" hidden>
+          <div class="radio-layout">
           <div class="radio-main">
             <div class="panel-card radio-card">
               <div class="radio-status" id="radio-status" data-state="offline">
@@ -337,6 +338,20 @@
             </form>
             <p class="radio-chat__status" id="radio-chat-status" role="status"></p>
           </aside>
+          </div>
+
+          <section
+            class="stream-recordings"
+            id="stream-recordings"
+            aria-labelledby="stream-recordings-title"
+          >
+            <h3 id="stream-recordings-title">Enregistrements VPS</h3>
+            <p class="stream-recordings__lead">
+              Captures sauvées sur le serveur — lecture réservée aux comptes
+              connectés.
+            </p>
+            <div class="stream-recordings__grid" id="stream-recordings-grid"></div>
+          </section>
         </div>
       </section>
 
@@ -928,6 +943,7 @@
 
     <script src="./consent.js" defer></script>
     <script type="module" src="./stream-gate.js"></script>
+    <script type="module" src="./stream-recordings.js"></script>
     <script src="./youtube-videos.js" defer></script>
     <script src="./radio.js" defer></script>
     <script src="./radio-chat.js" defer></script>

@@ -1621,6 +1621,13 @@ audio {
   display: none !important;
 }
 
+#stream-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
 .radio-layout {
   display: grid;
   grid-template-columns: minmax(0, 4fr) minmax(220px, 1fr);
@@ -1683,7 +1690,7 @@ audio {
   font-size: 0.85rem;
 }
 
-#stream.panel > .radio-layout {
+#stream.panel .radio-layout {
   max-width: none;
   width: 100%;
   align-self: stretch;
@@ -2082,6 +2089,100 @@ audio {
   margin-left: auto;
   padding: 0.42rem 0.85rem;
   font-size: 0.78rem;
+}
+
+.stream-recordings {
+  width: 100%;
+  padding: 0.85rem 0.95rem 1rem;
+  border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.28));
+  border-radius: 12px;
+  background: var(--panel-card-bg, rgba(9, 13, 24, 0.65));
+}
+
+.stream-recordings h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.stream-recordings__lead,
+.stream-recordings__empty {
+  margin: 0 0 0.85rem;
+  font-size: 0.88rem;
+  color: var(--panel-muted, var(--muted));
+}
+
+.stream-recordings__empty {
+  margin: 0;
+}
+
+.stream-recordings__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 0.85rem;
+}
+
+.stream-rec-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.stream-rec-card__frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.stream-rec-card__video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.stream-rec-card__dur {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 0.12rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.stream-rec-card__dur:empty {
+  display: none;
+}
+
+.stream-rec-card__title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 650;
+  word-break: break-all;
+}
+
+.stream-rec-card__info {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--panel-muted, var(--muted));
+}
+
+.stream-rec-card__dl {
+  align-self: flex-start;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.stream-rec-card__pending {
+  margin: 0;
+  padding: 1rem;
+  font-size: 0.88rem;
+  color: var(--panel-muted, var(--muted));
 }
 
 .radio-player__frame {

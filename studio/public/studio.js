@@ -238,38 +238,76 @@ async function loadRecordings() {
     for (const item of items) {
       const li = document.createElement("li");
       li.className = "studio-recordings__item";
+      if (item.recording || item.transcoding) {
+        const meta = document.createElement("div");
+        meta.className = "studio-recordings__meta";
+        const name = document.createElement("span");
+        name.className = "studio-recordings__name";
+        name.textContent = item.recording
+          ? "Capture en cours d’envoi…"
+          : `${item.name} (encodage…)`;
+        const size = document.createElement("span");
+        size.className = "studio-recordings__size";
+        size.textContent = `${item.sizeLabel || ""} · ${formatWhen(item.mtime)}`;
+        meta.append(name, size);
+        li.append(meta);
+        recordingsList.append(li);
+        continue;
+      }
+
+      const frame = document.createElement("div");
+      frame.className = "studio-recordings__frame";
+      const video = document.createElement("video");
+      video.className = "hakou-rec-video studio-recordings__video";
+      video.controls = true;
+      video.playsInline = true;
+      video.preload = "metadata";
+      video.src = `./api/studio/recordings/${encodeURIComponent(item.name)}`;
+      video.addEventListener("play", () => {
+        document.querySelectorAll("video.hakou-rec-video").forEach((other) => {
+          if (other !== video) other.pause();
+        });
+      });
+      frame.append(video);
+
       const meta = document.createElement("div");
       meta.className = "studio-recordings__meta";
       const name = document.createElement("span");
       name.className = "studio-recordings__name";
-      name.textContent = item.recording
-        ? "Capture en cours d’envoi…"
-        : item.transcoding
-          ? `${item.name} (encodage…)`
-          : item.name;
+      name.textContent = item.name.replace(/\.mp4$/i, "");
       const size = document.createElement("span");
       size.className = "studio-recordings__size";
+      video.addEventListener("loadedmetadata", () => {
+        const s = Math.floor(video.duration || 0);
+        if (s > 0) {
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const r = s % 60;
+          const pad = (n) => String(n).padStart(2, "0");
+          const dur =
+            h > 0 ? `${h}:${pad(m)}:${pad(r)}` : `${m}:${pad(r)}`;
+          size.textContent = `${dur} · ${item.sizeLabel || ""} · ${formatWhen(item.mtime)}`;
+        }
+      });
       size.textContent = `${item.sizeLabel || ""} · ${formatWhen(item.mtime)}`;
       meta.append(name, size);
+
       const actions = document.createElement("div");
       actions.className = "studio-recordings__actions";
-      if (!item.recording && !item.transcoding) {
-        const dl = document.createElement("a");
-        dl.className = "studio-btn studio-btn--ghost studio-btn--tiny";
-        dl.href = `./api/studio/recordings/${encodeURIComponent(item.name)}`;
-        dl.textContent = "Télécharger";
-        dl.setAttribute("download", item.name);
-        actions.append(dl);
-        const del = document.createElement("button");
-        del.type = "button";
-        del.className = "studio-btn studio-btn--ghost studio-btn--tiny";
-        del.textContent = "Supprimer";
-        del.addEventListener("click", () => {
-          deleteRecording(item.name).catch((err) => console.warn(err));
-        });
-        actions.append(del);
-      }
-      li.append(meta, actions);
+      const dl = document.createElement("a");
+      dl.className = "studio-btn studio-btn--ghost studio-btn--tiny";
+      dl.href = `./api/studio/recordings/${encodeURIComponent(item.name)}?download=1`;
+      dl.textContent = "Télécharger";
+      dl.setAttribute("download", item.name);
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "studio-btn studio-btn--ghost studio-btn--tiny";
+      del.textContent = "Supprimer";
+      del.addEventListener("click", () => {
+        deleteRecording(item.name).catch((err) => console.warn(err));
+      });
+      actions.append(dl, del);
+      li.append(frame, meta, actions);
       recordingsList.append(li);
     }
   } catch (err) {

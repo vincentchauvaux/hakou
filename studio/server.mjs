@@ -173,7 +173,11 @@ function applyCors(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Hakou-Record-Session"
+    "Content-Type, Authorization, X-Hakou-Record-Session, Range"
+  );
+  res.setHeader(
+    "Access-Control-Expose-Headers",
+    "Accept-Ranges, Content-Range, Content-Length, Content-Type"
   );
 }
 
@@ -549,10 +553,25 @@ app.get("/api/studio/recordings/:name", (req, res) => {
     res.status(404).json({ ok: false, error: "introuvable" });
     return;
   }
-  res.setHeader("Cache-Control", "no-store");
-  res.download(full, req.params.name, (err) => {
+  const download = req.query.download === "1" || req.query.download === "true";
+  res.setHeader("Cache-Control", "private, no-store");
+  if (download) {
+    res.download(full, req.params.name, (err) => {
+      if (err && !res.headersSent) {
+        res.status(500).json({ ok: false, error: "téléchargement impossible" });
+      }
+    });
+    return;
+  }
+  res.type("video/mp4");
+  res.sendFile(full, {
+    headers: {
+      "Content-Disposition": `inline; filename="${req.params.name}"`,
+      "Accept-Ranges": "bytes",
+    },
+  }, (err) => {
     if (err && !res.headersSent) {
-      res.status(500).json({ ok: false, error: "téléchargement impossible" });
+      res.status(500).json({ ok: false, error: "lecture impossible" });
     }
   });
 });
