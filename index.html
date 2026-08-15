@@ -11,6 +11,12 @@
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="./assets/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" sizes="180x180" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./styles.css" />
     <script type="importmap">
       {
@@ -24,7 +30,7 @@
   <body data-intro="pending">
     <canvas id="three-canvas" aria-hidden="true"></canvas>
 
-    <div id="intro-gate" class="intro-gate" role="dialog" aria-modal="true" aria-labelledby="intro-hint">
+    <div id="intro-gate" class="intro-gate" role="dialog" aria-modal="true" aria-labelledby="intro-brand intro-hint">
       <button
         type="button"
         id="intro-login"
@@ -43,7 +49,10 @@
         class="intro-enter"
         aria-label="Entrer sur le site"
       ></button>
-      <p id="intro-hint" class="intro-hint">Cliquer le logo pour entrer</p>
+      <div class="intro-copy">
+        <p id="intro-brand" class="intro-brand">hakou.be</p>
+        <p id="intro-hint" class="intro-hint">Cliquer sur le logo</p>
+      </div>
     </div>
 
     <div

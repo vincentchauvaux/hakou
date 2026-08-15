@@ -121,8 +121,16 @@ body[data-intro="playing"] {
   max-height: 200px;
   border: 0;
   padding: 0;
+  margin: 0;
   background: transparent;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .intro-enter:disabled {
@@ -130,25 +138,52 @@ body[data-intro="playing"] {
   cursor: default;
 }
 
-.intro-enter:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.55);
-  outline-offset: 8px;
-  border-radius: 12px;
+.intro-enter:focus,
+.intro-enter:focus-visible,
+.intro-enter:active {
+  outline: none;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
 }
 
-.intro-hint {
+.intro-enter::-moz-focus-inner {
+  border: 0;
+  padding: 0;
+}
+
+.intro-copy {
   pointer-events: none;
   position: absolute;
   left: 50%;
   bottom: max(48px, calc(env(safe-area-inset-bottom) + 36px));
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0;
   padding: 0 1rem;
+  text-align: center;
+}
+
+.intro-brand {
+  margin: 0;
+  font-family: Italiana, Didot, "Bodoni MT", "Hoefler Text", Georgia, serif;
+  font-size: clamp(2.1rem, 7vw, 3.4rem);
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  color: rgba(232, 237, 247, 0.96);
+  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.7);
+}
+
+.intro-hint {
+  margin: 0;
   color: rgba(232, 237, 247, 0.72);
   font-size: 0.85rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  text-align: center;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
 }
 
@@ -164,7 +199,7 @@ body[data-intro="playing"] #overlay {
 }
 
 body[data-intro="playing"] .intro-login,
-body[data-intro="playing"] .intro-hint {
+body[data-intro="playing"] .intro-copy {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.35s ease;

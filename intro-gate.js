@@ -36,7 +36,7 @@ function finishIntro({ redirectUrl } = {}) {
   gateEl?.setAttribute("hidden", "");
   if (hintEl) {
     hintEl.hidden = true;
-    hintEl.textContent = "Cliquer le logo pour entrer";
+    hintEl.textContent = "Cliquer sur le logo";
   }
   if (redirectUrl) {
     window.location.assign(redirectUrl);
@@ -87,7 +87,7 @@ export function replayIntroGate() {
   loginBtn?.removeAttribute("disabled");
   if (hintEl) {
     hintEl.hidden = false;
-    hintEl.textContent = "Cliquer le logo pour entrer";
+    hintEl.textContent = "Cliquer sur le logo";
   }
 }
 
@@ -179,7 +179,7 @@ export async function initIntroGate() {
   loginBtn?.removeAttribute("disabled");
   if (hintEl) {
     hintEl.hidden = false;
-    hintEl.textContent = "Cliquer le logo pour entrer";
+    hintEl.textContent = "Cliquer sur le logo";
   }
 
   return true;
