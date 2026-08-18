@@ -3,7 +3,7 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "37";
+const PLANET_GLB_V = "40";
 const PLANET_GLB = {
   pluto: `assets/planets/pluto.glb?v=${PLANET_GLB_V}`,
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
