@@ -113,12 +113,12 @@ body[data-intro="playing"] {
   pointer-events: auto;
   position: absolute;
   left: 50%;
-  top: 48%;
+  top: 50%;
   transform: translate(-50%, -50%);
-  width: min(42vw, 280px);
-  height: min(28vw, 180px);
-  max-width: 320px;
-  max-height: 200px;
+  width: min(72vw, 62vh);
+  height: min(54vh, 52vw);
+  max-width: 640px;
+  max-height: 460px;
   border: 0;
   padding: 0;
   margin: 0;
@@ -156,10 +156,10 @@ body[data-intro="playing"] {
   pointer-events: none;
   position: absolute;
   left: 50%;
-  top: 48%;
+  /* Logo 3D ~52 % de la hauteur viewport, centré → bord bas ~ 50% + 26vh */
+  top: min(calc(50% + 28vh), calc(100% - 7.25rem));
   bottom: auto;
-  /* Sous le logo (hit-area centrée, hauteur min(28vw, 180px)) */
-  transform: translate(-50%, calc(min(14vw, 90px) + 1.35rem));
+  transform: translate(-50%, 1.15rem);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -191,7 +191,8 @@ body[data-intro="playing"] {
 
 @media (max-height: 540px) {
   .intro-copy {
-    transform: translate(-50%, calc(min(10vw, 52px) + 0.65rem));
+    top: min(calc(50% + 24vh), calc(100% - 5.5rem));
+    transform: translate(-50%, 0.55rem);
   }
 
   .intro-brand {
