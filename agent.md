@@ -6,7 +6,7 @@
 
 - UI : zone **Stream** (`#stream`, nav « Stream ») — ex-Radio.
 - **Accès restreint** (4 août 2026) : player + chat uniquement si session Google allowlist. Gate [`stream-gate.js`](stream-gate.js) + login Google ; API `GET /api/stream/status` et WebSocket chat exigent le cookie studio. Contenu masqué (`#stream-lock` / `#stream-content`) tant que non connecté. **Noms des comptes** : plus affichés dans l’UI publique (lock, messages « Connecté », aria-label e-mail) — allowlist reste `ALLOWED_EMAILS` côté VPS. Mentions légales / responsable RGPD conservent l’identité éditeur (obligation BE/UE).
-- **Enregistrement VPS** (13 août 2026) : **indépendant du live**. Studio : bouton **Enregistrer sur le VPS** (MediaRecorder → chunks → ffmpeg MP4 H.264 CRF 28 + AAC 256k). Le live WHIP/MediaMTX n’est ni la source ni une condition. Même capture possible pour les deux. Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`. Module [`studio/record.mjs`](studio/record.mjs). Lien **Diffuser et enregistrer** dans `#stream` une fois connecté.
+- **Enregistrement VPS** (13 août 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks → ffmpeg MP4. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist, `<video>`, télécharger, supprimer). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET /hakou-studio/api/stream/status` (alias `/api/radio/status`) — **auth requise**.
@@ -119,7 +119,7 @@
 
 - **Intro (section 0)** : repos = `computeSectionCamera(0)` uniquement. Focale **42 mm**. Neptune `camDistMul` **2,40**, `distScale` **1,53**, `orbitSunLift` **0,08**. `INTRO_SNAP_FRAMES` 5. Pas de dérive caméra au repos Intro.
 
-- **Ordre planètes / caméra** : 0 Pluton → 1 Neptune GLB → 2 Uranus GLB → 3 Saturne GLB (+ anneaux) → 4 Jupiter GLB → 5 Mars GLB → **6 Terre GLB + Lune (Sites)** → **7 Vénus GLB (Plugin)** → 8 Mercure GLB ; Soleil au centre. Voyage 0→8 « vers le Soleil ». **Décoratifs** : Cérès (ceinture) + Lune. Terre : texture **N–S inversée**. Mode **Voir** : vue libre après grab ; retour héro seulement au Retour (blend). Cache-bust `stayOrbit36`.
+- **Ordre planètes / caméra** : 0 **Pluton GLB** → 1 Neptune GLB → 2 Uranus GLB → 3 Saturne GLB (+ anneaux) → 4 Jupiter GLB → 5 Mars GLB → **6 Terre GLB + Lune (Sites)** → **7 Vénus GLB (Plugin)** → 8 Mercure GLB ; Soleil au centre. Voyage 0→8 « vers le Soleil ». **Décoratifs** : Cérès (ceinture) + Lune. Terre : texture **N–S inversée**. Mode **Voir** : vue libre après grab ; retour héro seulement au Retour (blend). Cache-bust `pluto37`.
 
 - **Échelles / spins / ombres (août 2026)** : rayons relatifs ancrés sur Terre ; géants compressés `^0,48`. Inclinaisons / spins sidéraux. **Soleil** `sunKeyLight` sur planète active.
 
@@ -177,9 +177,9 @@
 
 - Pendant un saut long : orbites planètes continues ; accent / proximité visuelle via `getActiveSectionIndex` / `getSectionProximity` (from/to).
 
-- **Orbit manuelle au repos** : hors mode focus, le canvas reste en `pointer-events: none` (nav / panels prioritaires). **Mode observation planète** (`#planet-focus`) : **avant le premier grab = cadrage héro** (comme avec le texte) ; après grab = **vue libre conservée** (inertie puis repos sur place) ; **Retour** uniquement ramène au héro (fondu hub ~0,65 s + blend caméra `FOCUS_EXIT_MS` 680 ms). Spin gelé pendant grab. Molette/pinch : zoom héro avant grab, zoom rayon après. Exports `setPlanetFocusMode` / `isPlanetFocusMode` ; `setPlanetFocus` / `isPlanetFocusActive`.
+- **Orbit manuelle au repos** : hors mode focus, le canvas reste en `pointer-events: none` (nav / panels prioritaires). **Mode observation planète** (`#planet-focus`) : clic **Voir** → blend `FOCUS_ENTER_MS` 900 ms du cadrage héro (planète en bord, regard horizon) vers une **vue face au globe** (lookAt centre, rayon ~`FOCUS_OBSERVE_RADIUS_MUL` × taille, élévation adoucie) — plus de téléport au premier drag ; **Retour** → blend `FOCUS_EXIT_MS` 680 ms vers héro. Spin gelé pendant grab. Exports `setPlanetFocusMode` / `isPlanetFocusMode` ; `setPlanetFocus` / `isPlanetFocusActive`.
 
-- **Orbit manuelle (détail technique)** : free-orbit si `sectionUserOrbit.modified` via `focusOrbitToPos` (repère Soleil→planète). Clear `modified` seulement à l’entrée Voir (reset) et à la sortie Retour (`beginFocusExitBlend`). Spins : `spinSpeedFromPeriodHours` × `PLANET_SPIN_MUL` ; Uranus / Vénus rétrogrades.
+- **Orbit manuelle (détail technique)** : free-orbit si `sectionUserOrbit.modified` via `focusOrbitToPos`. Entrée : branche caméra dédiée `focusEnterActive` (pas de héro parasite) → `commitFocusEnterOrbit` ; sortie : `beginFocusExitBlend` + clear `modified`. Spins : `spinSpeedFromPeriodHours` × `PLANET_SPIN_MUL` ; Uranus / Vénus rétrogrades.
 
 
 
@@ -207,6 +207,7 @@
 
 | `stream-gate.js` | Auth allowlist pour `#stream` : session `/api/auth/me`, login Google, déverrouille `radio.js` / `radio-chat.js` |
 | `radio.js` | Zone **Stream** (`#stream`) : démarre **après** auth ; priorité **studio** → **Twitch live** → live YouTube ; **hors antenne** = logo `assets/logo-hakou.svg` (plus de playlist YouTube) ; poll ~20 s ; status API `credentials: include` |
+| `stream-recordings.js` | Galerie MP4 VPS dans `#stream` après auth : `GET /api/studio/recordings` |
 | `studio/record.mjs` | Enregistrement VPS de la **capture** (chunks MediaRecorder + ffmpeg MP4) — **pas** le live MediaMTX |
 | `radio-chat.js` | Chat public Stream (WebSocket VPS) : pseudo `Visiteur-xxxx` dérivé IP (éditable), messages texte/emoji, présence. **Téléphone (≤680px)** : composer 1 ligne (champ + Envoyer), chat plus court, padding bas Stream renforcé, bouton INTRO masqué sur Stream |
 

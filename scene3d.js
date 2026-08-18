@@ -3,8 +3,9 @@ import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
-const PLANET_GLB_V = "30";
+const PLANET_GLB_V = "37";
 const PLANET_GLB = {
+  pluto: `assets/planets/pluto.glb?v=${PLANET_GLB_V}`,
   neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
   saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
   jupiter: `assets/planets/jupiter.glb?v=${PLANET_GLB_V}`,
@@ -121,8 +122,11 @@ const FOCUS_ORBIT_PINCH_ZOOM_POW = 1;
 /** Zoom héro en mode Voir (hors grab) — même cadrage que le hub, distance variable. */
 const FOCUS_HERO_ZOOM_MIN = 0.55;
 const FOCUS_HERO_ZOOM_MAX = 2.35;
-/** Retour Voir → hub : blend caméra (ms). */
+/** Entrée / sortie Voir ↔ hub : blend caméra (ms). */
+const FOCUS_ENTER_MS = 900;
 const FOCUS_EXIT_MS = 680;
+/** Distance d’observation (× rayon planète) — vue « face au globe » après Voir. */
+const FOCUS_OBSERVE_RADIUS_MUL = 3.75;
 /** Derniers % du leg : convergence douce vers le cadrage héro destination. */
 const GLIDE_HERO_BLEND_START = 0.88;
 /** Trajectoire glide : mélange courbe Bézier + composante radiale Soleil. */
@@ -452,6 +456,7 @@ const PLANETS = [
     camTangent: 0.34,
     atmRadiusMul: 1.012,
     atmIntensity: 0.05,
+    gltfUrl: PLANET_GLB.pluto,
   },
   {
     name: "Neptune",
@@ -773,7 +778,16 @@ let focusOrbitRadiusMax = 80;
 let focusOrbitLastTickMs = 0;
 /** Zoom sur le cadrage héro pendant Voir (1 = identique au hub). */
 let focusHeroZoomMul = 1;
-/** Blend souple caméra à la sortie du mode Voir. */
+/** Blend souple caméra à l’entrée / sortie du mode Voir. */
+let focusEnterActive = false;
+let focusEnterStartMs = 0;
+const focusEnterFromPos = new THREE.Vector3();
+const focusEnterFromLook = new THREE.Vector3();
+const focusEnterToPos = new THREE.Vector3();
+const focusEnterToLook = new THREE.Vector3();
+let focusEnterOrbitRadius = 0;
+let focusEnterOrbitAzimuth = 0;
+let focusEnterOrbitElevation = 0;
 let focusExitActive = false;
 let focusExitStartMs = 0;
 const focusExitFromPos = new THREE.Vector3();
@@ -1540,6 +1554,9 @@ function clearOrbitVelocity(sectionIndex = lastAtRestSectionIndex) {
 }
 
 function ensureFocusOrbitCaptured(sectionIndex = lastAtRestSectionIndex) {
+  if (focusEnterActive) {
+    finishFocusEnterBlend(true);
+  }
   const orbit = sectionUserOrbit[sectionIndex];
   if (!orbit) return;
   if (!orbit.modified) {
@@ -1834,6 +1851,9 @@ function tickFocusOrbitInertia() {
 function onOrbitWheel(event) {
   if (!planetFocusMode || !canOrbitDrag()) return;
   event.preventDefault();
+  if (focusEnterActive) {
+    finishFocusEnterBlend(true);
+  }
   const idx = lastAtRestSectionIndex;
 
   if (isFocusFreeOrbitActive(idx) || isFocusManipulating()) {
@@ -1899,6 +1919,7 @@ function beginFocusExitBlend() {
     focusExitActive = false;
     return;
   }
+  focusEnterActive = false;
   focusExitFromPos.copy(camera.position);
   const idx = lastAtRestSectionIndex;
   const planet = PLANETS[idx];
@@ -1919,6 +1940,100 @@ function focusExitEase() {
   return u * u * (3 - 2 * u);
 }
 
+function focusEnterEase() {
+  if (!focusEnterActive) return 1;
+  const u = clamp((performance.now() - focusEnterStartMs) / FOCUS_ENTER_MS, 0, 1);
+  return u * u * (3 - 2 * u);
+}
+
+/** Pose observation : face au centre planète (image « Voir »), pas le cadrage héro. */
+function beginFocusEnterBlend() {
+  if (!camera) {
+    focusEnterActive = false;
+    return;
+  }
+  focusExitActive = false;
+  const idx = lastAtRestSectionIndex;
+  const planet = PLANETS[idx];
+  const elapsed = clock?.getElapsedTime() ?? 0;
+  const orbit = sectionUserOrbit[idx];
+  if (!orbit || !planet) {
+    focusEnterActive = false;
+    return;
+  }
+
+  // Départ = cadrage actuel (héro / hub).
+  focusEnterFromPos.copy(camera.position);
+  getFocusPivot(idx, focusEnterToLook, elapsed, idx, null);
+  const fromLookDist = Math.max(
+    camera.position.distanceTo(focusEnterToLook),
+    planet.size * 1.5
+  );
+  camera.getWorldDirection(tmpSeg);
+  focusEnterFromLook.copy(camera.position).addScaledVector(tmpSeg, fromLookDist);
+
+  // Arrivée = même côté de la planète, regard au centre, distance « observe ».
+  posToFocusOrbit(camera.position, focusEnterToLook, orbit);
+  updateFocusOrbitRadiusLimits(idx);
+  const preferRadius = clamp(
+    planet.size * FOCUS_OBSERVE_RADIUS_MUL,
+    focusOrbitRadiusMin,
+    focusOrbitRadiusMax
+  );
+  // Se rapprocher si on est trop loin ; ne pas s’éloigner si déjà plus près.
+  orbit.radius = clamp(
+    Math.min(orbit.radius, preferRadius),
+    focusOrbitRadiusMin,
+    focusOrbitRadiusMax
+  );
+  // Adoucir l’élévation vers une vue plus frontale (évite de garder l’horizon héro).
+  orbit.elevation = clamp(
+    orbit.elevation * 0.25,
+    FOCUS_ORBIT_ELEV_MIN,
+    FOCUS_ORBIT_ELEV_MAX
+  );
+  focusOrbitToPos(
+    focusEnterToLook,
+    orbit.radius,
+    orbit.azimuth,
+    orbit.elevation,
+    focusEnterToPos
+  );
+  focusEnterOrbitRadius = orbit.radius;
+  focusEnterOrbitAzimuth = orbit.azimuth;
+  focusEnterOrbitElevation = orbit.elevation;
+  orbit.modified = false;
+  clearOrbitVelocity(idx);
+
+  focusEnterStartMs = performance.now();
+  focusEnterActive = true;
+}
+
+function commitFocusEnterOrbit() {
+  const idx = lastAtRestSectionIndex;
+  const orbit = sectionUserOrbit[idx];
+  if (!orbit) return;
+  orbit.radius = focusEnterOrbitRadius;
+  orbit.azimuth = focusEnterOrbitAzimuth;
+  orbit.elevation = focusEnterOrbitElevation;
+  orbit.modified = true;
+  orbit.azVel = 0;
+  orbit.elVel = 0;
+  updateFocusOrbitRadiusLimits(idx);
+}
+
+/** Termine le blend d’entrée (arrivée naturelle ou interruption grab). */
+function finishFocusEnterBlend(snapToTarget = true) {
+  if (!focusEnterActive) return;
+  focusEnterActive = false;
+  if (snapToTarget && camera) {
+    camera.position.copy(focusEnterToPos);
+    smoothedCamPos.copy(focusEnterToPos);
+    camera.lookAt(focusEnterToLook);
+  }
+  commitFocusEnterOrbit();
+}
+
 /** Active le mode observation (drag + zoom caméra autour de la planète). */
 export function setPlanetFocusMode(active) {
   const next = Boolean(active);
@@ -1931,9 +2046,13 @@ export function setPlanetFocusMode(active) {
     planetFocusMode = true;
     focusOrbitLastTickMs = performance.now();
     focusHeroZoomMul = 1;
-    // Reste sur le cadrage héro jusqu’au premier grab (comme avec le texte).
     clearSectionUserOrbit(lastAtRestSectionIndex);
+    beginFocusEnterBlend();
   } else {
+    if (focusEnterActive) {
+      // Interrompre l’entrée : repartir de la pose courante vers le hub.
+      focusEnterActive = false;
+    }
     beginFocusExitBlend();
     endOrbitDrag();
     resetFocusSpinHold();
@@ -3784,6 +3903,20 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
     }
     introSnapFrames += 1;
     camSmoothReady = true;
+  } else if (focusEnterActive && !inGlide) {
+    // Entrée Voir : uniquement le blend héro → face planète (pas de cadrage héro parasite).
+    if (!camSmoothReady) {
+      smoothedCamPos.copy(focusEnterFromPos);
+      camSmoothReady = true;
+    }
+    const u = focusEnterEase();
+    camera.position.lerpVectors(focusEnterFromPos, focusEnterToPos, u);
+    smoothedCamPos.copy(camera.position);
+    tmpFocusPivot.lerpVectors(focusEnterFromLook, focusEnterToLook, u);
+    camera.lookAt(tmpFocusPivot);
+    if (u >= 1 - 1e-4) {
+      finishFocusEnterBlend(true);
+    }
   } else {
     if (!camSmoothReady) {
       smoothedCamPos.copy(cam.position);
