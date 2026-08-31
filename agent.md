@@ -7,7 +7,7 @@
 - UI : zone **Stream** (`#stream`, nav « Stream ») — ex-Radio.
 - **Accès restreint** (4 août 2026) : player + chat uniquement si session Google allowlist. Gate [`stream-gate.js`](stream-gate.js) + login Google ; API `GET /api/stream/status` et WebSocket chat exigent le cookie studio. Contenu masqué (`#stream-lock` / `#stream-content`) tant que non connecté. **Noms des comptes** : plus affichés dans l’UI publique (lock, messages « Connecté », aria-label e-mail) — allowlist reste `ALLOWED_EMAILS` côté VPS. Mentions légales / responsable RGPD conservent l’identité éditeur (obligation BE/UE).
 - **Enregistrement VPS** (31 août 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks MediaRecorder **pipés** dans ffmpeg (plus de concat WebM) → MP4 AAC **320 kb/s**. Badge **son d’onglet** vs **micro (qualité limitée)**. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist, `<video>`, télécharger, supprimer). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
-- **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live. **URI Google exacte** : `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/studio/youtube/callback` (sinon `redirect_uri_mismatch`). Twitch = **clé de stream collée** (OAuth Helix optionnel, pas encore `TWITCH_CLIENT_*` sur le VPS). Relais ffmpeg RTSP local `:8554` → RTMP. Comptes chiffrés `studio/data/live-accounts.bin`.
+- **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live. **URI Google exacte** : `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/studio/youtube/callback` (sinon `redirect_uri_mismatch`). Twitch = **clé de stream collée** (OAuth Helix optionnel, pas encore `TWITCH_CLIENT_*` sur le VPS). Après save : champ vide **exprès** ; bandeau vert dans la carte (`#studio-tw-result`) + aperçu `live_…xxxx` (`streamKeyHint`, jamais la clé complète) + destination Twitch auto-sélectionnée. Relais ffmpeg RTSP local `:8554` → RTMP. Comptes chiffrés `studio/data/live-accounts.bin`.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET /hakou-studio/api/stream/status` (alias `/api/radio/status`) — **auth requise**.
@@ -51,7 +51,7 @@
 
 - **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
 - **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
-- **Dernier redéploiement** : 31 août 2026 — restream YouTube/Twitch + pipe ffmpeg enregistrement AAC 320k ; rsync `studio/` ; MediaMTX RTSP local ; `pm2 restart hakou-studio`.
+- **Dernier redéploiement** : 31 août 2026 — feedback clé Twitch (bandeau vert + hint) ; rsync `studio/` ; `pm2 restart hakou-studio`.
 
 
 

@@ -6,7 +6,7 @@
     <title>Hakou Studio — Live Stream</title>
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" sizes="180x180" />
-    <link rel="stylesheet" href="./studio.css" />
+    <link rel="stylesheet" href="./studio.css?v=20260831twk" />
   </head>
   <body class="studio-body">
     <header class="studio-top">
@@ -130,9 +130,11 @@
         <article class="studio-account" id="studio-account-twitch">
           <h3>Twitch</h3>
           <p id="studio-tw-status" class="studio-account__status muted">Colle la clé de stream pour diffuser.</p>
+          <p id="studio-tw-result" class="studio-account__result" hidden role="status"></p>
           <p class="studio-account__help muted">
-            La clé suffit (Dashboard Twitch → Paramètres → Stream). « Connecter
-            Twitch » n’est utile que pour lier le nom de chaîne.
+            La clé suffit (Dashboard Twitch → Paramètres → Stream). Après
+            enregistrement, le champ se vide (normal) : un bandeau vert confirme
+            que la clé est stockée sur le VPS.
           </p>
           <div class="studio-account__actions">
             <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-tw-connect" hidden href="./api/studio/twitch/connect">
@@ -168,6 +170,6 @@
       <ul id="studio-recordings-list" class="studio-recordings__list"></ul>
     </section>
 
-    <script type="module" src="./studio.js"></script>
+    <script type="module" src="./studio.js?v=20260831twk"></script>
   </body>
 </html>

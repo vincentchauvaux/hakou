@@ -68,7 +68,7 @@ Durcissement : CORS, maxPayload, rate-limits, sanitisation, kick.
 Hakou.be reste toujours alimenté. En plus, tu peux relayer le live vers **YouTube** ou **Twitch** (un seul à la fois).
 
 - **YouTube** : bouton « Connecter YouTube » (OAuth scopes Live, distinct du login allowlist). La chaîne doit avoir le live activé. Redirect URI ci-dessus.
-- **Twitch** : « Connecter Twitch » (identité Helix) + coller **une fois** la clé de stream (Dashboard → Paramètres → Stream). Helix ne fournit pas la clé.
+- **Twitch** : coller **une fois** la clé de stream (Dashboard → Paramètres → Stream). Le champ se vide après save (normal) ; un bandeau vert + aperçu `live_…xxxx` confirment le stockage VPS. « Connecter Twitch » (OAuth Helix) est optionnel et masqué tant que `TWITCH_CLIENT_*` n’est pas sur le VPS. Helix ne fournit pas la clé.
 - Secrets comptes : fichier chiffré `LIVE_ACCOUNTS_PATH` (défaut `studio/data/live-accounts.bin`, chmod 600, hors git).
 - Relais : ffmpeg `RTSP local → RTMP` (audio AAC 320 kb/s). Pas de nouveau port inbound.
 

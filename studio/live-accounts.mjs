@@ -41,12 +41,25 @@ function publicYoutube(yt) {
 
 function publicTwitch(tw) {
   if (!tw?.login && !tw?.streamKey) {
-    return { connected: false, login: null, hasStreamKey: false };
+    return {
+      connected: false,
+      login: null,
+      hasStreamKey: false,
+      streamKeyHint: null,
+    };
+  }
+  const key = String(tw.streamKey || "");
+  let streamKeyHint = null;
+  if (key.length >= 8) {
+    streamKeyHint = `${key.slice(0, 5)}…${key.slice(-4)}`;
+  } else if (key) {
+    streamKeyHint = "••••";
   }
   return {
     connected: Boolean(tw.login),
     login: tw.login || null,
-    hasStreamKey: Boolean(tw.streamKey),
+    hasStreamKey: Boolean(key),
+    streamKeyHint,
   };
 }
 

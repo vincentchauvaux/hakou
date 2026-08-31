@@ -378,8 +378,31 @@ body {
   background: rgba(0, 0, 0, 0.28);
 }
 
-.studio-account__status {
+.studio-account.is-ready {
+  border-color: rgba(80, 180, 120, 0.55);
+}
+
+.studio-account__status.is-ok {
+  color: #9ee0b8 !important;
+  font-weight: 650;
+}
+
+.studio-account__result {
   margin: 0 0 0.65rem !important;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.studio-account__result.is-ok {
+  color: #c8f0d6;
+  background: rgba(40, 120, 80, 0.35);
+}
+
+.studio-account__result.is-err {
+  color: #ffd0c8;
+  background: rgba(160, 50, 40, 0.4);
 }
 
 .studio-account__help {

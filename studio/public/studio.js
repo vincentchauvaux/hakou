@@ -29,6 +29,8 @@ const twDisconnect = document.getElementById("studio-tw-disconnect");
 const twKeyForm = document.getElementById("studio-tw-key-form");
 const twKeyInput = document.getElementById("studio-tw-key");
 const twKeySave = document.getElementById("studio-tw-key-save");
+const twResultEl = document.getElementById("studio-tw-result");
+const twAccountEl = document.getElementById("studio-account-twitch");
 const ytHelpEl = document.getElementById("studio-yt-help");
 const ytCopyUri = document.getElementById("studio-yt-copy-uri");
 
@@ -55,7 +57,7 @@ let captureAudioKind = null;
 let destState = {
   destination: "hakou",
   youtube: { connected: false },
-  twitch: { connected: false, hasStreamKey: false },
+  twitch: { connected: false, hasStreamKey: false, streamKeyHint: null },
   youtubeOAuth: false,
   twitchOAuth: false,
 };
@@ -101,7 +103,7 @@ function applyDestinations(data) {
   destState = {
     destination: data.destination || "hakou",
     youtube: data.youtube || { connected: false },
-    twitch: data.twitch || { connected: false, hasStreamKey: false },
+    twitch: data.twitch || { connected: false, hasStreamKey: false, streamKeyHint: null },
     youtubeOAuth: Boolean(data.youtubeOAuth),
     twitchOAuth: Boolean(data.twitchOAuth),
   };
@@ -128,12 +130,17 @@ function applyDestinations(data) {
   if (ytConnect) ytConnect.hidden = ytOk || !destState.youtubeOAuth;
   if (ytDisconnect) ytDisconnect.hidden = !ytOk;
   if (twStatusEl) {
-    if (destState.twitch.hasStreamKey) {
+    twStatusEl.classList.toggle("is-ok", twReady);
+    twStatusEl.classList.toggle("muted", !twReady);
+    if (twReady) {
+      const hint = destState.twitch.streamKeyHint
+        ? ` (${destState.twitch.streamKeyHint})`
+        : "";
       const who =
         destState.twitch.connected && destState.twitch.login
           ? ` @${destState.twitch.login}`
           : "";
-      twStatusEl.textContent = `Clé enregistrée${who} — choisis Twitch dans Destination live.`;
+      twStatusEl.textContent = `Clé enregistrée${hint}${who}. Choisis Twitch en haut, puis Passer en direct.`;
     } else if (!destState.twitchOAuth) {
       twStatusEl.textContent =
         "Colle la clé de stream ci-dessous (pas besoin de « Connecter Twitch »).";
@@ -142,6 +149,23 @@ function applyDestinations(data) {
         ? `@${destState.twitch.login} — colle encore la clé de stream.`
         : "Colle la clé de stream, ou lie le compte puis la clé.";
     }
+  }
+  twAccountEl?.classList.toggle("is-ready", twReady);
+  if (twKeyInput) {
+    twKeyInput.placeholder = twReady
+      ? `Enregistrée${destState.twitch.streamKeyHint ? ` : ${destState.twitch.streamKeyHint}` : ""} — coller une nouvelle clé pour remplacer`
+      : "live_…";
+  }
+  if (twKeySave) {
+    twKeySave.textContent = twReady ? "Remplacer la clé" : "Enregistrer la clé";
+  }
+  if (!twReady) {
+    setTwitchResult(null);
+  } else if (twResultEl?.hidden) {
+    const hint = destState.twitch.streamKeyHint
+      ? ` (${destState.twitch.streamKeyHint})`
+      : "";
+    setTwitchResult(`Clé déjà enregistrée sur le VPS${hint}.`, true);
   }
   if (twConnect) twConnect.hidden = destState.twitch.connected || !destState.twitchOAuth;
   if (twDisconnect) twDisconnect.hidden = !destState.twitch.connected && !destState.twitch.hasStreamKey;
@@ -1147,22 +1171,59 @@ twDisconnect?.addEventListener("click", async () => {
 
 async function saveTwitchKey() {
   const streamKey = twKeyInput?.value || "";
-  const res = await fetch("./api/studio/twitch/stream-key", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ streamKey }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    setStatus(data.error || "Clé Twitch refusée.", { sticky: true });
+  if (twKeySave) twKeySave.disabled = true;
+  setTwitchResult(null);
+  try {
+    const res = await fetch("./api/studio/twitch/stream-key", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ streamKey }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = data.error || "Clé Twitch refusée.";
+      setTwitchResult(err, false);
+      setStatus(err, { sticky: true });
+      return;
+    }
+    if (twKeyInput) twKeyInput.value = "";
+    applyDestinations(data);
+    const hint = data.twitch?.streamKeyHint
+      ? ` Aperçu : ${data.twitch.streamKeyHint}.`
+      : "";
+    setTwitchResult(
+      `C’est bon — la clé est stockée sur le VPS.${hint} Le champ se vide exprès (la clé n’est jamais réaffichée). Destination Twitch sélectionnée : tu peux Passer en direct.`,
+      true
+    );
+    setStatus("Clé Twitch enregistrée — destination Twitch prête.", {
+      sticky: true,
+    });
+    if (!streaming) {
+      await saveDestination("twitch").catch(() => {});
+    }
+    twResultEl?.scrollIntoView({ block: "center", behavior: "smooth" });
+  } catch (err) {
+    const msg = err?.message || "Impossible d’enregistrer la clé.";
+    setTwitchResult(msg, false);
+    setStatus(msg, { sticky: true });
+  } finally {
+    if (twKeySave) twKeySave.disabled = false;
+  }
+}
+
+function setTwitchResult(msg, ok) {
+  if (!twResultEl) return;
+  if (!msg) {
+    twResultEl.hidden = true;
+    twResultEl.textContent = "";
+    twResultEl.classList.remove("is-ok", "is-err");
     return;
   }
-  if (twKeyInput) twKeyInput.value = "";
-  applyDestinations(data);
-  setStatus("Clé Twitch enregistrée — choisis Twitch dans Destination live, puis Passer en direct.", {
-    sticky: true,
-  });
+  twResultEl.hidden = false;
+  twResultEl.textContent = msg;
+  twResultEl.classList.toggle("is-ok", ok === true);
+  twResultEl.classList.toggle("is-err", ok === false);
 }
 
 twKeyForm?.addEventListener("submit", (ev) => {
