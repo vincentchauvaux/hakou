@@ -195,7 +195,7 @@
 
 | `main.js` | Boucle RAF, lie navigation + rendu + intro gate ; repli sans WebGL si `initScene` échoue |
 
-| `intro-gate.js` | Intro : `sessionStorage` skip, gate 3D, clic logo → zoom, login Google → studio |
+| `intro-gate.js` | Intro : `sessionStorage` skip, gate 3D, clic logo → zoom §0 ; login Google → vol Soleil (§8) puis studio |
 
 | `auth-client.js` | GIS Google + `POST` auth VPS (`content/auth-config.json`) |
 
@@ -401,7 +401,7 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Pl
   - Serveur VPS : `/opt/hakou-studio` (code + `pm2` `hakou-studio` :8787). `POST /api/auth/google` vérifie l’ID token GIS, cookie HttpOnly `SameSite=None; Secure` path `/hakou-studio` + cookie média `hakou_media` Path=`/`. Chat Stream : [`studio/radio-chat.mjs`](studio/radio-chat.mjs) WebSocket `/api/radio/chat` — **auth session** + CORS, rate-limit, sanitisation, plafond IP/clients.
   - **Secrets** : `GOOGLE_CLIENT_SECRET` + `SESSION_SECRET` uniquement dans `/opt/hakou-studio/.env` (`chmod 600`, hors git). Le JSON `client_secret_*.json` Google ne doit **jamais** être committer (`.gitignore`).
   - Nginx : snippet `/etc/nginx/snippets/hakou-studio.conf` (`location /hakou-studio/` → `127.0.0.1:8787`), `include` dans le vhost HTTPS `streamtv` (`vps-e09ed6db.vps.ovh.net`). Exemple repo : [`studio/deploy/nginx-hakou-studio.conf.example`](studio/deploy/nginx-hakou-studio.conf.example).
-  - Après login OK : zoom intro puis **redirect** vers le studio. Sans session → 401 sur `/hakou-studio/`.
+  - Après login OK : zoom intro (§0) puis **saut long** jusqu’au Soleil (§8 Contact, même glide que le menu) ; overlay masqué (`data-studio-arrive`) ; à l’arrivée **redirect** studio. Sans session → 401 sur `/hakou-studio/`.
   - Setup détaillé : [`studio/README.md`](studio/README.md).
 - **Live studio (Étape 3)** :
   - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.

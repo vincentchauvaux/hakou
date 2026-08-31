@@ -781,11 +781,29 @@ function startGlide(toIndex, fromSection) {
   syncScrollGate();
 }
 
+/** Appelé une fois à l’arrivée d’un `goToSectionIndex(..., onArrive)`. */
+let pendingArriveCallback = null;
+
+function flushArriveCallback() {
+  const cb = pendingArriveCallback;
+  pendingArriveCallback = null;
+  if (typeof cb !== "function") return;
+  try {
+    cb();
+  } catch (err) {
+    console.warn("[Hakou Nav] onArrive", err);
+  }
+}
+
 function goToSection(index) {
-  if (isNavInputBlocked()) return;
+  if (isNavInputBlocked()) {
+    flushArriveCallback();
+    return;
+  }
   const target = clamp(index, 0, sectionCount - 1);
   if (target === currentSection) {
     resetGate();
+    flushArriveCallback();
     return;
   }
   if (isAnimating) {
@@ -1249,6 +1267,7 @@ export function tickNavigation(now) {
       resetActivePanelScroll();
       resetGlideDepartingPanelScroll();
       syncPlanetFocusButton();
+      flushArriveCallback();
     }
   } else {
     displaySection = currentSection;
@@ -1288,7 +1307,10 @@ export function getGlideState() {
   };
 }
 
-export function goToSectionIndex(index) {
+export function goToSectionIndex(index, onArrive) {
+  if (typeof onArrive === "function") {
+    pendingArriveCallback = onArrive;
+  }
   goToSection(index);
 }
 

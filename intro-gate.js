@@ -6,6 +6,7 @@ import {
 import {
   setNavigationLocked,
   goToSectionIndex,
+  getSectionCount,
 } from "./navigation.js";
 import { initGoogleLogin } from "./auth-client.js";
 
@@ -41,6 +42,31 @@ function finishIntro({ redirectUrl } = {}) {
   if (redirectUrl) {
     window.location.assign(redirectUrl);
   }
+}
+
+/**
+ * Après login : même saut long que le menu (Intro → Contact / Soleil),
+ * puis ouverture du studio.
+ */
+function flyToSunThenStudio(studioUrl) {
+  document.body.dataset.studioArrive = "1";
+  finishIntro();
+  if (!studioUrl) {
+    delete document.body.dataset.studioArrive;
+    return;
+  }
+  if (document.body.dataset.webgl === "unavailable") {
+    window.location.assign(studioUrl);
+    return;
+  }
+  const sunIndex = Math.max(0, getSectionCount() - 1);
+  window.requestAnimationFrame(() => {
+    goToSectionIndex(sunIndex, () => {
+      window.setTimeout(() => {
+        window.location.assign(studioUrl);
+      }, 900);
+    });
+  });
 }
 
 function playEnterZoom(after) {
@@ -126,11 +152,7 @@ function bindIntroUi() {
     initGoogleLogin(loginBtn, {
       onSuccess: ({ studioUrl }) => {
         setLoginMessage("Connecté");
-        playEnterZoom(() =>
-          finishIntro({
-            redirectUrl: studioUrl || undefined,
-          })
-        );
+        playEnterZoom(() => flyToSunThenStudio(studioUrl));
       },
       onError: (message) => {
         loginBtn.classList.add("is-stub");

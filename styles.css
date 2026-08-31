@@ -218,6 +218,17 @@ body[data-intro="playing"] .intro-copy {
   transition: opacity 0.35s ease;
 }
 
+/* Arrivée studio : vol vers le Soleil sans flash du panel Contact. */
+body[data-studio-arrive="1"] #overlay {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body[data-studio-arrive="1"] .chrome-actions {
+  display: none;
+}
+
 body[data-intro="done"] .intro-gate,
 .intro-gate[hidden] {
   display: none !important;
