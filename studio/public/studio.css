@@ -334,6 +334,13 @@ body {
   color: var(--accent);
 }
 
+.studio-dest__hint {
+  flex: 1 0 100%;
+  margin: 0 0 0.15rem !important;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .studio-dest__opt {
   display: inline-flex;
   align-items: center;

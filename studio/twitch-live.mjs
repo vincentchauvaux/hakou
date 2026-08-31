@@ -167,9 +167,12 @@ export async function twitchRtmpUrl(streamKey) {
     });
     const body = await res.json().catch(() => ({}));
     const list = Array.isArray(body.ingests) ? body.ingests : [];
+    const available = list.filter((i) => i.url_template);
     const best =
-      list.find((i) => Number(i.availability) === 1 && i.url_template) ||
-      list.find((i) => i.url_template);
+      available.find((i) => /Paris/i.test(i.name || "")) ||
+      available.find((i) => /Frankfurt|Ireland|Europe/i.test(i.name || "")) ||
+      available.find((i) => Number(i.availability) === 1) ||
+      available[0];
     if (best?.url_template) {
       return String(best.url_template).replace("{stream_key}", key);
     }

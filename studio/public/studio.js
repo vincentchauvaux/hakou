@@ -61,6 +61,8 @@ let destState = {
   youtubeOAuth: false,
   twitchOAuth: false,
 };
+let restreamWatch = null;
+let restreamExpected = false;
 
 /** Safari / iOS : pas de son système via getDisplayMedia — audio:true peut bloquer la Promise. */
 function isAppleWebKit() {
@@ -564,18 +566,27 @@ function preferH264Video(pc) {
   const caps = RTCRtpSender.getCapabilities("video");
   if (!caps?.codecs?.length) return;
   const h264 = caps.codecs.filter((c) => /H264/i.test(c.mimeType));
-  if (!h264.length) {
-    console.warn("[Hakou Studio] H264 indisponible — HLS n’aura pas de vidéo (VP8).");
+  const vp8 = caps.codecs.filter((c) => /VP8/i.test(c.mimeType));
+  if (!h264.length && !vp8.length) {
+    console.warn("[Hakou Studio] ni H264 ni VP8 — la vidéo WHIP peut échouer.");
     return;
   }
-  const rest = caps.codecs.filter(
-    (c) => !/H264/i.test(c.mimeType) && !/VP8|VP9/i.test(c.mimeType)
+  const h264Mode1 = h264.filter((c) =>
+    /packetization-mode=1/.test(c.sdpFmtpLine || "")
   );
+  const rest = caps.codecs.filter(
+    (c) => !/H264|VP8|VP9|AV1/i.test(c.mimeType)
+  );
+  const ordered = [
+    ...(h264Mode1.length ? h264Mode1 : h264),
+    ...vp8,
+    ...rest,
+  ];
   for (const t of pc.getTransceivers()) {
     if (t.sender?.track?.kind !== "video") continue;
     if (typeof t.setCodecPreferences !== "function") continue;
     try {
-      t.setCodecPreferences([...h264, ...rest]);
+      t.setCodecPreferences(ordered);
     } catch (err) {
       console.warn("[Hakou Studio] setCodecPreferences", err);
     }
@@ -589,9 +600,12 @@ function preferH264Video(pc) {
  */
 async function acquireDisplayStream() {
   const safari = isAppleWebKit();
-  const videoOnly = { video: true, audio: false };
+  const videoOnly = {
+    video: { frameRate: { ideal: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    audio: false,
+  };
   const withAudio = {
-    video: true,
+    video: { frameRate: { ideal: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
     audio: true,
     systemAudio: "include",
   };
@@ -631,6 +645,13 @@ async function acquireDisplayStream() {
   }
 
   const displayAudio = stream.getAudioTracks();
+  for (const t of stream.getVideoTracks()) {
+    try {
+      t.contentHint = "detail";
+    } catch {
+      /* ignore */
+    }
+  }
   if (displayAudio.length) {
     displayAudio.forEach((t) => {
       t.enabled = true;
@@ -748,6 +769,10 @@ async function publishWhip(stream, ingest) {
     pc.addTrack(track, stream);
   }
   preferH264Video(pc);
+  console.info(
+    "[Hakou Studio] WHIP tracks",
+    stream.getTracks().map((t) => `${t.kind}:${t.readyState}`).join(", ")
+  );
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -1018,12 +1043,58 @@ function togglePause() {
   else pauseRecord();
 }
 
+function stopRestreamWatch() {
+  if (restreamWatch) {
+    clearInterval(restreamWatch);
+    restreamWatch = null;
+  }
+  restreamExpected = false;
+}
+
+function startRestreamWatch() {
+  stopRestreamWatch();
+  restreamExpected = true;
+  restreamWatch = setInterval(() => {
+    watchRestream().catch(() => {});
+  }, 4000);
+}
+
+async function watchRestream() {
+  if (!streaming || !restreamExpected) {
+    stopRestreamWatch();
+    return;
+  }
+  const res = await fetch("./api/studio/restream", {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!res.ok) return;
+  const data = await res.json().catch(() => ({}));
+  if (data.active) return;
+  restreamExpected = false;
+  stopRestreamWatch();
+  const dest = selectedDestination();
+  const where = dest === "youtube" ? "YouTube" : dest === "twitch" ? "Twitch" : "la destination";
+  setStatus(
+    `En direct sur Hakou, mais plus sur ${where}${data.error ? ` : ${data.error}` : "."}`,
+    { sticky: true }
+  );
+}
+
 async function startStream() {
   if (startInFlight || streaming) return;
   startInFlight = true;
   syncButtons();
   try {
     await ensureCapture();
+    const liveVideo = localStream
+      ?.getVideoTracks?.()
+      .some((t) => t.readyState === "live");
+    if (!liveVideo) {
+      throw new Error(
+        "Aucune vidéo dans le partage. Choisis un onglet ou une fenêtre (le mix), pas seulement l’audio."
+      );
+    }
     setStatus("Connexion WHIP au serveur…");
     const ingest = await fetchIngestConfig();
     await publishWhip(localStream, ingest);
@@ -1046,10 +1117,13 @@ async function startStream() {
         setStatus(
           `En direct sur Hakou, mais pas sur ${dest === "youtube" ? "YouTube" : "Twitch"} : ${
             restBody.error || `HTTP ${rest.status}`
-          }`
+          }`,
+          { sticky: true }
         );
+        loadDestinations().catch(() => {});
         return;
       }
+      startRestreamWatch();
     }
     const audioLabels = localStream
       .getAudioTracks()
@@ -1091,6 +1165,7 @@ async function startStream() {
 }
 
 async function stopStream({ keepCapture = true } = {}) {
+  stopRestreamWatch();
   try {
     await fetch("./api/studio/restream/stop", {
       method: "POST",

@@ -38,6 +38,14 @@ export function createRestreamController(opts = {}) {
     };
   }
 
+  function trackList(data) {
+    return Array.isArray(data?.tracks) ? data.tracks.map(String) : [];
+  }
+
+  function hasVideoTrack(tracks) {
+    return tracks.some((t) => /\b(H264|H265|VP8|VP9|AV1)\b/i.test(t));
+  }
+
   async function pathReady(timeoutMs = 20_000) {
     const headers = apiPass
       ? {
@@ -46,6 +54,7 @@ export function createRestreamController(opts = {}) {
       : {};
     const deadline = Date.now() + timeoutMs;
     let last = "MediaMTX pas encore prêt";
+    let audioOnlySince = 0;
     while (Date.now() < deadline) {
       try {
         const res = await fetch(
@@ -54,12 +63,22 @@ export function createRestreamController(opts = {}) {
         );
         if (res.ok) {
           const data = await res.json();
-          if (data?.ready) return true;
-          last = "path MediaMTX pas ready";
+          const tracks = trackList(data);
+          if (data?.ready && hasVideoTrack(tracks)) return tracks;
+          if (data?.ready) {
+            last = `pas de vidéo (pistes : ${tracks.join(", ") || "aucune"}). Twitch a besoin de l’image — relance le live et partage un onglet / une fenêtre (le mix, pas le dashboard Twitch).`;
+            if (!audioOnlySince) audioOnlySince = Date.now();
+            if (Date.now() - audioOnlySince >= 6000) {
+              throw new Error(last);
+            }
+          } else {
+            last = "path MediaMTX pas ready";
+          }
         } else {
           last = `MediaMTX HTTP ${res.status}`;
         }
       } catch (err) {
+        if (String(err.message || "").startsWith("pas de vidéo")) throw err;
         last = err.message || "MediaMTX injoignable";
       }
       await sleep(400);
@@ -67,19 +86,7 @@ export function createRestreamController(opts = {}) {
     throw new Error(`Live Hakou pas encore prêt (${last}).`);
   }
 
-  function spawnFfmpeg(rtmpUrl, { transcodeVideo = false } = {}) {
-    const videoArgs = transcodeVideo
-      ? [
-          "-c:v",
-          "libx264",
-          "-preset",
-          "veryfast",
-          "-tune",
-          "zerolatency",
-          "-pix_fmt",
-          "yuv420p",
-        ]
-      : ["-c:v", "copy"];
+  function spawnFfmpeg(rtmpUrl) {
     const args = [
       "-hide_banner",
       "-loglevel",
@@ -89,10 +96,33 @@ export function createRestreamController(opts = {}) {
       "-i",
       rtspUrl,
       "-map",
-      "0:v:0?",
+      "0:v:0",
       "-map",
       "0:a:0?",
-      ...videoArgs,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-tune",
+      "zerolatency",
+      "-pix_fmt",
+      "yuv420p",
+      "-profile:v",
+      "main",
+      "-bf",
+      "0",
+      "-g",
+      "60",
+      "-keyint_min",
+      "60",
+      "-sc_threshold",
+      "0",
+      "-b:v",
+      "4500k",
+      "-maxrate",
+      "4500k",
+      "-bufsize",
+      "9000k",
       "-c:a",
       "aac",
       "-b:a",
@@ -122,8 +152,11 @@ export function createRestreamController(opts = {}) {
     };
     let stderr = "";
     proc.stderr?.on("data", (chunk) => {
-      stderr = (stderr + chunk.toString()).slice(-3000);
+      const text = chunk.toString();
+      stderr = (stderr + text).slice(-4000);
       active && (active.stderr = stderr);
+      const line = text.trim();
+      if (line) console.warn("[Hakou Restream] ffmpeg", line.slice(0, 300));
     });
     proc.on("error", (err) => {
       lastError = err.message || "ffmpeg restream";
@@ -132,11 +165,16 @@ export function createRestreamController(opts = {}) {
     });
     proc.on("exit", (code, signal) => {
       if (active?.proc === proc) active = null;
+      if (signal === "SIGINT" || signal === "SIGTERM") return;
       if (code && code !== 0 && code !== 255) {
         lastError = `ffmpeg restream ${code}${stderr ? `: ${stderr.slice(-180)}` : ""}`;
         console.warn("[Hakou Restream] exit", lastError);
-      } else if (signal && signal !== "SIGINT" && signal !== "SIGTERM") {
+      } else if (signal) {
         lastError = `ffmpeg restream signal ${signal}`;
+        console.warn("[Hakou Restream] exit", lastError);
+      } else if (code === 0 && stderr) {
+        lastError = `ffmpeg restream arrêté${stderr ? `: ${stderr.slice(-180)}` : ""}`;
+        console.warn("[Hakou Restream] exit 0", lastError);
       }
     });
     return proc;
@@ -150,21 +188,21 @@ export function createRestreamController(opts = {}) {
       throw new Error("URL RTMP invalide");
     }
     lastError = null;
-    await pathReady();
+    const tracks = await pathReady();
     const dest = String(destination || "").toLowerCase();
-    attachProc(spawnFfmpeg(rtmpUrl, { transcodeVideo: false }), dest, rtmpUrl);
-    await sleep(1200);
-    if (!active || active.proc.exitCode != null) {
-      console.warn("[Hakou Restream] copy failed — retry libx264");
-      lastError = null;
-      attachProc(spawnFfmpeg(rtmpUrl, { transcodeVideo: true }), dest, rtmpUrl);
-      await sleep(1500);
-    }
+    attachProc(spawnFfmpeg(rtmpUrl), dest, rtmpUrl);
+    await sleep(2500);
     if (!active || active.proc.exitCode != null) {
       const msg = lastError || "ffmpeg n’a pas démarré le relais RTMP";
       throw new Error(msg);
     }
-    console.info("[Hakou Restream] start", dest, active.rtmpHost);
+    console.info(
+      "[Hakou Restream] start",
+      dest,
+      active.rtmpHost,
+      "tracks",
+      tracks.join(",")
+    );
     return status();
   }
 

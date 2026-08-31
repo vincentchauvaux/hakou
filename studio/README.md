@@ -70,7 +70,7 @@ Hakou.be reste toujours alimenté. En plus, tu peux relayer le live vers **YouTu
 - **YouTube** : bouton « Connecter YouTube » (OAuth scopes Live, distinct du login allowlist). La chaîne doit avoir le live activé. Redirect URI ci-dessus.
 - **Twitch** : coller **une fois** la clé de stream (Dashboard → Paramètres → Stream). Le champ se vide après save (normal) ; un bandeau vert + aperçu `live_…xxxx` confirment le stockage VPS. « Connecter Twitch » (OAuth Helix) est optionnel et masqué tant que `TWITCH_CLIENT_*` n’est pas sur le VPS. Helix ne fournit pas la clé.
 - Secrets comptes : fichier chiffré `LIVE_ACCOUNTS_PATH` (défaut `studio/data/live-accounts.bin`, chmod 600, hors git).
-- Relais : ffmpeg `RTSP local → RTMP` (audio AAC 320 kb/s). Pas de nouveau port inbound.
+- Relais : ffmpeg `RTSP local → RTMP` (H264 libx264 GOP 2 s, audio AAC 320 kb/s). Sans piste vidéo MediaMTX, Twitch reste hors ligne — partager l’onglet du mix, pas le dashboard Twitch. Pas de nouveau port inbound.
 
 Twitch console : même `TWITCH_CLIENT_ID` / `SECRET`, plus l’URI  
 `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/studio/twitch/callback`.
