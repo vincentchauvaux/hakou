@@ -58,4 +58,4 @@ fi
 mkdir -p /var/lib/hakou-recordings
 chmod 750 /var/lib/hakou-recordings
 
-echo "MediaMTX ${MTX_VERSION} OK — HLS :8888 WHIP :8889 ICE :8189/udp API :9997"
+echo "MediaMTX ${MTX_VERSION} OK — HLS :8888 WHIP :8889 ICE :8189/udp API :9997 RTSP 127.0.0.1:8554"

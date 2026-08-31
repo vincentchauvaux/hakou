@@ -14,7 +14,12 @@ metrics: false
 pprof: false
 playback: false
 
-rtsp: false
+# RTSP local uniquement — source ffmpeg pour restream YouTube / Twitch
+rtsp: true
+rtspAddress: 127.0.0.1:8554
+rtspEncryption: "no"
+rtspTransports: [tcp]
+rtspAuthMethods: [basic]
 rtmp: false
 srt: false
 

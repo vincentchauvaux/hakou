@@ -6,13 +6,15 @@
 
 - UI : zone **Stream** (`#stream`, nav « Stream ») — ex-Radio.
 - **Accès restreint** (4 août 2026) : player + chat uniquement si session Google allowlist. Gate [`stream-gate.js`](stream-gate.js) + login Google ; API `GET /api/stream/status` et WebSocket chat exigent le cookie studio. Contenu masqué (`#stream-lock` / `#stream-content`) tant que non connecté. **Noms des comptes** : plus affichés dans l’UI publique (lock, messages « Connecté », aria-label e-mail) — allowlist reste `ALLOWED_EMAILS` côté VPS. Mentions légales / responsable RGPD conservent l’identité éditeur (obligation BE/UE).
-- **Enregistrement VPS** (13 août 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks → ffmpeg MP4. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist, `<video>`, télécharger, supprimer). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
+- **Enregistrement VPS** (31 août 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks MediaRecorder **pipés** dans ffmpeg (plus de concat WebM) → MP4 AAC **320 kb/s**. Badge **son d’onglet** vs **micro (qualité limitée)**. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist, `<video>`, télécharger, supprimer). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
+- **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live (redirect `/api/studio/youtube/callback`). Twitch = OAuth identité + **clé de stream collée** (Helix ne la donne pas). Relais ffmpeg RTSP local `:8554` → RTMP. Comptes chiffrés `studio/data/live-accounts.bin`.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET /hakou-studio/api/stream/status` (alias `/api/radio/status`) — **auth requise**.
 - Config Twitch (VPS `/opt/hakou-studio/.env`) :
-  - `TWITCH_LOGIN=` login chaîne sans `@`
-  - `TWITCH_CLIENT_ID=` / `TWITCH_CLIENT_SECRET=` (app [dev.twitch.tv](https://dev.twitch.tv/console) → Client Credentials)
+  - `TWITCH_LOGIN=` login chaîne sans `@` (repli si pas d’OAuth studio)
+  - `TWITCH_CLIENT_ID=` / `TWITCH_CLIENT_SECRET=` (app [dev.twitch.tv](https://dev.twitch.tv/console) → Client Credentials + redirect OAuth user)
+  - Redirect : `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/studio/twitch/callback`
   - Miroir optionnel : `twitchLogin` dans [`content/radio.json`](content/radio.json) (lien UI hors live)
 - Embed : `https://player.twitch.tv/?channel=…&parent=hakou.be` (consentement médias tiers).
 - Note : le chemin HLS MediaMTX `/hakou-live/` peut rester joignable si l’URL est connue — le verrou porte sur l’UI Stream + statut + chat.
@@ -49,7 +51,7 @@
 
 - **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
 - **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
-- **Dernier redéploiement** : 13 août 2026 — rsync `studio/` (record.mjs + UI capture/live séparés), nginx `client_max_body_size 25m` + location recordings, `ffmpeg`, `RECORD_DIR=/var/lib/hakou-recordings`, `pm2 restart hakou-studio` ; health 200.
+- **Dernier redéploiement** : 31 août 2026 — restream YouTube/Twitch + pipe ffmpeg enregistrement AAC 320k ; rsync `studio/` ; MediaMTX RTSP local ; `pm2 restart hakou-studio`.
 
 
 
@@ -208,7 +210,12 @@
 | `stream-gate.js` | Auth allowlist pour `#stream` : session `/api/auth/me`, login Google, déverrouille `radio.js` / `radio-chat.js` |
 | `radio.js` | Zone **Stream** (`#stream`) : démarre **après** auth ; priorité **studio** → **Twitch live** → live YouTube ; **hors antenne** = logo `assets/logo-hakou.svg` (plus de playlist YouTube) ; poll ~20 s ; status API `credentials: include` |
 | `stream-recordings.js` | Galerie MP4 VPS dans `#stream` après auth : `GET /api/studio/recordings` |
-| `studio/record.mjs` | Enregistrement VPS de la **capture** (chunks MediaRecorder + ffmpeg MP4) — **pas** le live MediaMTX |
+| `studio/record.mjs` | Enregistrement VPS : chunks MediaRecorder **stdin ffmpeg** → MP4 AAC 320k — **pas** le live MediaMTX |
+| `studio/live-accounts.mjs` | Comptes YouTube/Twitch chiffrés (VPS, hors git) |
+| `studio/live-publish.mjs` | Orchestration restream RTMP au « Passer en direct » |
+| `studio/restream.mjs` | ffmpeg RTSP local → RTMP YouTube / Twitch |
+| `studio/youtube-live.mjs` | OAuth + API YouTube Live (broadcast / stream key) |
+| `studio/twitch-live.mjs` | OAuth Helix + ingest RTMP (clé collée) |
 | `radio-chat.js` | Chat public Stream (WebSocket VPS) : pseudo `Visiteur-xxxx` dérivé IP (éditable), messages texte/emoji, présence. **Téléphone (≤680px)** : composer 1 ligne (champ + Envoyer), chat plus court, padding bas Stream renforcé, bouton INTRO masqué sur Stream |
 
 | `contact.js` | Zone Contact : formulaire + honeypot / filtres ; e-mail révélé depuis `content/contact-config.json` ; `POST` API VPS `/api/contact` |
@@ -285,6 +292,11 @@ node --input-type=module --check < scene3d.js
 node --input-type=module --check < main.js
 node --input-type=module --check < studio/server.mjs
 node --input-type=module --check < studio/record.mjs
+node --input-type=module --check < studio/live-accounts.mjs
+node --input-type=module --check < studio/live-publish.mjs
+node --input-type=module --check < studio/restream.mjs
+node --input-type=module --check < studio/youtube-live.mjs
+node --input-type=module --check < studio/twitch-live.mjs
 
 ```
 
@@ -394,7 +406,7 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Pl
 - **Live studio (Étape 3)** :
   - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.
   - Nginx : `/hakou-live/whip/` → WHIP/WHEP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **cookieCheck** : ne **pas** injecter `Cookie: cookieCheck=1` (sinon playlists sans `?session=` + 401 enfants si `Set-Cookie` masqué). Client : `?cookieCheck=1` → `?session=` dans les m3u8. CORS HLS `*` sans credentials (`hls.js` `withCredentials: false`).
-  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP **H264** (`setCodecPreferences`). **Son** : Chrome onglet + « Partager l’audio » (`systemAudio: include`) ; sinon **micro obligatoire** (Safari / fenêtre macOS). **Enregistrement VPS** : bouton séparé, MediaRecorder → `/api/studio/record/*` (pas MediaMTX). Spectateurs Radio : autoplay **muet** + bouton **Activer le son** ; piste audio HLS sélectionnée explicitement.
+  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP **H264** (`setCodecPreferences`). **Son** : Chrome onglet + « Partager l’audio » (`systemAudio: include`) ; sinon **micro obligatoire** (Safari / fenêtre macOS) — badge **son d’onglet** vs **micro**. **Enregistrement VPS** : bouton séparé, MediaRecorder → pipe ffmpeg `/api/studio/record/*` (pas MediaMTX). **Destination** : Hakou / YouTube / Twitch ; restream RTMP via RTSP local. Spectateurs Radio : autoplay **muet** + bouton **Activer le son** ; piste audio HLS sélectionnée explicitement.
   - Spectateurs : [`radio.js`](radio.js) si auth Stream + `studioLive` / Twitch / YouTube. Hors antenne : **logo Hakou**. Priorité studio > Twitch live > YouTube live.
   - Nginx WHIP/WHEP : CORS origines hakou.be (+ localhost / VPS), headers `Content-Type` / `Accept` pour SDP ; ICE UDP **8189** ouvert (média WebRTC hors nginx).
   - Install : [`studio/deploy/install-mediamtx.sh`](studio/deploy/install-mediamtx.sh) + secrets `MEDIAMTX_PUBLISH_PASS` / `MEDIAMTX_API_PASS` dans `/opt/hakou-studio/.env` et `mediamtx.yml`.
@@ -405,5 +417,5 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Pl
 - **Publish** : `git push git@github.com:vincentchauvaux/hakou.git main` (SSH ; le remote HTTPS `origin` peut échouer sans token). Déploiement Pages automatique après push sur `main` (délai cache ~1–10 min).
 - **Build optionnel** : `node scripts/refresh-instagram-posts.mjs --refresh` — met à jour `content/instagram-posts.json` + `assets/instagram/thumb-*.jpg` ; `node scripts/refresh-radio-status.mjs` — live + archives Radio. Pas de bundler / compile JS.
 - **Dev local** : `npx serve .` (pas `file://`).
-- **VPS OVH Hakou** : `vps-e09ed6db.vps.ovh.net` → `51.178.44.114` (SSH `root`, nginx + pm2). Services sous préfixe : `/hirakana/`, `/rpg-cr/`, **`/hakou-studio/`**. Enregistrements capture : `RECORD_DIR=/var/lib/hakou-recordings` + `ffmpeg` (indépendant de MediaMTX). Ne pas confondre avec **djgoons / nexroof** (`54.76.151.62`, autres projets ; SSH parfois timeout depuis l’agent).
+- **VPS OVH Hakou** : `vps-e09ed6db.vps.ovh.net` → `51.178.44.114` (SSH `root`, nginx + pm2). Services sous préfixe : `/hirakana/`, `/rpg-cr/`, **`/hakou-studio/`**. Enregistrements capture : `RECORD_DIR=/var/lib/hakou-recordings` + `ffmpeg` (indépendant de MediaMTX). Restream YouTube/Twitch : RTSP MediaMTX `127.0.0.1:8554` + comptes `data/live-accounts.bin`. Ne pas confondre avec **djgoons / nexroof** (`54.76.151.62`, autres projets ; SSH parfois timeout depuis l’agent).
 

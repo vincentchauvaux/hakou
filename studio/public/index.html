@@ -23,7 +23,7 @@
       <h1>Capture fenêtre / app</h1>
       <p>
         Deux actions <strong>indépendantes</strong> : le live Stream, et
-        l’enregistrement MP4 sur le VPS (vidéo compressée, audio 256 kb/s).
+        l’enregistrement MP4 sur le VPS (vidéo compressée, audio 320 kb/s).
         Tu peux faire l’un, l’autre, ou les deux — ce n’est pas le live qui
         est enregistré, c’est la capture.
         <br />
@@ -39,6 +39,7 @@
           Aucune capture — lance un live ou un enregistrement.
         </p>
         <span id="studio-rec-badge" class="studio-rec-badge" hidden>REC</span>
+        <span id="studio-audio-badge" class="studio-audio-badge" hidden></span>
       </div>
 
       <div class="studio-transport" id="studio-transport" hidden>
@@ -72,6 +73,22 @@
         </div>
       </div>
 
+      <fieldset class="studio-dest" id="studio-dest">
+        <legend>Destination live</legend>
+        <label class="studio-dest__opt">
+          <input type="radio" name="studio-dest" value="hakou" checked />
+          Hakou seulement
+        </label>
+        <label class="studio-dest__opt" id="studio-dest-youtube-label">
+          <input type="radio" name="studio-dest" value="youtube" disabled />
+          YouTube Live
+        </label>
+        <label class="studio-dest__opt" id="studio-dest-twitch-label">
+          <input type="radio" name="studio-dest" value="twitch" disabled />
+          Twitch
+        </label>
+      </fieldset>
+
       <div class="studio-actions">
         <button type="button" id="studio-start" class="studio-btn studio-btn--primary">
           Passer en direct
@@ -85,6 +102,56 @@
       </div>
       <p id="studio-status" class="muted" role="status"></p>
     </main>
+
+    <section class="studio-card studio-card--wide studio-accounts" aria-labelledby="studio-accounts-title">
+      <h2 id="studio-accounts-title">Comptes live</h2>
+      <p class="muted">
+        Connecte YouTube et/ou Twitch, puis choisis la destination ci-dessus
+        avant « Passer en direct ». Hakou.be reste toujours alimenté.
+      </p>
+      <div class="studio-accounts__grid">
+        <article class="studio-account" id="studio-account-youtube">
+          <h3>YouTube</h3>
+          <p id="studio-yt-status" class="studio-account__status muted">Non connecté</p>
+          <div class="studio-account__actions">
+            <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-yt-connect" href="./api/studio/youtube/connect">
+              Connecter YouTube
+            </a>
+            <button type="button" id="studio-yt-disconnect" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
+              Déconnecter
+            </button>
+          </div>
+        </article>
+        <article class="studio-account" id="studio-account-twitch">
+          <h3>Twitch</h3>
+          <p id="studio-tw-status" class="studio-account__status muted">Non connecté</p>
+          <div class="studio-account__actions">
+            <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-tw-connect" href="./api/studio/twitch/connect">
+              Connecter Twitch
+            </a>
+            <button type="button" id="studio-tw-disconnect" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
+              Déconnecter
+            </button>
+          </div>
+          <form id="studio-tw-key-form" class="studio-account__key" hidden>
+            <label for="studio-tw-key">Clé de stream (Dashboard → Paramètres → Stream)</label>
+            <div class="studio-account__key-row">
+              <input
+                id="studio-tw-key"
+                name="streamKey"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="live_…"
+              />
+              <button type="submit" class="studio-btn studio-btn--ghost studio-btn--tiny">
+                Enregistrer
+              </button>
+            </div>
+          </form>
+        </article>
+      </div>
+    </section>
 
     <section class="studio-card studio-card--wide studio-recordings" aria-labelledby="studio-recordings-title">
       <h2 id="studio-recordings-title">Enregistrements VPS</h2>

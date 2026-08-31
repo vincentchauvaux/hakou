@@ -1,7 +1,7 @@
 /**
  * Enregistrement de la capture studio sur le VPS — indépendant du live WHIP.
- * Le navigateur envoie des chunks MediaRecorder ; ffmpeg finalise un MP4
- * (H.264 compressé max 1280 px + AAC 256 kb/s).
+ * Chunks MediaRecorder → stdin ffmpeg (WebM/MP4 live) → remux MP4
+ * (H.264 compressé max 1280 px + AAC 320 kb/s).
  */
 
 import { spawn } from "node:child_process";
@@ -12,7 +12,6 @@ import {
   readdirSync,
   statSync,
   unlinkSync,
-  appendFileSync,
   createReadStream,
 } from "node:fs";
 import { join, basename } from "node:path";
@@ -45,7 +44,7 @@ function formatBytes(n) {
   return `${(v / (1024 * 1024 * 1024)).toFixed(2)} Go`;
 }
 
-function extFromMime(mime) {
+function inputFormat(mime) {
   const m = String(mime || "").toLowerCase();
   if (m.includes("mp4")) return "mp4";
   return "webm";
@@ -55,14 +54,23 @@ export function createRecordController(opts = {}) {
   const dir = opts.dir;
   const ffmpegBin = opts.ffmpegBin || "ffmpeg";
   const videoMode = opts.videoMode === "copy" ? "copy" : "compress";
-  const audioBitrate = String(opts.audioBitrate || "256k");
+  const audioBitrate = String(opts.audioBitrate || "320k");
   const retentionDays = Math.max(1, Number(opts.retentionDays || 60));
   const maxBytes = Math.max(
     100 * 1024 * 1024,
     Number(opts.maxBytes || 20 * 1024 * 1024 * 1024)
   );
 
-  /** @type {null | { id: string, tmpPath: string, mimeType: string, bytes: number, startedAt: string }} */
+  /** @type {null | {
+   *   id: string,
+   *   tmpPath: string,
+   *   mimeType: string,
+   *   bytes: number,
+   *   startedAt: string,
+   *   proc: import("node:child_process").ChildProcess,
+   *   stderr: string,
+   *   stdinQueue: Promise<void>,
+   * }} */
   let active = null;
   /** @type {null | { file: string, startedAt: string }} */
   let transcoding = null;
@@ -197,48 +205,11 @@ export function createRecordController(opts = {}) {
     };
   }
 
-  async function start({ mimeType } = {}) {
-    if (active) return status();
-    if (!(await ffmpegAvailable())) {
-      lastError = "ffmpeg introuvable sur le VPS";
-      throw new Error(lastError);
-    }
-    ensureDir();
-    prune();
-    const id = `rec-${Date.now()}-${randomBytes(4).toString("hex")}`;
-    const mime = String(mimeType || "video/webm");
-    const tmpPath = join(tmpDir(), `${id}.${extFromMime(mime)}`);
-    active = {
-      id,
-      tmpPath,
-      mimeType: mime,
-      bytes: 0,
-      startedAt: new Date().toISOString(),
-    };
-    lastError = null;
-    console.info("[Hakou Record] start", id, mime);
-    return status();
-  }
-
-  function appendChunk(sessionId, buf) {
-    if (!active || active.id !== sessionId || !SESSION_RE.test(sessionId)) {
-      throw new Error("session d’enregistrement inconnue");
-    }
-    if (!Buffer.isBuffer(buf) || !buf.length) return status();
-    if (buf.length > MAX_CHUNK) {
-      throw new Error("chunk trop volumineux");
-    }
-    if (active.bytes + buf.length > MAX_SESSION_BYTES) {
-      throw new Error("enregistrement trop long (plafond 4 Go)");
-    }
-    appendFileSync(active.tmpPath, buf);
-    active.bytes += buf.length;
-    return status();
-  }
-
-  function runFfmpeg(args) {
+  function runFfmpeg(args, { stdin } = {}) {
     return new Promise((resolve, reject) => {
-      const proc = spawn(ffmpegBin, args, { stdio: ["ignore", "pipe", "pipe"] });
+      const proc = spawn(ffmpegBin, args, {
+        stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"],
+      });
       let stderr = "";
       proc.stderr?.on("data", (chunk) => {
         stderr = (stderr + chunk.toString()).slice(-4000);
@@ -273,8 +244,9 @@ export function createRecordController(opts = {}) {
       : ["-c:v", "copy"];
     const args = [
       "-hide_banner",
-      "-nostdin",
       "-y",
+      "-fflags",
+      "+genpts",
       "-i",
       tmpPath,
       "-map",
@@ -286,6 +258,10 @@ export function createRecordController(opts = {}) {
       "aac",
       "-b:a",
       audioBitrate,
+      "-aac_coder",
+      "twoloop",
+      "-af",
+      "aresample=async=1:first_pts=0",
       "-ar",
       "48000",
       "-ac",
@@ -297,6 +273,146 @@ export function createRecordController(opts = {}) {
     await runFfmpeg(args);
   }
 
+  function waitExit(proc) {
+    return new Promise((resolve, reject) => {
+      if (proc.exitCode != null) {
+        if (proc.exitCode === 0 || proc.exitCode === 255) resolve(proc.exitCode);
+        else reject(new Error(`ffmpeg ${proc.exitCode}`));
+        return;
+      }
+      const timer = setTimeout(() => {
+        try {
+          proc.kill("SIGKILL");
+        } catch {
+          /* ignore */
+        }
+        reject(new Error("ffmpeg : délai dépassé à l’arrêt"));
+      }, 90_000);
+      proc.once("exit", (code) => {
+        clearTimeout(timer);
+        if (code === 0 || code === 255 || code == null) resolve(code || 0);
+        else reject(new Error(`ffmpeg ${code}`));
+      });
+    });
+  }
+
+  async function start({ mimeType } = {}) {
+    if (active) return status();
+    if (!(await ffmpegAvailable())) {
+      lastError = "ffmpeg introuvable sur le VPS";
+      throw new Error(lastError);
+    }
+    ensureDir();
+    prune();
+    const id = `rec-${Date.now()}-${randomBytes(4).toString("hex")}`;
+    const mime = String(mimeType || "video/webm");
+    const fmt = inputFormat(mime);
+    const tmpPath = join(tmpDir(), `${id}.mkv`);
+    const args = [
+      "-hide_banner",
+      "-loglevel",
+      "warning",
+      "-fflags",
+      "+genpts+igndts+discardcorrupt",
+      "-err_detect",
+      "ignore_err",
+      "-f",
+      fmt,
+      "-i",
+      "pipe:0",
+      "-map",
+      "0:v:0?",
+      "-map",
+      "0:a:0?",
+      "-c",
+      "copy",
+      "-f",
+      "matroska",
+      tmpPath,
+    ];
+    const proc = spawn(ffmpegBin, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const session = {
+      id,
+      tmpPath,
+      mimeType: mime,
+      bytes: 0,
+      startedAt: new Date().toISOString(),
+      proc,
+      stderr: "",
+      stdinQueue: Promise.resolve(),
+    };
+    proc.stderr?.on("data", (chunk) => {
+      session.stderr = (session.stderr + chunk.toString()).slice(-3000);
+    });
+    proc.on("error", (err) => {
+      lastError = err.message || "ffmpeg pipe";
+      console.warn("[Hakou Record] ffmpeg", lastError);
+      if (active?.id === id) active = null;
+    });
+    proc.on("exit", (code) => {
+      if (active?.id === id && code && code !== 0 && code !== 255) {
+        lastError = `ffmpeg ${code}: ${session.stderr.slice(-180)}`;
+        console.warn("[Hakou Record] pipe exit", lastError);
+        active = null;
+      }
+    });
+    if (!proc.stdin) {
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        /* ignore */
+      }
+      lastError = "ffmpeg stdin indisponible";
+      throw new Error(lastError);
+    }
+    proc.stdin.on("error", (err) => {
+      if (err?.code === "EPIPE") return;
+      console.warn("[Hakou Record] stdin", err.message || err);
+    });
+    active = session;
+    lastError = null;
+    console.info("[Hakou Record] start pipe", id, mime);
+    return status();
+  }
+
+  function appendChunk(sessionId, buf) {
+    if (!active || active.id !== sessionId || !SESSION_RE.test(sessionId)) {
+      throw new Error("session d’enregistrement inconnue");
+    }
+    if (!Buffer.isBuffer(buf) || !buf.length) return Promise.resolve(status());
+    if (buf.length > MAX_CHUNK) {
+      throw new Error("chunk trop volumineux");
+    }
+    if (active.bytes + buf.length > MAX_SESSION_BYTES) {
+      throw new Error("enregistrement trop long (plafond 4 Go)");
+    }
+    const session = active;
+    const stdin = session.proc.stdin;
+    if (!stdin || !stdin.writable) {
+      throw new Error("encodeur fermé");
+    }
+    session.bytes += buf.length;
+    session.stdinQueue = session.stdinQueue.then(
+      () =>
+        new Promise((resolve, reject) => {
+          if (!stdin.writable) {
+            resolve();
+            return;
+          }
+          let settled = false;
+          const done = (err) => {
+            if (settled) return;
+            settled = true;
+            if (err) reject(err);
+            else resolve();
+          };
+          const ok = stdin.write(buf, (err) => done(err || null));
+          if (!ok) stdin.once("drain", () => done());
+        })
+    );
+    return session.stdinQueue.then(() => status());
+  }
+
   async function stop(sessionId) {
     if (!active) {
       return { ...status(), lastFile: null };
@@ -304,12 +420,47 @@ export function createRecordController(opts = {}) {
     if (sessionId && active.id !== sessionId) {
       throw new Error("session d’enregistrement inconnue");
     }
-    const tmpPath = active.tmpPath;
-    const bytes = active.bytes;
+    const session = active;
     active = null;
-    if (!bytes || !existsSync(tmpPath)) {
+    try {
+      await session.stdinQueue.catch(() => {});
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (session.proc.stdin?.writable) session.proc.stdin.end();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await waitExit(session.proc);
+    } catch (err) {
+      if (!existsSync(session.tmpPath) || !session.bytes) {
+        lastError = err.message || "aucun média reçu";
+        try {
+          if (existsSync(session.tmpPath)) unlinkSync(session.tmpPath);
+        } catch {
+          /* ignore */
+        }
+        throw new Error(lastError);
+      }
+      console.warn("[Hakou Record] ffmpeg stop", err.message || err);
+    }
+
+    if (!session.bytes || !existsSync(session.tmpPath)) {
       try {
-        if (existsSync(tmpPath)) unlinkSync(tmpPath);
+        if (existsSync(session.tmpPath)) unlinkSync(session.tmpPath);
+      } catch {
+        /* ignore */
+      }
+      lastError = "aucun média reçu";
+      throw new Error(lastError);
+    }
+
+    const st = statSync(session.tmpPath);
+    if (!st.size) {
+      try {
+        unlinkSync(session.tmpPath);
       } catch {
         /* ignore */
       }
@@ -320,10 +471,10 @@ export function createRecordController(opts = {}) {
     const outName = stampName();
     const outPath = join(dir, outName);
     transcoding = { file: outName, startedAt: new Date().toISOString() };
-    console.info("[Hakou Record] transcode", tmpPath, "→", outName);
+    console.info("[Hakou Record] transcode", session.tmpPath, "→", outName);
 
     setImmediate(() => {
-      transcodeFile(tmpPath, outPath)
+      transcodeFile(session.tmpPath, outPath)
         .then(() => {
           lastError = null;
           console.info("[Hakou Record] ok", outName);
@@ -340,7 +491,7 @@ export function createRecordController(opts = {}) {
         .finally(() => {
           transcoding = null;
           try {
-            unlinkSync(tmpPath);
+            unlinkSync(session.tmpPath);
           } catch {
             /* ignore */
           }
@@ -353,10 +504,20 @@ export function createRecordController(opts = {}) {
 
   function abort() {
     if (!active) return status();
-    const tmpPath = active.tmpPath;
+    const session = active;
     active = null;
     try {
-      if (existsSync(tmpPath)) unlinkSync(tmpPath);
+      session.proc.stdin?.end();
+    } catch {
+      /* ignore */
+    }
+    try {
+      session.proc.kill("SIGKILL");
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (existsSync(session.tmpPath)) unlinkSync(session.tmpPath);
     } catch {
       /* ignore */
     }

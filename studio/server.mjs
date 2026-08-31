@@ -14,6 +14,22 @@ import { fileURLToPath } from "node:url";
 import { getRadioStatus } from "./radio-status.mjs";
 import { attachRadioChat } from "./radio-chat.mjs";
 import { createRecordController } from "./record.mjs";
+import { createLiveAccounts } from "./live-accounts.mjs";
+import { createRestreamController } from "./restream.mjs";
+import { createLivePublish } from "./live-publish.mjs";
+import {
+  exchangeYoutubeCode,
+  fetchYoutubeChannel,
+  revokeYoutubeToken,
+  youtubeAuthUrl,
+} from "./youtube-live.mjs";
+import {
+  exchangeTwitchCode,
+  fetchTwitchUser,
+  normalizeStreamKey,
+  revokeTwitchToken,
+  twitchAuthUrl,
+} from "./twitch-live.mjs";
 import {
   appendContactInbox,
   checkRateLimit,
@@ -89,14 +105,56 @@ const recorder = createRecordController({
   dir: RECORD_DIR,
   ffmpegBin: env.FFMPEG_BIN || "ffmpeg",
   videoMode: env.RECORD_VIDEO_MODE || "compress",
-  audioBitrate: env.RECORD_AUDIO_BITRATE || "256k",
+  audioBitrate: env.RECORD_AUDIO_BITRATE || "320k",
   retentionDays: Number(env.RECORD_RETENTION_DAYS || 60),
   maxBytes: Number(env.RECORD_MAX_BYTES || 20 * 1024 * 1024 * 1024),
 });
 
+const STUDIO_PUBLIC_URL = String(
+  env.STUDIO_PUBLIC_URL || "https://vps-e09ed6db.vps.ovh.net/hakou-studio"
+).replace(/\/$/, "");
+const GOOGLE_CLIENT_SECRET = String(env.GOOGLE_CLIENT_SECRET || "").trim();
+const YOUTUBE_REDIRECT_URI =
+  env.YOUTUBE_REDIRECT_URI ||
+  `${STUDIO_PUBLIC_URL}/api/studio/youtube/callback`;
+const TWITCH_REDIRECT_URI =
+  env.TWITCH_REDIRECT_URI || `${STUDIO_PUBLIC_URL}/api/studio/twitch/callback`;
+const YOUTUBE_PRIVACY =
+  String(env.YOUTUBE_PRIVACY || "public").toLowerCase() === "unlisted"
+    ? "unlisted"
+    : "public";
+const LIVE_ACCOUNTS_PATH =
+  env.LIVE_ACCOUNTS_PATH || join(__dirname, "data", "live-accounts.bin");
+const MEDIAMTX_RTSP_URL =
+  env.MEDIAMTX_RTSP_URL || `rtsp://127.0.0.1:8554/${MEDIAMTX_PATH}`;
+
 const SESSION_SECRET = requireStrongSecret(env, {
   label: "SESSION_SECRET",
   value: env.SESSION_SECRET,
+});
+
+const liveAccounts = createLiveAccounts({
+  filePath: LIVE_ACCOUNTS_PATH,
+  secret: SESSION_SECRET,
+});
+const restreamer = createRestreamController({
+  ffmpegBin: env.FFMPEG_BIN || "ffmpeg",
+  rtspUrl: MEDIAMTX_RTSP_URL,
+  mediamtxApiBase: MEDIAMTX_API_BASE,
+  mediamtxPath: MEDIAMTX_PATH,
+  mediamtxApiUser: MEDIAMTX_API_USER,
+  mediamtxApiPass: MEDIAMTX_API_PASS,
+  audioBitrate: env.RESTREAM_AUDIO_BITRATE || "320k",
+});
+const livePublish = createLivePublish({
+  accounts: liveAccounts,
+  restream: restreamer,
+  youtubeConfig: {
+    clientId: GOOGLE_CLIENT_ID,
+    clientSecret: GOOGLE_CLIENT_SECRET,
+    privacy: YOUTUBE_PRIVACY,
+    title: env.YOUTUBE_LIVE_TITLE || "",
+  },
 });
 const CONTACT_CAPTCHA_SECRET = requireStrongSecret(env, {
   label: "CONTACT_CAPTCHA_SECRET",
@@ -242,7 +300,8 @@ async function sendStreamStatus(req, res) {
       channelId: RADIO_CHANNEL_ID,
       channelHandle: RADIO_CHANNEL_HANDLE,
       youtubeApiKey: YOUTUBE_API_KEY || undefined,
-      twitchLogin: TWITCH_LOGIN || undefined,
+      twitchLogin:
+        liveAccounts.twitchTokens()?.login || TWITCH_LOGIN || undefined,
       twitchClientId: TWITCH_CLIENT_ID || undefined,
       twitchClientSecret: TWITCH_CLIENT_SECRET || undefined,
       mediamtxApiBase: MEDIAMTX_API_BASE,
@@ -416,6 +475,25 @@ function requireSession(req, res) {
   return session;
 }
 
+function redirectStudio(res, params = {}) {
+  const url = new URL(`${STUDIO_PUBLIC_URL}/`);
+  for (const [k, v] of Object.entries(params)) {
+    if (v != null && v !== "") url.searchParams.set(k, String(v));
+  }
+  res.redirect(302, url.toString());
+}
+
+function destinationsPayload() {
+  const snap = liveAccounts.snapshot();
+  return {
+    ok: true,
+    ...snap,
+    youtubeOAuth: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
+    twitchOAuth: Boolean(TWITCH_CLIENT_ID && TWITCH_CLIENT_SECRET),
+    restream: livePublish.status(),
+  };
+}
+
 /** Credentials WHIP pour le studio (allowlist uniquement). */
 app.get("/api/studio/ingest", (req, res) => {
   const ip = getClientIp(req);
@@ -448,6 +526,271 @@ app.get("/api/studio/ingest", (req, res) => {
     hlsUrl: HLS_PUBLIC_URL,
     authorization: `Basic ${basic}`,
   });
+});
+
+app.get("/api/studio/destinations", (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  res.setHeader("Cache-Control", "no-store");
+  res.json(destinationsPayload());
+});
+
+app.post("/api/studio/destinations", (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    liveAccounts.setDestination(req.body?.destination);
+    res.json(destinationsPayload());
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "destination invalide" });
+  }
+});
+
+app.get("/api/studio/youtube/connect", (req, res) => {
+  const session = verifySession(req.cookies?.[SESSION_COOKIE]);
+  if (!session) {
+    redirectStudio(res, { accounts: "error", msg: "connexion requise" });
+    return;
+  }
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    redirectStudio(res, {
+      accounts: "error",
+      msg: "OAuth YouTube non configuré (GOOGLE_CLIENT_SECRET).",
+    });
+    return;
+  }
+  const state = liveAccounts.signState({
+    email: session.email,
+    provider: "youtube",
+  });
+  res.redirect(
+    302,
+    youtubeAuthUrl({
+      clientId: GOOGLE_CLIENT_ID,
+      redirectUri: YOUTUBE_REDIRECT_URI,
+      state,
+    })
+  );
+});
+
+app.get("/api/studio/youtube/callback", async (req, res) => {
+  const session = verifySession(req.cookies?.[SESSION_COOKIE]);
+  if (!session) {
+    redirectStudio(res, { accounts: "error", msg: "connexion requise" });
+    return;
+  }
+  if (req.query.error) {
+    redirectStudio(res, {
+      accounts: "error",
+      msg: "Autorisation YouTube refusée.",
+    });
+    return;
+  }
+  const state = liveAccounts.verifyState(req.query.state, "youtube");
+  if (!state || state.email !== session.email) {
+    redirectStudio(res, { accounts: "error", msg: "état OAuth YouTube invalide" });
+    return;
+  }
+  const code = String(req.query.code || "");
+  if (!code) {
+    redirectStudio(res, { accounts: "error", msg: "code YouTube manquant" });
+    return;
+  }
+  try {
+    const tokens = await exchangeYoutubeCode({
+      clientId: GOOGLE_CLIENT_ID,
+      clientSecret: GOOGLE_CLIENT_SECRET,
+      redirectUri: YOUTUBE_REDIRECT_URI,
+      code,
+    });
+    if (!tokens.refreshToken) {
+      redirectStudio(res, {
+        accounts: "error",
+        msg: "YouTube n’a pas renvoyé de refresh token — réessaie « Connecter YouTube ».",
+      });
+      return;
+    }
+    const channel = await fetchYoutubeChannel(tokens.accessToken);
+    liveAccounts.setYoutube({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiry: tokens.expiry,
+      channelId: channel.channelId,
+      channelTitle: channel.channelTitle,
+    });
+    redirectStudio(res, { accounts: "youtube-ok" });
+  } catch (err) {
+    console.warn("[Hakou Live] YouTube OAuth", err.message || err);
+    redirectStudio(res, {
+      accounts: "error",
+      msg: err.message || "Connexion YouTube impossible",
+    });
+  }
+});
+
+app.post("/api/studio/youtube/disconnect", async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const stored = liveAccounts.youtubeTokens();
+  await revokeYoutubeToken(stored?.refreshToken || stored?.accessToken);
+  liveAccounts.clearYoutube();
+  res.json(destinationsPayload());
+});
+
+app.get("/api/studio/twitch/connect", (req, res) => {
+  const session = verifySession(req.cookies?.[SESSION_COOKIE]);
+  if (!session) {
+    redirectStudio(res, { accounts: "error", msg: "connexion requise" });
+    return;
+  }
+  if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
+    redirectStudio(res, {
+      accounts: "error",
+      msg: "OAuth Twitch non configuré (TWITCH_CLIENT_ID / SECRET).",
+    });
+    return;
+  }
+  const state = liveAccounts.signState({
+    email: session.email,
+    provider: "twitch",
+  });
+  res.redirect(
+    302,
+    twitchAuthUrl({
+      clientId: TWITCH_CLIENT_ID,
+      redirectUri: TWITCH_REDIRECT_URI,
+      state,
+    })
+  );
+});
+
+app.get("/api/studio/twitch/callback", async (req, res) => {
+  const session = verifySession(req.cookies?.[SESSION_COOKIE]);
+  if (!session) {
+    redirectStudio(res, { accounts: "error", msg: "connexion requise" });
+    return;
+  }
+  if (req.query.error) {
+    redirectStudio(res, {
+      accounts: "error",
+      msg: "Autorisation Twitch refusée.",
+    });
+    return;
+  }
+  const state = liveAccounts.verifyState(req.query.state, "twitch");
+  if (!state || state.email !== session.email) {
+    redirectStudio(res, { accounts: "error", msg: "état OAuth Twitch invalide" });
+    return;
+  }
+  const code = String(req.query.code || "");
+  if (!code) {
+    redirectStudio(res, { accounts: "error", msg: "code Twitch manquant" });
+    return;
+  }
+  try {
+    const tokens = await exchangeTwitchCode({
+      clientId: TWITCH_CLIENT_ID,
+      clientSecret: TWITCH_CLIENT_SECRET,
+      redirectUri: TWITCH_REDIRECT_URI,
+      code,
+    });
+    const user = await fetchTwitchUser({
+      clientId: TWITCH_CLIENT_ID,
+      accessToken: tokens.accessToken,
+    });
+    liveAccounts.setTwitch({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiry: tokens.expiry,
+      login: user.login,
+      displayName: user.displayName,
+      userId: user.userId,
+    });
+    redirectStudio(res, { accounts: "twitch-ok" });
+  } catch (err) {
+    console.warn("[Hakou Live] Twitch OAuth", err.message || err);
+    redirectStudio(res, {
+      accounts: "error",
+      msg: err.message || "Connexion Twitch impossible",
+    });
+  }
+});
+
+app.post("/api/studio/twitch/stream-key", (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    const key = normalizeStreamKey(req.body?.streamKey);
+    if (!key) {
+      res.status(400).json({ ok: false, error: "clé de stream requise" });
+      return;
+    }
+    liveAccounts.setTwitch({ streamKey: key });
+    res.json(destinationsPayload());
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || "clé invalide" });
+  }
+});
+
+app.post("/api/studio/twitch/disconnect", async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const stored = liveAccounts.twitchTokens();
+  await revokeTwitchToken({
+    clientId: TWITCH_CLIENT_ID,
+    token: stored?.accessToken,
+  });
+  liveAccounts.clearTwitch();
+  res.json(destinationsPayload());
+});
+
+app.get("/api/studio/restream", (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ ok: true, ...livePublish.status() });
+});
+
+app.post("/api/studio/restream/start", async (req, res) => {
+  const ip = getClientIp(req);
+  if (
+    !checkRateLimit(ip, {
+      max: 12,
+      windowMs: 60 * 1000,
+      key: "restream-start",
+    })
+  ) {
+    res.status(429).json({ ok: false, error: "trop de requêtes" });
+    return;
+  }
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    const dest = req.body?.destination;
+    if (dest) liveAccounts.setDestination(dest);
+    const result = await livePublish.start(dest);
+    res.json({ ...destinationsPayload(), ...result });
+  } catch (err) {
+    console.warn("[Hakou Live] restream start", err.message || err);
+    res.status(400).json({
+      ok: false,
+      error: err.message || "relais RTMP impossible",
+    });
+  }
+});
+
+app.post("/api/studio/restream/stop", async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    const result = await livePublish.stop();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err.message || "arrêt relais impossible",
+    });
+  }
 });
 
 app.get("/api/studio/record", async (req, res) => {
@@ -489,7 +832,7 @@ app.post("/api/studio/record/start", async (req, res) => {
 app.post(
   "/api/studio/record/chunk",
   express.raw({ type: "*/*", limit: "20mb" }),
-  (req, res) => {
+  async (req, res) => {
     const ip = getClientIp(req);
     if (
       !checkRateLimit(ip, {
@@ -508,7 +851,7 @@ app.post(
       const buf = Buffer.isBuffer(req.body)
         ? req.body
         : Buffer.from(req.body || []);
-      const state = recorder.appendChunk(sessionId, buf);
+      const state = await recorder.appendChunk(sessionId, buf);
       res.json({ ok: true, ...state });
     } catch (err) {
       res.status(400).json({
@@ -733,11 +1076,16 @@ httpServer.listen(PORT, () => {
 });
 
 async function shutdown(signal) {
-  console.info(`[Hakou Studio] ${signal} — abort record`);
+  console.info(`[Hakou Studio] ${signal} — abort record / restream`);
   try {
     recorder.abort();
   } catch (err) {
     console.warn("[Hakou Studio] record shutdown", err.message || err);
+  }
+  try {
+    await livePublish.stop();
+  } catch (err) {
+    console.warn("[Hakou Studio] restream shutdown", err.message || err);
   }
   process.exit(0);
 }

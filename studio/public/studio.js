@@ -18,6 +18,16 @@ const timelineHead = document.getElementById("studio-timeline-head");
 const timelineMarks = document.getElementById("studio-timeline-marks");
 const timelineTicks = document.getElementById("studio-timeline-ticks");
 const recordingsList = document.getElementById("studio-recordings-list");
+const audioBadge = document.getElementById("studio-audio-badge");
+const destFieldset = document.getElementById("studio-dest");
+const ytStatusEl = document.getElementById("studio-yt-status");
+const twStatusEl = document.getElementById("studio-tw-status");
+const ytConnect = document.getElementById("studio-yt-connect");
+const ytDisconnect = document.getElementById("studio-yt-disconnect");
+const twConnect = document.getElementById("studio-tw-connect");
+const twDisconnect = document.getElementById("studio-tw-disconnect");
+const twKeyForm = document.getElementById("studio-tw-key-form");
+const twKeyInput = document.getElementById("studio-tw-key");
 
 let localStream = null;
 let peerConnection = null;
@@ -37,6 +47,15 @@ let recElapsedMs = 0;
 let recTickAt = 0;
 let recTimer = null;
 let recMarks = [];
+/** @type {null | "tab" | "mic"} */
+let captureAudioKind = null;
+let destState = {
+  destination: "hakou",
+  youtube: { connected: false },
+  twitch: { connected: false, hasStreamKey: false },
+  youtubeOAuth: false,
+  twitchOAuth: false,
+};
 
 /** Safari / iOS : pas de son système via getDisplayMedia — audio:true peut bloquer la Promise. */
 function isAppleWebKit() {
@@ -49,6 +68,134 @@ function isAppleWebKit() {
     /Safari/i.test(ua) &&
     !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FXIOS|Android/i.test(ua)
   );
+}
+
+function setAudioBadge(kind) {
+  captureAudioKind = kind || null;
+  if (!audioBadge) return;
+  if (kind === "tab") {
+    audioBadge.hidden = false;
+    audioBadge.classList.remove("is-mic");
+    audioBadge.textContent = "Son d’onglet";
+  } else if (kind === "mic") {
+    audioBadge.hidden = false;
+    audioBadge.classList.add("is-mic");
+    audioBadge.textContent = "Micro — qualité limitée";
+  } else {
+    audioBadge.hidden = true;
+    audioBadge.textContent = "";
+    audioBadge.classList.remove("is-mic");
+  }
+}
+
+function selectedDestination() {
+  const checked = destFieldset?.querySelector('input[name="studio-dest"]:checked');
+  return checked?.value || destState.destination || "hakou";
+}
+
+function applyDestinations(data) {
+  if (!data || data.ok === false) return;
+  destState = {
+    destination: data.destination || "hakou",
+    youtube: data.youtube || { connected: false },
+    twitch: data.twitch || { connected: false, hasStreamKey: false },
+    youtubeOAuth: Boolean(data.youtubeOAuth),
+    twitchOAuth: Boolean(data.twitchOAuth),
+  };
+  const ytOk = Boolean(destState.youtube.connected);
+  const twReady = Boolean(destState.twitch.hasStreamKey);
+  if (ytStatusEl) {
+    ytStatusEl.textContent = ytOk
+      ? `Connecté${destState.youtube.title ? ` — ${destState.youtube.title}` : ""}`
+      : destState.youtubeOAuth
+        ? "Non connecté"
+        : "OAuth YouTube non configuré sur le VPS";
+  }
+  if (ytConnect) ytConnect.hidden = ytOk || !destState.youtubeOAuth;
+  if (ytDisconnect) ytDisconnect.hidden = !ytOk;
+  if (twStatusEl) {
+    const bits = [];
+    if (destState.twitch.connected && destState.twitch.login) {
+      bits.push(`@${destState.twitch.login}`);
+    } else if (!destState.twitchOAuth) {
+      bits.push("OAuth Twitch non configuré");
+    } else {
+      bits.push("Compte non lié");
+    }
+    bits.push(
+      destState.twitch.hasStreamKey ? "clé enregistrée" : "clé de stream manquante"
+    );
+    twStatusEl.textContent = bits.join(" · ");
+  }
+  if (twConnect) twConnect.hidden = destState.twitch.connected || !destState.twitchOAuth;
+  if (twDisconnect) twDisconnect.hidden = !destState.twitch.connected && !destState.twitch.hasStreamKey;
+  if (twKeyForm) {
+    twKeyForm.hidden = destState.twitch.hasStreamKey;
+  }
+  const radios = destFieldset?.querySelectorAll('input[name="studio-dest"]') || [];
+  for (const radio of radios) {
+    if (radio.value === "youtube") radio.disabled = streaming || !ytOk;
+    else if (radio.value === "twitch") radio.disabled = streaming || !twReady;
+    else radio.disabled = streaming;
+  }
+  const wanted = destState.destination;
+  const target = destFieldset?.querySelector(
+    `input[name="studio-dest"][value="${wanted}"]`
+  );
+  if (target && !target.disabled) target.checked = true;
+  else {
+    const hakou = destFieldset?.querySelector('input[name="studio-dest"][value="hakou"]');
+    if (hakou) hakou.checked = true;
+  }
+}
+
+async function loadDestinations() {
+  const res = await fetch("./api/studio/destinations", {
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!res.ok) return;
+  const data = await res.json();
+  applyDestinations(data);
+}
+
+async function saveDestination(value) {
+  const res = await fetch("./api/studio/destinations", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ destination: value }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setStatus(data.error || "Impossible d’enregistrer la destination.");
+    return;
+  }
+  applyDestinations(data);
+}
+
+function consumeAccountsQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const accounts = params.get("accounts");
+  if (!accounts) return;
+  const msg = params.get("msg");
+  if (accounts === "youtube-ok") setStatus("YouTube connecté — tu peux le choisir en destination.");
+  else if (accounts === "twitch-ok") {
+    setStatus(
+      destState.twitch?.hasStreamKey
+        ? "Twitch connecté."
+        : "Twitch connecté — colle encore la clé de stream (Dashboard → Stream)."
+    );
+  } else if (accounts === "error") {
+    setStatus(msg || "Connexion du compte live impossible.");
+  }
+  params.delete("accounts");
+  params.delete("msg");
+  const next = params.toString();
+  const url = next
+    ? `${window.location.pathname}?${next}`
+    : window.location.pathname;
+  window.history.replaceState({}, "", url);
 }
 
 function setStatus(msg) {
@@ -175,6 +322,16 @@ function syncButtons() {
     recPauseBtn.hidden = recording && !canPause;
     recPauseBtn.disabled = !recording || recInFlight || !canPause;
     recPauseBtn.textContent = recPaused ? "Reprendre" : "Pause";
+  }
+  const radios = destFieldset?.querySelectorAll('input[name="studio-dest"]') || [];
+  for (const radio of radios) {
+    if (radio.value === "youtube") {
+      radio.disabled = streaming || startInFlight || !destState.youtube.connected;
+    } else if (radio.value === "twitch") {
+      radio.disabled = streaming || startInFlight || !destState.twitch.hasStreamKey;
+    } else {
+      radio.disabled = streaming || startInFlight;
+    }
   }
 }
 
@@ -434,6 +591,7 @@ async function acquireDisplayStream() {
       "[Hakou Studio] audio display:",
       displayAudio.map((t) => t.label || t.id).join(", ")
     );
+    setAudioBadge("tab");
     return stream;
   }
 
@@ -462,6 +620,7 @@ async function acquireDisplayStream() {
       track.enabled = true;
       stream.addTrack(track);
     }
+    setAudioBadge("mic");
   } catch (err) {
     stream.getTracks().forEach((t) => t.stop());
     if (err?.name === "NotAllowedError" || err?.name === "AbortError") {
@@ -526,6 +685,8 @@ function releaseCapture() {
   localStream?.getTracks()?.forEach((t) => t.stop());
   localStream = null;
   captureEndedBound = false;
+  captureAudioKind = null;
+  setAudioBadge(null);
   hidePreview();
 }
 
@@ -647,7 +808,7 @@ async function startRecord() {
     recordSessionId = startBody.sessionId;
     chunkQueue = Promise.resolve();
     const recOpts = {
-      audioBitsPerSecond: 256_000,
+      audioBitsPerSecond: 320_000,
       videoBitsPerSecond: 1_800_000,
     };
     if (mimeType) recOpts.mimeType = mimeType;
@@ -665,15 +826,19 @@ async function startRecord() {
     mediaRecorder.addEventListener("error", (ev) => {
       console.warn("[Hakou Studio] MediaRecorder", ev.error || ev);
     });
-    mediaRecorder.start(2000);
+    mediaRecorder.start(5000);
     recording = true;
     recPaused = false;
     startChrono();
     setRecBadge(true, false);
+    const micHint =
+      captureAudioKind === "mic"
+        ? " Source : micro (qualité limitée) — préfère Chrome + onglet + « Partager l’audio »."
+        : "";
     setStatus(
       streaming
-        ? "Enregistrement VPS en cours (le live continue à part)."
-        : "Enregistrement VPS en cours — pas de diffusion."
+        ? `Enregistrement VPS en cours (le live continue à part).${micHint}`
+        : `Enregistrement VPS en cours — pas de diffusion.${micHint}`
     );
     loadRecordings().catch(() => {});
   } catch (err) {
@@ -815,15 +980,47 @@ async function startStream() {
     const ingest = await fetchIngestConfig();
     await publishWhip(localStream, ingest);
     streaming = true;
+    const dest = selectedDestination();
+    if (dest !== "hakou") {
+      setStatus(
+        dest === "youtube"
+          ? "Live Hakou OK — relais YouTube…"
+          : "Live Hakou OK — relais Twitch…"
+      );
+      const rest = await fetch("./api/studio/restream/start", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ destination: dest }),
+      });
+      const restBody = await rest.json().catch(() => ({}));
+      if (!rest.ok) {
+        setStatus(
+          `En direct sur Hakou, mais pas sur ${dest === "youtube" ? "YouTube" : "Twitch"} : ${
+            restBody.error || `HTTP ${rest.status}`
+          }`
+        );
+        return;
+      }
+    }
     const audioLabels = localStream
       .getAudioTracks()
       .map((t) => t.label || "audio")
       .join(", ");
+    const destLabel =
+      dest === "youtube"
+        ? "Hakou + YouTube"
+        : dest === "twitch"
+          ? "Hakou + Twitch"
+          : "Hakou";
+    const srcHint =
+      captureAudioKind === "mic" ? " Source : micro (qualité limitée)." : "";
     setStatus(
       recording
-        ? `En direct (${audioLabels}). L’enregistrement VPS continue à part.`
-        : `En direct (${audioLabels}). Sur Stream, clique « Activer le son ».`
+        ? `En direct (${destLabel}, ${audioLabels}). L’enregistrement VPS continue à part.${srcHint}`
+        : `En direct (${destLabel}, ${audioLabels}). Sur Stream, clique « Activer le son ».${srcHint}`
     );
+    loadDestinations().catch(() => {});
   } catch (err) {
     console.warn("[Hakou Studio]", err);
     await stopWhip();
@@ -846,6 +1043,14 @@ async function startStream() {
 }
 
 async function stopStream({ keepCapture = true } = {}) {
+  try {
+    await fetch("./api/studio/restream/stop", {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch {
+    /* ignore */
+  }
   await stopWhip();
   streaming = false;
   startInFlight = false;
@@ -889,12 +1094,61 @@ logoutBtn?.addEventListener("click", async () => {
   window.location.href = "https://hakou.be/";
 });
 
+destFieldset?.addEventListener("change", (ev) => {
+  const input = ev.target;
+  if (input instanceof HTMLInputElement && input.name === "studio-dest") {
+    saveDestination(input.value).catch((err) => console.warn(err));
+  }
+});
+
+ytDisconnect?.addEventListener("click", async () => {
+  const res = await fetch("./api/studio/youtube/disconnect", {
+    method: "POST",
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  applyDestinations(data);
+  setStatus("YouTube déconnecté.");
+});
+
+twDisconnect?.addEventListener("click", async () => {
+  const res = await fetch("./api/studio/twitch/disconnect", {
+    method: "POST",
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  applyDestinations(data);
+  setStatus("Twitch déconnecté.");
+});
+
+twKeyForm?.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const streamKey = twKeyInput?.value || "";
+  const res = await fetch("./api/studio/twitch/stream-key", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ streamKey }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setStatus(data.error || "Clé Twitch refusée.");
+    return;
+  }
+  if (twKeyInput) twKeyInput.value = "";
+  applyDestinations(data);
+  setStatus("Clé Twitch enregistrée — tu peux choisir Twitch en destination.");
+});
+
 syncButtons();
 loadMe().catch((err) => {
   console.warn(err);
   setStatus("Session illisible — reconnecte-toi depuis hakou.be.");
 });
 loadRecordings().catch(() => {});
+loadDestinations()
+  .then(() => consumeAccountsQuery())
+  .catch(() => consumeAccountsQuery());
 fetch("./api/studio/record", { credentials: "include" })
   .then((res) => (res.ok ? res.json() : null))
   .then((data) => {
