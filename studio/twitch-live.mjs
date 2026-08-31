@@ -145,9 +145,12 @@ export async function ensureTwitchAccess({
 }
 
 export function normalizeStreamKey(raw) {
-  const key = String(raw || "").trim();
+  let key = String(raw || "").trim();
   if (!key) return "";
-  if (/\s/.test(key) || key.length < 8 || key.length > 120) {
+  const extracted = key.match(/live_[A-Za-z0-9_]+/);
+  if (extracted) key = extracted[0];
+  key = key.replace(/^rtmps?:\/\/\S+\//i, "").replace(/^app\//i, "").trim();
+  if (!key || key.length < 8 || key.length > 120 || /\s/.test(key)) {
     throw new Error("Clé de stream Twitch invalide.");
   }
   if (!/^live_[A-Za-z0-9_]+$/.test(key) && !/^[A-Za-z0-9_]+$/.test(key)) {

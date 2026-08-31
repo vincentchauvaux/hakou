@@ -103,37 +103,46 @@
       <p id="studio-status" class="muted" role="status"></p>
     </main>
 
-    <section class="studio-card studio-card--wide studio-accounts" aria-labelledby="studio-accounts-title">
+    <section class="studio-card studio-card--wide studio-accounts" id="studio-accounts" aria-labelledby="studio-accounts-title">
       <h2 id="studio-accounts-title">Comptes live</h2>
       <p class="muted">
-        Connecte YouTube et/ou Twitch, puis choisis la destination ci-dessus
-        avant « Passer en direct ». Hakou.be reste toujours alimenté.
+        Connecte YouTube et/ou enregistre ta clé Twitch, puis choisis la
+        destination ci-dessus avant « Passer en direct ». Hakou.be reste
+        toujours alimenté.
       </p>
       <div class="studio-accounts__grid">
         <article class="studio-account" id="studio-account-youtube">
           <h3>YouTube</h3>
           <p id="studio-yt-status" class="studio-account__status muted">Non connecté</p>
+          <p id="studio-yt-help" class="studio-account__help muted"></p>
           <div class="studio-account__actions">
-            <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-yt-connect" href="./api/studio/youtube/connect">
+            <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-yt-connect" hidden href="./api/studio/youtube/connect">
               Connecter YouTube
             </a>
             <button type="button" id="studio-yt-disconnect" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
               Déconnecter
             </button>
+            <button type="button" id="studio-yt-copy-uri" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
+              Copier l’URI de redirection
+            </button>
           </div>
         </article>
         <article class="studio-account" id="studio-account-twitch">
           <h3>Twitch</h3>
-          <p id="studio-tw-status" class="studio-account__status muted">Non connecté</p>
+          <p id="studio-tw-status" class="studio-account__status muted">Colle la clé de stream pour diffuser.</p>
+          <p class="studio-account__help muted">
+            La clé suffit (Dashboard Twitch → Paramètres → Stream). « Connecter
+            Twitch » n’est utile que pour lier le nom de chaîne.
+          </p>
           <div class="studio-account__actions">
-            <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-tw-connect" href="./api/studio/twitch/connect">
+            <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-tw-connect" hidden href="./api/studio/twitch/connect">
               Connecter Twitch
             </a>
             <button type="button" id="studio-tw-disconnect" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
               Déconnecter
             </button>
           </div>
-          <form id="studio-tw-key-form" class="studio-account__key" hidden>
+          <form id="studio-tw-key-form" class="studio-account__key" action="#studio-accounts" method="post">
             <label for="studio-tw-key">Clé de stream (Dashboard → Paramètres → Stream)</label>
             <div class="studio-account__key-row">
               <input
@@ -144,8 +153,8 @@
                 spellcheck="false"
                 placeholder="live_…"
               />
-              <button type="submit" class="studio-btn studio-btn--ghost studio-btn--tiny">
-                Enregistrer
+              <button type="button" id="studio-tw-key-save" class="studio-btn studio-btn--ghost studio-btn--tiny">
+                Enregistrer la clé
               </button>
             </div>
           </form>

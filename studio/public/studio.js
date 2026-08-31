@@ -28,6 +28,9 @@ const twConnect = document.getElementById("studio-tw-connect");
 const twDisconnect = document.getElementById("studio-tw-disconnect");
 const twKeyForm = document.getElementById("studio-tw-key-form");
 const twKeyInput = document.getElementById("studio-tw-key");
+const twKeySave = document.getElementById("studio-tw-key-save");
+const ytHelpEl = document.getElementById("studio-yt-help");
+const ytCopyUri = document.getElementById("studio-yt-copy-uri");
 
 let localStream = null;
 let peerConnection = null;
@@ -108,29 +111,42 @@ function applyDestinations(data) {
     ytStatusEl.textContent = ytOk
       ? `Connecté${destState.youtube.title ? ` — ${destState.youtube.title}` : ""}`
       : destState.youtubeOAuth
-        ? "Non connecté"
+        ? "Non connecté — colle l’URI dans Google Cloud puis clique « Connecter YouTube »."
         : "OAuth YouTube non configuré sur le VPS";
+  }
+  if (ytHelpEl) {
+    const uri = data.youtubeRedirectUri || "";
+    ytHelpEl.hidden = ytOk || !uri;
+    ytHelpEl.textContent = uri
+      ? `Google Cloud → identifiants du client OAuth → URI de redirection autorisées : ${uri}`
+      : "";
+  }
+  if (ytCopyUri) {
+    ytCopyUri.hidden = ytOk || !data.youtubeRedirectUri;
+    ytCopyUri.dataset.uri = data.youtubeRedirectUri || "";
   }
   if (ytConnect) ytConnect.hidden = ytOk || !destState.youtubeOAuth;
   if (ytDisconnect) ytDisconnect.hidden = !ytOk;
   if (twStatusEl) {
-    const bits = [];
-    if (destState.twitch.connected && destState.twitch.login) {
-      bits.push(`@${destState.twitch.login}`);
+    if (destState.twitch.hasStreamKey) {
+      const who =
+        destState.twitch.connected && destState.twitch.login
+          ? ` @${destState.twitch.login}`
+          : "";
+      twStatusEl.textContent = `Clé enregistrée${who} — choisis Twitch dans Destination live.`;
     } else if (!destState.twitchOAuth) {
-      bits.push("OAuth Twitch non configuré");
+      twStatusEl.textContent =
+        "Colle la clé de stream ci-dessous (pas besoin de « Connecter Twitch »).";
     } else {
-      bits.push("Compte non lié");
+      twStatusEl.textContent = destState.twitch.connected
+        ? `@${destState.twitch.login} — colle encore la clé de stream.`
+        : "Colle la clé de stream, ou lie le compte puis la clé.";
     }
-    bits.push(
-      destState.twitch.hasStreamKey ? "clé enregistrée" : "clé de stream manquante"
-    );
-    twStatusEl.textContent = bits.join(" · ");
   }
   if (twConnect) twConnect.hidden = destState.twitch.connected || !destState.twitchOAuth;
   if (twDisconnect) twDisconnect.hidden = !destState.twitch.connected && !destState.twitch.hasStreamKey;
   if (twKeyForm) {
-    twKeyForm.hidden = destState.twitch.hasStreamKey;
+    twKeyForm.hidden = false;
   }
   const radios = destFieldset?.querySelectorAll('input[name="studio-dest"]') || [];
   for (const radio of radios) {
@@ -179,15 +195,19 @@ function consumeAccountsQuery() {
   const accounts = params.get("accounts");
   if (!accounts) return;
   const msg = params.get("msg");
-  if (accounts === "youtube-ok") setStatus("YouTube connecté — tu peux le choisir en destination.");
-  else if (accounts === "twitch-ok") {
+  if (accounts === "youtube-ok") {
+    setStatus("YouTube connecté — tu peux le choisir en destination.", {
+      sticky: true,
+    });
+  } else if (accounts === "twitch-ok") {
     setStatus(
       destState.twitch?.hasStreamKey
         ? "Twitch connecté."
-        : "Twitch connecté — colle encore la clé de stream (Dashboard → Stream)."
+        : "Twitch connecté — colle encore la clé de stream (Dashboard → Stream).",
+      { sticky: true }
     );
   } else if (accounts === "error") {
-    setStatus(msg || "Connexion du compte live impossible.");
+    setStatus(msg || "Connexion du compte live impossible.", { sticky: true });
   }
   params.delete("accounts");
   params.delete("msg");
@@ -195,11 +215,15 @@ function consumeAccountsQuery() {
   const url = next
     ? `${window.location.pathname}?${next}`
     : window.location.pathname;
-  window.history.replaceState({}, "", url);
+  window.history.replaceState({}, "", `${url}#studio-accounts`);
+  document.getElementById("studio-accounts")?.scrollIntoView({ block: "start" });
 }
 
-function setStatus(msg) {
-  if (statusEl) statusEl.textContent = msg || "";
+function setStatus(msg, { sticky } = {}) {
+  if (!statusEl) return;
+  statusEl.textContent = msg || "";
+  if (sticky) statusEl.setAttribute("data-keep", "1");
+  else if (!msg) statusEl.removeAttribute("data-keep");
 }
 
 function setRecBadge(on, paused = false) {
@@ -1121,8 +1145,7 @@ twDisconnect?.addEventListener("click", async () => {
   setStatus("Twitch déconnecté.");
 });
 
-twKeyForm?.addEventListener("submit", async (ev) => {
-  ev.preventDefault();
+async function saveTwitchKey() {
   const streamKey = twKeyInput?.value || "";
   const res = await fetch("./api/studio/twitch/stream-key", {
     method: "POST",
@@ -1132,12 +1155,32 @@ twKeyForm?.addEventListener("submit", async (ev) => {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    setStatus(data.error || "Clé Twitch refusée.");
+    setStatus(data.error || "Clé Twitch refusée.", { sticky: true });
     return;
   }
   if (twKeyInput) twKeyInput.value = "";
   applyDestinations(data);
-  setStatus("Clé Twitch enregistrée — tu peux choisir Twitch en destination.");
+  setStatus("Clé Twitch enregistrée — choisis Twitch dans Destination live, puis Passer en direct.", {
+    sticky: true,
+  });
+}
+
+twKeyForm?.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  saveTwitchKey().catch((err) => console.warn(err));
+});
+twKeySave?.addEventListener("click", () => {
+  saveTwitchKey().catch((err) => console.warn(err));
+});
+ytCopyUri?.addEventListener("click", async () => {
+  const uri = ytCopyUri.dataset.uri || "";
+  if (!uri) return;
+  try {
+    await navigator.clipboard.writeText(uri);
+    setStatus("URI copiée — colle-la dans Google Cloud (URI de redirection autorisées).");
+  } catch {
+    setStatus(uri);
+  }
 });
 
 syncButtons();
@@ -1156,9 +1199,11 @@ fetch("./api/studio/record", { credentials: "include" })
     if (!data.ffmpeg) {
       recordAvailable = false;
       syncButtons();
-      setStatus(
-        "ffmpeg absent sur le VPS — le live marche, l’enregistrement sera dispo après installation."
-      );
+      if (statusEl?.getAttribute("data-keep") !== "1") {
+        setStatus(
+          "ffmpeg absent sur le VPS — le live marche, l’enregistrement sera dispo après installation."
+        );
+      }
     }
   })
   .catch(() => {});

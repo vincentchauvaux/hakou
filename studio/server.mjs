@@ -480,6 +480,7 @@ function redirectStudio(res, params = {}) {
   for (const [k, v] of Object.entries(params)) {
     if (v != null && v !== "") url.searchParams.set(k, String(v));
   }
+  url.hash = "studio-accounts";
   res.redirect(302, url.toString());
 }
 
@@ -490,6 +491,8 @@ function destinationsPayload() {
     ...snap,
     youtubeOAuth: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET),
     twitchOAuth: Boolean(TWITCH_CLIENT_ID && TWITCH_CLIENT_SECRET),
+    youtubeRedirectUri: YOUTUBE_REDIRECT_URI,
+    twitchRedirectUri: TWITCH_REDIRECT_URI,
     restream: livePublish.status(),
   };
 }

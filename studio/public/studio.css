@@ -382,6 +382,13 @@ body {
   margin: 0 0 0.65rem !important;
 }
 
+.studio-account__help {
+  margin: 0 0 0.65rem !important;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
 .studio-account__actions {
   display: flex;
   flex-wrap: wrap;
