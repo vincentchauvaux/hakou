@@ -2504,8 +2504,24 @@ audio {
   color: var(--panel-muted, rgba(200, 210, 235, 0.78));
 }
 
+.site-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0 0.55rem;
+}
+
+.site-card__logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .site-card__kicker {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.2rem;
   font-size: 0.72rem;
   font-weight: 650;
   letter-spacing: 0.1em;
@@ -2514,7 +2530,11 @@ audio {
 }
 
 .site-card .card-title {
-  margin-top: 0;
+  margin: 0;
+}
+
+.site-card__head .card-title {
+  margin: 0;
 }
 
 .site-card--tall {
