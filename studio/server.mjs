@@ -111,7 +111,7 @@ const recorder = createRecordController({
 });
 
 const STUDIO_PUBLIC_URL = String(
-  env.STUDIO_PUBLIC_URL || "https://vps-e09ed6db.vps.ovh.net/hakou-studio"
+  env.STUDIO_PUBLIC_URL || "https://studio.hakou.be"
 ).replace(/\/$/, "");
 const GOOGLE_CLIENT_SECRET = String(env.GOOGLE_CLIENT_SECRET || "").trim();
 const YOUTUBE_REDIRECT_URI =
@@ -180,7 +180,7 @@ if (ALLOWED_EMAILS.size === 0) {
 const CORS_ORIGINS = new Set(
   String(
     env.CORS_ORIGINS ||
-      "https://hakou.be,http://localhost:3000,http://127.0.0.1:3000"
+      "https://hakou.be,https://studio.hakou.be,http://localhost:3000,http://127.0.0.1:3000"
   )
     .split(",")
     .map((o) => o.trim())
@@ -1006,7 +1006,7 @@ app.post("/api/auth/google", async (req, res) => {
       picture: payload.picture || null,
       exp: Date.now() + SESSION_MAX_AGE_S * 1000,
     };
-    setSessionCookie(res, session);
+    setSessionCookie(res, session, req);
     setMediaCookie(res, session);
     res.json({
       ok: true,
@@ -1022,7 +1022,7 @@ app.post("/api/auth/google", async (req, res) => {
 });
 
 app.post("/api/auth/logout", (req, res) => {
-  clearSessionCookie(res);
+  clearSessionCookie(res, req);
   clearMediaCookie(res);
   res.json({ ok: true });
 });

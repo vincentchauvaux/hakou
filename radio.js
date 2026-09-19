@@ -480,7 +480,7 @@
     const channelId = base.channelId || "UCmm1lsi4IS7RzwFFhIax3ug";
     const statusApi =
       base.statusApi ||
-      "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/stream/status";
+      "https://studio.hakou.be/api/stream/status";
     const twitchLoginLocal = String(base.twitchLogin || "")
       .trim()
       .replace(/^@/, "")

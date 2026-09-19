@@ -59,15 +59,27 @@ export function applySecurityHeaders(_req, res, next) {
       "base-uri 'self'",
       "frame-ancestors 'none'",
       "form-action 'self'",
-      "script-src 'self'",
-      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' https://cdn.jsdelivr.net",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: https:",
-      "connect-src 'self' https://hakou.be",
+      "connect-src 'self' https://hakou.be https://studio.hakou.be https://vps-e09ed6db.vps.ovh.net wss://studio.hakou.be wss://vps-e09ed6db.vps.ovh.net",
       "media-src 'self' blob:",
       "object-src 'none'",
     ].join("; ")
   );
   if (typeof next === "function") next();
+}
+
+export function requestHostname(req) {
+  const raw = String(req.headers["x-forwarded-host"] || req.headers.host || "");
+  return raw.split(",")[0].trim().split(":")[0].toLowerCase();
+}
+
+export function sessionCookiePathForRequest(req, fallbackPath) {
+  const host = requestHostname(req);
+  if (host === "studio.hakou.be" || host === "www.studio.hakou.be") return "/";
+  return fallbackPath;
 }
 
 export function createSessionHelpers({
@@ -107,22 +119,22 @@ export function createSessionHelpers({
     }
   }
 
-  function setSessionCookie(res, payload) {
+  function setSessionCookie(res, payload, req) {
     res.cookie(sessionCookie, sign(payload), {
       httpOnly: true,
       secure: true,
       sameSite: "none",
       maxAge: sessionMaxAgeS * 1000,
-      path: sessionCookiePath,
+      path: sessionCookiePathForRequest(req, sessionCookiePath),
     });
   }
 
-  function clearSessionCookie(res) {
+  function clearSessionCookie(res, req) {
     res.clearCookie(sessionCookie, {
       httpOnly: true,
       secure: true,
       sameSite: "none",
-      path: sessionCookiePath,
+      path: sessionCookiePathForRequest(req, sessionCookiePath),
     });
   }
 

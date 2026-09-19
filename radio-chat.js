@@ -1,7 +1,7 @@
 (() => {
   const RADIO_JSON_URL = "./content/radio.json";
   const DEFAULT_WS =
-    "wss://vps-e09ed6db.vps.ovh.net/hakou-studio/api/radio/chat";
+    "wss://studio.hakou.be/api/radio/chat";
   const NICK_KEY = "hakou-radio-chat-nick";
   const LOG = "[Hakou Chat]";
   const RECONNECT_MS = 2500;

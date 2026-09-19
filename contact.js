@@ -1,9 +1,9 @@
 (() => {
   const CONFIG_URL = "./content/contact-config.json";
   const FALLBACK_API =
-    "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/contact";
+    "https://studio.hakou.be/api/contact";
   const FALLBACK_CHALLENGE =
-    "https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/contact/challenge";
+    "https://studio.hakou.be/api/contact/challenge";
   const LOG = "[Hakou Contact]";
   const FETCH_MS = 12_000;
 

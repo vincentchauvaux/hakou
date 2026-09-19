@@ -35,10 +35,10 @@ sudo nginx -t && sudo systemctl reload nginx
 ## Google Cloud
 
 1. Client OAuth **Application Web**.
-2. Origines JS : `https://hakou.be`, `https://vps-e09ed6db.vps.ovh.net`, `http://localhost:3000`.
+2. Origines JS : `https://hakou.be`, `https://studio.hakou.be`, `https://vps-e09ed6db.vps.ovh.net`, `http://localhost:3000`.
 3. **Client ID** → `studio/.env` + [`content/auth-config.json`](../content/auth-config.json).
 4. **Client secret** → uniquement VPS.
-5. **URI de redirection** (Live YouTube) : `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/studio/youtube/callback`.
+5. **URI de redirection** (Live YouTube) : `https://studio.hakou.be/api/studio/youtube/callback` (garder aussi l’ancienne URI VPS le temps de la transition).
 6. Activer **YouTube Data API v3** sur le projet Google Cloud (sinon création de live = 403).
 
 Allowlist : `ALLOWED_EMAILS` (obligatoire, pas de défaut).
@@ -73,7 +73,7 @@ Hakou.be reste toujours alimenté. En plus, tu peux relayer le live vers **YouTu
 - Relais : ffmpeg `RTSP local → RTMP` (H264 libx264 GOP 2 s, audio AAC 320 kb/s). Sans piste vidéo MediaMTX, Twitch reste hors ligne — partager l’onglet du mix, pas le dashboard Twitch. Pas de nouveau port inbound.
 
 Twitch console : même `TWITCH_CLIENT_ID` / `SECRET`, plus l’URI  
-`https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/studio/twitch/callback`.
+`https://studio.hakou.be/api/studio/twitch/callback`.
 
 ## Enregistrement VPS (indépendant du live)
 

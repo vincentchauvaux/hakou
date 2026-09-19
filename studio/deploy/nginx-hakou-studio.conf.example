@@ -1,6 +1,7 @@
 # Hakou Studio — snippet Nginx (HTTPS, hostname OVH)
 # À inclure dans le server {} de vps-e09ed6db.vps.ovh.net
 # (à côté de hirakana / rpg-cr).
+# L’UI /hakou-studio/ redirige vers https://studio.hakou.be/ ; les API restent proxifiées.
 #
 # Installation :
 #   sudo cp studio/deploy/nginx-hakou-studio.conf.example /etc/nginx/snippets/hakou-studio.conf
@@ -9,7 +10,11 @@
 #   sudo nginx -t && sudo systemctl reload nginx
 
 location = /hakou-studio {
-    return 301 $scheme://$host/hakou-studio/;
+    return 301 https://studio.hakou.be/;
+}
+
+location = /hakou-studio/ {
+    return 301 https://studio.hakou.be/;
 }
 
 location /hakou-studio/ {

@@ -24,7 +24,7 @@ location = /internal-hakou-media-auth {
 
 location @hakou_media_denied {
     set $hakou_cors "";
-    if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
+    if ($http_origin ~* ^(https://hakou\.be|https://studio\.hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
         set $hakou_cors $http_origin;
     }
     add_header Access-Control-Allow-Origin $hakou_cors always;
@@ -36,7 +36,7 @@ location @hakou_media_denied {
 # HLS — lecture réservée
 location /hakou-live/hls/ {
     set $hakou_cors "";
-    if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
+    if ($http_origin ~* ^(https://hakou\.be|https://studio\.hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
         set $hakou_cors $http_origin;
     }
 
@@ -80,7 +80,7 @@ location /hakou-live/hls/ {
 # WHIP (publish) + WHEP (lecture) — cookie média obligatoire
 location /hakou-live/whip/ {
     set $whip_cors "";
-    if ($http_origin ~* ^(https://hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
+    if ($http_origin ~* ^(https://hakou\.be|https://studio\.hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
         set $whip_cors $http_origin;
     }
 
