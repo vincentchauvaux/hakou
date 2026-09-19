@@ -1,7 +1,27 @@
+import { initStudioSpace } from "./studio-space.js";
+import { BELTS, initStudioViz } from "./studio-viz.js";
+
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
-const preview = document.getElementById("studio-preview");
 const previewWrap = document.querySelector(".studio-preview");
+const beltsEl = document.getElementById("studio-belts");
+const beltHintEl = document.getElementById("studio-belt-hint");
+const audioSrcField = document.getElementById("studio-audio-src");
+const audioDeviceSel = document.getElementById("studio-audio-device");
+
+const studioViz = (() => {
+  try {
+    return initStudioViz(document.getElementById("studio-viz"));
+  } catch (err) {
+    console.warn("[Hakou Studio] viz", err);
+    return null;
+  }
+})();
+try {
+  initStudioSpace(document.getElementById("studio-space"));
+} catch (err) {
+  console.warn("[Hakou Studio] space", err);
+}
 const startBtn = document.getElementById("studio-start");
 const stopBtn = document.getElementById("studio-stop");
 const recStartBtn = document.getElementById("studio-rec-start");
@@ -35,6 +55,7 @@ const ytHelpEl = document.getElementById("studio-yt-help");
 const ytCopyUri = document.getElementById("studio-yt-copy-uri");
 
 let localStream = null;
+let audioCaptureStream = null;
 let peerConnection = null;
 let whipResourceUrl = null;
 let whipAuthHeader = null;
@@ -54,6 +75,7 @@ let recTimer = null;
 let recMarks = [];
 /** @type {null | "tab" | "mic"} */
 let captureAudioKind = null;
+let selectedBeltId = BELTS[0]?.id || "main";
 let destState = {
   destination: "hakou",
   youtube: { connected: false },
@@ -87,11 +109,74 @@ function setAudioBadge(kind) {
   } else if (kind === "mic") {
     audioBadge.hidden = false;
     audioBadge.classList.add("is-mic");
-    audioBadge.textContent = "Micro — qualité limitée";
+    audioBadge.textContent = "Entrée audio";
   } else {
     audioBadge.hidden = true;
     audioBadge.textContent = "";
     audioBadge.classList.remove("is-mic");
+  }
+}
+
+function selectedAudioSource() {
+  const checked = audioSrcField?.querySelector(
+    'input[name="studio-audio-src"]:checked'
+  );
+  return checked?.value || "input";
+}
+
+function renderBelts() {
+  if (!beltsEl) return;
+  beltsEl.replaceChildren();
+  for (const belt of BELTS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "studio-belt";
+    btn.dataset.belt = belt.id;
+    btn.setAttribute("role", "radio");
+    const on = belt.id === selectedBeltId;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-checked", on ? "true" : "false");
+    const label = document.createElement("span");
+    label.className = "studio-belt__label";
+    label.textContent = belt.label;
+    const hint = document.createElement("span");
+    hint.className = "studio-belt__hint";
+    hint.textContent = belt.hint.split("—")[0].trim();
+    btn.append(label, hint);
+    btn.addEventListener("click", () => {
+      selectedBeltId = belt.id;
+      studioViz?.setBelt(belt.id);
+      renderBelts();
+      if (beltHintEl) beltHintEl.textContent = belt.hint;
+    });
+    beltsEl.append(btn);
+  }
+  const current = BELTS.find((b) => b.id === selectedBeltId) || BELTS[0];
+  if (beltHintEl && current) beltHintEl.textContent = current.hint;
+}
+
+async function refreshAudioDevices() {
+  if (!audioDeviceSel || !navigator.mediaDevices?.enumerateDevices) return;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const inputs = devices.filter((d) => d.kind === "audioinput");
+    const current = audioDeviceSel.value;
+    audioDeviceSel.replaceChildren();
+    const def = document.createElement("option");
+    def.value = "";
+    def.textContent = "Entrée par défaut";
+    audioDeviceSel.append(def);
+    for (const d of inputs) {
+      const opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Entrée ${audioDeviceSel.options.length}`;
+      audioDeviceSel.append(opt);
+    }
+    if ([...audioDeviceSel.options].some((o) => o.value === current)) {
+      audioDeviceSel.value = current;
+    }
+  } catch (err) {
+    console.warn("[Hakou Studio] devices", err);
   }
 }
 
@@ -383,6 +468,14 @@ function syncButtons() {
       radio.disabled = streaming || startInFlight;
     }
   }
+  const audioRadios =
+    audioSrcField?.querySelectorAll('input[name="studio-audio-src"]') || [];
+  for (const radio of audioRadios) {
+    radio.disabled = streaming || recording || startInFlight || recInFlight;
+  }
+  if (audioDeviceSel) {
+    audioDeviceSel.disabled = streaming || recording || startInFlight || recInFlight;
+  }
 }
 
 function withTimeout(promise, ms, label) {
@@ -403,7 +496,11 @@ function withTimeout(promise, ms, label) {
 async function loadMe() {
   const res = await fetch("./api/auth/me", { credentials: "include" });
   if (!res.ok) {
-    window.location.reload();
+    if (res.status === 401) {
+      window.location.href = "https://hakou.be/";
+      return;
+    }
+    setStatus("Session illisible — reconnecte-toi depuis hakou.be.");
     return;
   }
   const data = await res.json();
@@ -594,135 +691,83 @@ function preferH264Video(pc) {
 }
 
 /**
- * Capture écran + son.
- * Chrome (onglet) : « Partager l’audio » = son système/app.
- * Safari / fenêtre / écran macOS : pas de son système → micro obligatoire.
+ * Capture son seulement (plus d’écran).
+ * Entrée audio : BlackHole / micro / Rekordbox.
+ * Chrome : option son d’onglet (getDisplayMedia, piste vidéo jetée).
  */
-async function acquireDisplayStream() {
+async function acquireAudioStream() {
   const safari = isAppleWebKit();
-  const videoOnly = {
-    video: { frameRate: { ideal: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-    audio: false,
-  };
-  const withAudio = {
-    video: { frameRate: { ideal: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-    audio: true,
-    systemAudio: "include",
-  };
+  const mode = selectedAudioSource();
 
-  setStatus(
-    safari
-      ? "Choisis une fenêtre / un écran… (ensuite : micro pour le son)"
-      : "Choisis un onglet Chrome et coche « Partager l’audio » (sinon micro ensuite)…"
-  );
-
-  let stream;
-  if (safari) {
-    stream = await withTimeout(
-      navigator.mediaDevices.getDisplayMedia(videoOnly),
+  if (mode === "tab") {
+    if (safari) {
+      throw new Error(
+        "Le son d’onglet n’est pas dispo dans Safari — choisis une entrée audio (BlackHole)."
+      );
+    }
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      throw new Error("Son d’onglet indisponible sur ce navigateur.");
+    }
+    setStatus("Choisis un onglet et coche « Partager l’audio »…");
+    const display = await withTimeout(
+      navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 1, width: { ideal: 16 }, height: { ideal: 16 } },
+        audio: true,
+        systemAudio: "include",
+      }),
       90_000,
-      "Partage d’écran trop long — ferme le dialogue macOS s’il est ouvert, puis réessaie."
+      "Dialogue trop long — ferme-le s’il est resté ouvert, puis réessaie."
     );
-  } else {
-    try {
-      stream = await withTimeout(
-        navigator.mediaDevices.getDisplayMedia(withAudio),
-        90_000,
-        "Partage d’écran trop long — ferme le dialogue s’il est resté ouvert, puis réessaie."
-      );
-    } catch (err) {
-      if (err?.name === "NotAllowedError" || err?.name === "AbortError") {
-        throw err;
-      }
-      console.warn("[Hakou Studio] getDisplayMedia+audio → retry vidéo", err);
-      setStatus("Relance sans son d’onglet…");
-      stream = await withTimeout(
-        navigator.mediaDevices.getDisplayMedia(videoOnly),
-        90_000,
-        "Partage d’écran trop long — réessaie."
-      );
+    display.getVideoTracks().forEach((t) => t.stop());
+    const audios = display.getAudioTracks();
+    if (!audios.length) {
+      display.getTracks().forEach((t) => t.stop());
+      throw new Error("Aucun son d’onglet — coche « Partager l’audio ».");
     }
-  }
-
-  const displayAudio = stream.getAudioTracks();
-  for (const t of stream.getVideoTracks()) {
-    try {
-      t.contentHint = "detail";
-    } catch {
-      /* ignore */
-    }
-  }
-  if (displayAudio.length) {
-    displayAudio.forEach((t) => {
+    audios.forEach((t) => {
       t.enabled = true;
     });
-    console.info(
-      "[Hakou Studio] audio display:",
-      displayAudio.map((t) => t.label || t.id).join(", ")
-    );
     setAudioBadge("tab");
-    return stream;
+    refreshAudioDevices().catch(() => {});
+    return new MediaStream(audios);
   }
 
-  if (!navigator.mediaDevices.getUserMedia) {
-    throw new Error(
-      "Aucun son capturé. Sur Chrome, partage un onglet avec « Partager l’audio »."
-    );
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Capture audio indisponible sur ce navigateur.");
   }
-  setStatus(
-    "Aucun son d’écran — autorise le micro (ou une entrée virtuelle qui reprend Rekordbox / la table)…"
+  setStatus("Autorise l’entrée audio (BlackHole / micro / Rekordbox)…");
+  const audio = {
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl: false,
+  };
+  const deviceId = audioDeviceSel?.value;
+  if (deviceId) audio.deviceId = { exact: deviceId };
+  const mic = await withTimeout(
+    navigator.mediaDevices.getUserMedia({ audio, video: false }),
+    60_000,
+    "Entrée audio non autorisée."
   );
-  try {
-    const mic = await withTimeout(
-      navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-        video: false,
-      }),
-      60_000,
-      "Micro non autorisé — il faut un son (onglet + audio, ou micro)."
-    );
-    for (const track of mic.getAudioTracks()) {
-      track.enabled = true;
-      stream.addTrack(track);
-    }
-    setAudioBadge("mic");
-  } catch (err) {
-    stream.getTracks().forEach((t) => t.stop());
-    if (err?.name === "NotAllowedError" || err?.name === "AbortError") {
-      throw new Error(
-        "Son refusé. Chrome : onglet + « Partager l’audio », ou autorise le micro."
-      );
-    }
-    throw err;
-  }
-
-  if (!stream.getAudioTracks().length) {
-    stream.getTracks().forEach((t) => t.stop());
-    throw new Error("Impossible de capturer le son.");
-  }
-  return stream;
+  mic.getAudioTracks().forEach((t) => {
+    t.enabled = true;
+  });
+  setAudioBadge("mic");
+  refreshAudioDevices().catch(() => {});
+  return mic;
 }
 
 function captureAlive() {
   return Boolean(
-    localStream?.getTracks?.().some((t) => t.readyState === "live")
+    audioCaptureStream?.getAudioTracks?.().some((t) => t.readyState === "live") &&
+      localStream?.getVideoTracks?.().some((t) => t.readyState === "live")
   );
 }
 
-function showPreview(stream) {
-  if (preview) {
-    preview.srcObject = stream;
-    preview.play?.().catch(() => {});
-  }
+function showPreview() {
   previewWrap?.classList.add("is-live");
 }
 
 function hidePreview() {
-  if (preview) preview.srcObject = null;
   previewWrap?.classList.remove("is-live");
 }
 
@@ -730,19 +775,40 @@ async function onCaptureEnded() {
   if (streaming) await stopStream({ keepCapture: false }).catch(() => {});
   if (recording) await stopRecord({ keepCapture: false }).catch(() => {});
   releaseCapture();
-  setStatus("Partage d’écran arrêté.");
+  setStatus("Source audio arrêtée.");
 }
 
 async function ensureCapture() {
   if (captureAlive()) return localStream;
-  if (!navigator.mediaDevices?.getDisplayMedia) {
-    throw new Error("getDisplayMedia indisponible sur ce navigateur.");
+  if (!studioViz) {
+    throw new Error("Visualiseur indisponible (WebGL).");
   }
-  localStream = await acquireDisplayStream();
-  showPreview(localStream);
+  audioCaptureStream = await acquireAudioStream();
+  studioViz.connectAudio(audioCaptureStream);
+  const vizStream = studioViz.captureStream(30);
+  const mixed = new MediaStream();
+  for (const track of vizStream.getVideoTracks()) {
+    try {
+      track.contentHint = "motion";
+    } catch {
+      /* ignore */
+    }
+    mixed.addTrack(track);
+  }
+  if (!mixed.getVideoTracks().length) {
+    audioCaptureStream.getTracks().forEach((t) => t.stop());
+    audioCaptureStream = null;
+    studioViz.disconnectAudio();
+    throw new Error("Piste vidéo du visualiseur absente.");
+  }
+  for (const track of audioCaptureStream.getAudioTracks()) {
+    mixed.addTrack(track);
+  }
+  localStream = mixed;
+  showPreview();
   if (!captureEndedBound) {
     captureEndedBound = true;
-    localStream.getVideoTracks()[0]?.addEventListener("ended", () => {
+    audioCaptureStream.getAudioTracks()[0]?.addEventListener("ended", () => {
       onCaptureEnded().catch(() => {});
     });
   }
@@ -751,10 +817,12 @@ async function ensureCapture() {
 
 function releaseCapture() {
   if (streaming || recording) return;
-  localStream?.getTracks()?.forEach((t) => t.stop());
+  audioCaptureStream?.getTracks()?.forEach((t) => t.stop());
+  audioCaptureStream = null;
   localStream = null;
   captureEndedBound = false;
   captureAudioKind = null;
+  studioViz?.disconnectAudio();
   setAudioBadge(null);
   hidePreview();
 }
@@ -905,9 +973,9 @@ async function startRecord() {
     startChrono();
     setRecBadge(true, false);
     const micHint =
-      captureAudioKind === "mic"
-        ? " Source : micro (qualité limitée) — préfère Chrome + onglet + « Partager l’audio »."
-        : "";
+      captureAudioKind === "tab"
+        ? " Source : son d’onglet."
+        : " Source : entrée audio.";
     setStatus(
       streaming
         ? `Enregistrement VPS en cours (le live continue à part).${micHint}`
@@ -923,7 +991,7 @@ async function startRecord() {
     releaseCapture();
     const name = err?.name || "";
     if (name === "NotAllowedError" || name === "AbortError") {
-      setStatus("Partage annulé — réessaie « Enregistrer sur le VPS ».");
+      setStatus("Capture audio annulée — réessaie « Enregistrer sur le VPS ».");
     } else {
       setStatus(err?.message || "Impossible de démarrer l’enregistrement.");
     }
@@ -1092,7 +1160,7 @@ async function startStream() {
       .some((t) => t.readyState === "live");
     if (!liveVideo) {
       throw new Error(
-        "Aucune vidéo dans le partage. Choisis un onglet ou une fenêtre (le mix), pas seulement l’audio."
+        "Le visualiseur n’a pas produit de vidéo — recharge la page et réessaie."
       );
     }
     setStatus("Connexion WHIP au serveur…");
@@ -1136,7 +1204,7 @@ async function startStream() {
           ? "Hakou + Twitch"
           : "Hakou";
     const srcHint =
-      captureAudioKind === "mic" ? " Source : micro (qualité limitée)." : "";
+      captureAudioKind === "tab" ? " Source : son d’onglet." : " Source : entrée audio.";
     setStatus(
       recording
         ? `En direct (${destLabel}, ${audioLabels}). L’enregistrement VPS continue à part.${srcHint}`
@@ -1150,10 +1218,10 @@ async function startStream() {
     releaseCapture();
     const name = err?.name || "";
     if (name === "NotAllowedError" || name === "AbortError") {
-      setStatus("Partage annulé ou refusé — réessaie « Passer en direct ».");
+      setStatus("Capture audio annulée ou refusée — réessaie « Passer en direct ».");
     } else if (name === "NotReadableError") {
       setStatus(
-        "Impossible de lire l’écran — vérifie Réglages macOS → Confidentialité → Enregistrement de l’écran."
+        "Impossible de lire l’entrée audio — vérifie le périphérique (BlackHole / micro)."
       );
     } else {
       setStatus(err?.message || "Impossible de démarrer le live.");
@@ -1320,6 +1388,17 @@ ytCopyUri?.addEventListener("click", async () => {
 });
 
 syncButtons();
+renderBelts();
+if (isAppleWebKit()) {
+  audioSrcField
+    ?.querySelector('input[value="tab"]')
+    ?.closest("label")
+    ?.setAttribute("hidden", "");
+}
+refreshAudioDevices().catch(() => {});
+navigator.mediaDevices?.addEventListener?.("devicechange", () => {
+  refreshAudioDevices().catch(() => {});
+});
 loadMe().catch((err) => {
   console.warn(err);
   setStatus("Session illisible — reconnecte-toi depuis hakou.be.");

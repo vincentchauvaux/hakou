@@ -6,8 +6,9 @@
 
 - UI : zone **Stream** (`#stream`, nav « Stream ») — ex-Radio.
 - **Accès restreint** (4 août 2026) : player + chat uniquement si session Google allowlist. Gate [`stream-gate.js`](stream-gate.js) + login Google ; API `GET /api/stream/status` et WebSocket chat exigent le cookie studio. Contenu masqué (`#stream-lock` / `#stream-content`) tant que non connecté. **Noms des comptes** : plus affichés dans l’UI publique (lock, messages « Connecté », aria-label e-mail) — allowlist reste `ALLOWED_EMAILS` côté VPS. Mentions légales / responsable RGPD conservent l’identité éditeur (obligation BE/UE).
-- **Enregistrement VPS** (31 août 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks MediaRecorder **pipés** dans ffmpeg (plus de concat WebM) → MP4 AAC **320 kb/s**. Badge **son d’onglet** vs **micro (qualité limitée)**. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist, `<video>`, télécharger, supprimer). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
-- **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live. **URI Google exacte** : `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/studio/youtube/callback` (sinon `redirect_uri_mismatch`). Twitch = **clé de stream collée** (OAuth Helix optionnel, pas encore `TWITCH_CLIENT_*` sur le VPS). Après save : champ vide **exprès** ; bandeau vert dans la carte (`#studio-tw-result`) + aperçu `live_…xxxx` (`streamKeyHint`, jamais la clé complète) + destination Twitch auto-sélectionnée. Relais ffmpeg RTSP local `:8554` → RTMP **libx264 GOP 2 s**. WHIP : H264 préféré + **VP8 en repli** (sinon Chrome onglet n’envoie que l’Opus → Twitch DÉCONNECTÉ). Restream refuse sans piste vidéo. Ingest Twitch **Paris** si dispo. Partager l’onglet du **mix**, pas le dashboard Twitch. Comptes chiffrés `studio/data/live-accounts.bin`.
+- **Enregistrement VPS** (31 août 2026, MAJ 20 sept. 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks MediaRecorder **pipés** dans ffmpeg → MP4 AAC **320 kb/s** + visuel canvas 1280×720. Badge **son d’onglet** vs **entrée audio**. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
+- **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live. **URI Google exacte** : `https://vps-e09ed6db.vps.ovh.net/hakou-studio/api/studio/youtube/callback` (sinon `redirect_uri_mismatch`). Twitch = **clé de stream collée** (OAuth Helix optionnel). Relais ffmpeg RTSP local `:8554` → RTMP **libx264 GOP 2 s**. WHIP : H264 préféré + **VP8 en repli**. Restream refuse sans piste vidéo — la piste vient du **visualiseur** (`canvas.captureStream`), plus du partage d’écran. Comptes chiffrés `studio/data/live-accounts.bin`.
+- **Studio visuel / ceintures** (20 sept. 2026) : page studio = fond système solaire Three.js ([`studio/public/studio-space.js`](studio/public/studio-space.js)) + cartes verre. Live = **son + champ d’astéroïdes plexus** ([`studio/public/studio-viz.js`](studio/public/studio-viz.js)), plus de `getDisplayMedia` vidéo. 4 ceintures au choix : **principale** (Mars–Jupiter), **Troyens de Jupiter**, **Kuiper**, **anneaux de Saturne**. Audio : entrée (BlackHole / Rekordbox / micro) ou son d’onglet Chrome (piste écran jetée). Capture WHIP = canvas 1280×720 + pistes audio. Cache-bust `?v=20260920viz`.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET /hakou-studio/api/stream/status` (alias `/api/radio/status`) — **auth requise**.
@@ -51,7 +52,7 @@
 
 - **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
 - **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
-- **Dernier redéploiement** : 31 août 2026 — restream Twitch : exiger une piste vidéo + transcode x264 + VP8 fallback WHIP ; rsync `studio/` ; `pm2 restart hakou-studio`.
+- **Dernier redéploiement** : 20 sept. 2026 — visualiseur astéroïdes + fond solaire studio ; rsync `studio/` ; `pm2 restart hakou-studio` ; health 200.
 
 
 
@@ -199,7 +200,9 @@
 
 | `auth-client.js` | GIS Google + `POST` auth VPS (`content/auth-config.json`) |
 
-| `studio/` | Service Node VPS : auth allowlist + page studio (capture test) |
+| `studio/` | Service Node VPS : auth allowlist + page studio (fond solaire + visualiseur astéroïdes) |
+| `studio/public/studio-space.js` | Fond Three.js (planètes / ceinture / étoiles) derrière l’UI studio |
+| `studio/public/studio-viz.js` | Visualiseur plexus audio-réactif ; 4 ceintures ; `captureStream` pour WHIP / REC |
 
 | `navigation.js` | Gating scroll, overlay, glide state, échelle solaire ; `setNavigationLocked` pendant intro |
 
@@ -281,6 +284,8 @@ node --check youtube-videos.js
 node --check instagram-gallery.js
 
 node --check studio/public/studio.js
+node --check studio/public/studio-space.js
+node --check studio/public/studio-viz.js
 
 node --check scripts/refresh-radio-status.mjs
 
@@ -406,7 +411,7 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Pl
 - **Live studio (Étape 3)** :
   - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.
   - Nginx : `/hakou-live/whip/` → WHIP/WHEP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **cookieCheck** : ne **pas** injecter `Cookie: cookieCheck=1` (sinon playlists sans `?session=` + 401 enfants si `Set-Cookie` masqué). Client : `?cookieCheck=1` → `?session=` dans les m3u8. CORS HLS `*` sans credentials (`hls.js` `withCredentials: false`).
-  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) `getDisplayMedia` → WHIP **H264** (`setCodecPreferences`). **Son** : Chrome onglet + « Partager l’audio » (`systemAudio: include`) ; sinon **micro obligatoire** (Safari / fenêtre macOS) — badge **son d’onglet** vs **micro**. **Enregistrement VPS** : bouton séparé, MediaRecorder → pipe ffmpeg `/api/studio/record/*` (pas MediaMTX). **Destination** : Hakou / YouTube / Twitch ; restream RTMP via RTSP local. Spectateurs Radio : autoplay **muet** + bouton **Activer le son** ; piste audio HLS sélectionnée explicitement.
+  - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) **entrée audio** (ou son d’onglet Chrome) + **canvas visualiseur** → WHIP **H264** (`setCodecPreferences`). Plus de partage d’écran comme image du live. Badge **son d’onglet** vs **entrée audio**. **Enregistrement VPS** : bouton séparé, MediaRecorder (viz + audio) → pipe ffmpeg `/api/studio/record/*` (pas MediaMTX). **Destination** : Hakou / YouTube / Twitch ; restream RTMP via RTSP local. Spectateurs : autoplay **muet** + bouton **Activer le son**.
   - Spectateurs : [`radio.js`](radio.js) si auth Stream + `studioLive` / Twitch / YouTube. Hors antenne : **logo Hakou**. Priorité studio > Twitch live > YouTube live.
   - Nginx WHIP/WHEP : CORS origines hakou.be (+ localhost / VPS), headers `Content-Type` / `Accept` pour SDP ; ICE UDP **8189** ouvert (média WebRTC hors nginx).
   - Install : [`studio/deploy/install-mediamtx.sh`](studio/deploy/install-mediamtx.sh) + secrets `MEDIAMTX_PUBLISH_PASS` / `MEDIAMTX_API_PASS` dans `/opt/hakou-studio/.env` et `mediamtx.yml`.

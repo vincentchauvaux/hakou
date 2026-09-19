@@ -6,9 +6,23 @@
     <title>Hakou Studio — Live Stream</title>
     <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" sizes="180x180" />
-    <link rel="stylesheet" href="./studio.css?v=20260831vid" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./studio.css?v=20260920viz" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
+        }
+      }
+    </script>
   </head>
   <body class="studio-body">
+    <canvas id="studio-space" aria-hidden="true"></canvas>
     <header class="studio-top">
       <p class="tag">Studio</p>
       <div class="studio-top__actions">
@@ -20,23 +34,53 @@
     </header>
 
     <main class="studio-card studio-card--wide">
-      <h1>Capture fenêtre / app</h1>
+      <h1>Champ d’astéroïdes</h1>
       <p>
-        Deux actions <strong>indépendantes</strong> : le live Stream, et
-        l’enregistrement MP4 sur le VPS (vidéo compressée, audio 320 kb/s).
-        Tu peux faire l’un, l’autre, ou les deux — ce n’est pas le live qui
-        est enregistré, c’est la capture.
+        Le live envoie le <strong>son</strong> + le visualiseur — plus de
+        partage d’écran. Deux actions <strong>indépendantes</strong> : le
+        direct Stream, et l’enregistrement MP4 sur le VPS (animation 1280×720,
+        audio 320 kb/s).
         <br />
-        <strong>Chrome (recommandé)</strong> : partage un <em>onglet</em> et
-        coche « Partager l’audio » pour le son de l’appli / DJ.
-        <strong>Safari / fenêtre</strong> : pas de son système — autorise le
-        micro (ou une entrée virtuelle type BlackHole branchée sur Rekordbox).
+        <strong>Entrée audio</strong> (Rekordbox / BlackHole / micro) ou,
+        sur Chrome, le <strong>son d’onglet</strong>. Glisse dans le champ
+        pour l’explorer — il vibre dès qu’il y a du son.
       </p>
 
+      <div
+        class="studio-belts"
+        id="studio-belts"
+        role="radiogroup"
+        aria-label="Ceinture d’astéroïdes"
+      ></div>
+      <p id="studio-belt-hint" class="studio-belt-hint muted"></p>
+
+      <fieldset class="studio-dest studio-audio-src" id="studio-audio-src">
+        <legend>Source son</legend>
+        <label class="studio-dest__opt">
+          <input type="radio" name="studio-audio-src" value="input" checked />
+          Entrée audio (BlackHole / micro)
+        </label>
+        <label class="studio-dest__opt">
+          <input type="radio" name="studio-audio-src" value="tab" />
+          Son d’onglet Chrome
+        </label>
+        <label class="studio-audio-device" for="studio-audio-device">
+          Périphérique
+          <select id="studio-audio-device">
+            <option value="">Entrée par défaut</option>
+          </select>
+        </label>
+      </fieldset>
+
       <div class="studio-preview">
-        <video id="studio-preview" playsinline muted autoplay></video>
+        <canvas
+          id="studio-viz"
+          width="1280"
+          height="720"
+          aria-label="Visualiseur — champ d’astéroïdes"
+        ></canvas>
         <p id="studio-preview-empty" class="studio-preview__empty">
-          Aucune capture — lance un live ou un enregistrement.
+          Glisse pour explorer — passe en direct pour lier le son.
         </p>
         <span id="studio-rec-badge" class="studio-rec-badge" hidden>REC</span>
         <span id="studio-audio-badge" class="studio-audio-badge" hidden></span>
@@ -76,8 +120,9 @@
       <fieldset class="studio-dest" id="studio-dest">
         <legend>Destination live</legend>
         <p class="studio-dest__hint muted">
-          Pour Twitch / YouTube : partage l’onglet ou la fenêtre du mix
-          (Rekordbox…), pas le dashboard Twitch. Chrome + « Partager l’audio ».
+          Hakou.be, Twitch et YouTube voient le champ d’astéroïdes + le mix.
+          Branche Rekordbox sur l’entrée audio (ou un onglet Chrome avec
+          « Partager l’audio »).
         </p>
         <label class="studio-dest__opt">
           <input type="radio" name="studio-dest" value="hakou" checked />
@@ -174,6 +219,6 @@
       <ul id="studio-recordings-list" class="studio-recordings__list"></ul>
     </section>
 
-    <script type="module" src="./studio.js?v=20260831vid"></script>
+    <script type="module" src="./studio.js?v=20260920viz"></script>
   </body>
 </html>

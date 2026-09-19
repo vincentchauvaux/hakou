@@ -3,7 +3,7 @@
   --text: #e8edf7;
   --muted: #92a0ba;
   --accent: #7f9dff;
-  --card: rgba(9, 13, 24, 0.82);
+  --card: rgba(7, 10, 20, 0.58);
   --border: rgba(147, 170, 219, 0.28);
 }
 
@@ -18,13 +18,29 @@ body {
 }
 
 .studio-body {
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
   padding: 24px clamp(16px, 4vw, 40px) 48px;
   font-family: "Segoe UI", system-ui, sans-serif;
   color: var(--text);
-  background:
-    radial-gradient(ellipse 80% 50% at 70% 10%, rgba(127, 157, 255, 0.16), transparent),
-    var(--bg);
+  background: var(--bg);
+}
+
+#studio-space {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.studio-top,
+.studio-card {
+  position: relative;
+  z-index: 1;
 }
 
 .tag {
@@ -59,18 +75,88 @@ body {
   margin: 10vh auto 0;
   padding: 1.5rem 1.35rem;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--card);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
 }
 
 .studio-card--wide {
-  width: min(820px, 100%);
+  width: min(920px, 100%);
   margin-top: 0;
 }
 
 .studio-card h1 {
   margin: 0.4rem 0 0.75rem;
-  font-size: clamp(1.4rem, 3vw, 1.85rem);
+  font-family: Italiana, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  font-size: clamp(1.55rem, 3.2vw, 2.05rem);
+}
+
+.studio-belts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0 0 0.55rem;
+}
+
+.studio-belt {
+  display: grid;
+  gap: 0.15rem;
+  text-align: left;
+  min-height: 58px;
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.studio-belt:hover,
+.studio-belt:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 55%, white);
+}
+
+.studio-belt.is-active {
+  border-color: color-mix(in srgb, var(--accent) 80%, white);
+  background: color-mix(in srgb, var(--accent) 18%, rgba(0, 0, 0, 0.45));
+}
+
+.studio-belt__label {
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.studio-belt__hint {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.studio-belt-hint {
+  margin: 0 0 0.85rem !important;
+}
+
+.studio-audio-device {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.studio-audio-device select {
+  min-height: 36px;
+  padding: 0.3rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font: inherit;
 }
 
 .studio-card p {
@@ -96,28 +182,46 @@ body {
   overflow: hidden;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  touch-action: none;
+  cursor: grab;
 }
 
-.studio-preview video {
+.studio-preview:active {
+  cursor: grabbing;
+}
+
+.studio-preview canvas {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  background: #000;
+  display: block;
+  object-fit: cover;
+  background: #050308;
 }
 
 .studio-preview__empty {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: grid;
   place-items: center;
   margin: 0 !important;
-  padding: 1rem;
+  padding: 0.55rem 1rem;
   text-align: center;
+  font-size: 0.8rem;
   color: var(--muted) !important;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.55));
+  pointer-events: none;
 }
 
 .studio-preview.is-live .studio-preview__empty {
   display: none;
+}
+
+@media (max-width: 680px) {
+  .studio-belts {
+    grid-template-columns: 1fr;
+  }
 }
 
 .studio-actions {
