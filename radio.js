@@ -147,8 +147,12 @@
     const btn = $("stream-listen");
     if (btn && !btn.dataset.bound) {
       btn.dataset.bound = "1";
+      btn.addEventListener("pointerdown", (ev) => {
+        ev.stopPropagation();
+      });
       btn.addEventListener("click", (ev) => {
         ev.preventDefault();
+        ev.stopPropagation();
         if (!liveVideoEl) return;
         if (liveVideoEl.muted || liveVideoEl.volume === 0) {
           resumeLiveAudio();
@@ -163,7 +167,9 @@
       panel.dataset.listenBound = "1";
       panel.addEventListener(
         "pointerdown",
-        () => {
+        (ev) => {
+          const t = ev.target;
+          if (t instanceof Element && t.closest("#stream-listen")) return;
           if (liveVideoEl?.muted) resumeLiveAudio();
         },
         { passive: true }
