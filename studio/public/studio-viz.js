@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { BELTS } from "./studio-belts.js?v=20260920m";
-import { createSolarSystem } from "./studio-system.js?v=20260920m";
+import { BELTS } from "./studio-belts.js?v=20260920p";
+import { createSolarSystem } from "./studio-system.js?v=20260920p";
 
 export { BELTS };
 
@@ -205,27 +205,31 @@ export async function initStudioViz(canvas) {
     pointer.el = Math.min(1.1, Math.max(-0.35, pointer.el + ev.movementY * 0.004));
   }
 
-  canvas.addEventListener("pointerdown", (ev) => {
+  function isStudioUi(target) {
+    const el = target instanceof Element ? target : null;
+    return Boolean(el?.closest?.(".studio-dock, .studio-top, .studio-hud"));
+  }
+
+  function onPointerDown(ev) {
+    if (isStudioUi(ev.target)) return;
     pointer.down = true;
-    canvas.setPointerCapture(ev.pointerId);
-  });
-  canvas.addEventListener("pointerup", (ev) => {
+  }
+
+  function onPointerUp() {
     pointer.down = false;
-    try {
-      canvas.releasePointerCapture(ev.pointerId);
-    } catch {
-      /* ignore */
-    }
-  });
-  canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener(
-    "wheel",
-    (ev) => {
-      ev.preventDefault();
-      pointer.el = Math.min(1.15, Math.max(-0.4, pointer.el + Math.sign(ev.deltaY) * 0.04));
-    },
-    { passive: false }
-  );
+  }
+
+  function onWheel(ev) {
+    if (isStudioUi(ev.target)) return;
+    ev.preventDefault();
+    pointer.el = Math.min(1.15, Math.max(-0.4, pointer.el + Math.sign(ev.deltaY) * 0.04));
+  }
+
+  window.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("pointerup", onPointerUp);
+  window.addEventListener("pointercancel", onPointerUp);
+  window.addEventListener("pointermove", onPointerMove);
+  window.addEventListener("wheel", onWheel, { passive: false });
 
   tick();
 
@@ -278,6 +282,11 @@ export async function initStudioViz(canvas) {
     dispose() {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", syncCameraAspect);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("wheel", onWheel);
       this.disconnectAudio();
       renderer.dispose();
     },

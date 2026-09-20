@@ -39,6 +39,7 @@ body {
   object-fit: fill;
   touch-action: none;
   cursor: grab;
+  pointer-events: none;
 }
 
 #studio-space:active {
@@ -49,7 +50,8 @@ body {
 .studio-dock,
 .studio-hud {
   position: relative;
-  z-index: 1;
+  z-index: 3;
+  pointer-events: auto;
 }
 
 .studio-hud {
@@ -122,7 +124,7 @@ body {
 
 .studio-dock__row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.5rem;
   margin-bottom: 0.55rem;
 }
@@ -171,20 +173,74 @@ body {
   font-weight: 650;
 }
 
-.studio-audio-device {
-  flex: 1 1 8rem;
+.studio-audio-src {
+  margin-bottom: 0.55rem;
+}
+
+.studio-audio-picker {
+  flex: 1 1 100%;
   display: grid;
-  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.studio-audio-src[data-mode="tab"] .studio-audio-picker,
+.studio-audio-src[data-mode="tab"] #studio-audio-unlock {
+  display: none;
+}
+
+.studio-audio-device {
+  display: grid;
+  min-width: 0;
 }
 
 .studio-audio-device select {
-  min-height: 36px;
-  padding: 0.3rem 0.55rem;
+  width: 100%;
+  min-height: 40px;
+  padding: 0.35rem 0.65rem;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.45);
   color: var(--text);
   font: inherit;
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.studio-audio-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.studio-audio-list:empty {
+  display: none;
+}
+
+.studio-audio-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.32);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.studio-audio-chip.is-active {
+  border-color: color-mix(in srgb, var(--accent) 80%, white);
+  background: color-mix(in srgb, var(--accent) 18%, rgba(0, 0, 0, 0.45));
+}
+
+.studio-audio-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .studio-card p,

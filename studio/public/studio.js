@@ -1,4 +1,4 @@
-import { BELTS } from "./studio-belts.js?v=20260920m";
+import { BELTS } from "./studio-belts.js?v=20260920p";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
@@ -6,6 +6,12 @@ const previewWrap = document.querySelector(".studio-preview");
 const beltsEl = document.getElementById("studio-belts");
 const audioSrcField = document.getElementById("studio-audio-src");
 const audioDeviceSel = document.getElementById("studio-audio-device");
+const audioUnlockBtn = document.getElementById("studio-audio-unlock");
+const audioHintEl = document.getElementById("studio-audio-hint");
+const audioListEl = document.getElementById("studio-audio-list");
+let audioPermissionGranted = false;
+let lastAudioInputs = [];
+let audioDeviceTouched = false;
 
 let studioViz = null;
 const startBtn = document.getElementById("studio-start");
@@ -110,6 +116,143 @@ function selectedAudioSource() {
   return checked?.value || "input";
 }
 
+function audioControlsLocked() {
+  return streaming || recording || startInFlight || recInFlight;
+}
+
+function isContinuityMic(label) {
+  return /iphone|ipad|ipod|apple watch|\bcontinuity\b/i.test(label || "");
+}
+
+function preferredInputId(inputs) {
+  const hit = inputs.find((d) =>
+    /blackhole|rekordbox|loopback|vb-?audio|soundflower/i.test(d.label || "")
+  );
+  return hit?.deviceId || "";
+}
+
+function syncAudioSourceUi() {
+  const tab = selectedAudioSource() === "tab";
+  audioSrcField?.setAttribute("data-mode", tab ? "tab" : "input");
+  if (audioDeviceSel) audioDeviceSel.hidden = tab;
+  if (audioUnlockBtn) {
+    audioUnlockBtn.hidden = tab;
+    audioUnlockBtn.disabled = audioControlsLocked();
+    audioUnlockBtn.textContent = audioPermissionGranted
+      ? "Actualiser"
+      : "Lister les micros";
+  }
+  if (audioHintEl) {
+    audioHintEl.textContent = tab
+      ? "Au Direct, Chrome demandera l’onglet — coche « Partager l’audio »."
+      : audioPermissionGranted
+        ? "Cette entrée partira en live et en rec."
+        : "Clique « Lister les micros » pour voir BlackHole / Rekordbox / micro.";
+  }
+  renderAudioDeviceList();
+}
+
+function renderAudioDeviceList() {
+  if (!audioListEl) return;
+  const tab = selectedAudioSource() === "tab";
+  const locked = audioControlsLocked();
+  const current = audioDeviceSel?.value || "";
+  audioListEl.replaceChildren();
+  if (tab) return;
+
+  const addChip = (id, label) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "studio-audio-chip";
+    btn.setAttribute("role", "option");
+    const on = current === id;
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+    btn.classList.toggle("is-active", on);
+    btn.disabled = locked;
+    btn.dataset.deviceId = id;
+    btn.textContent = label;
+    btn.addEventListener("click", () => {
+      if (locked) return;
+      audioDeviceTouched = true;
+      if (audioDeviceSel) audioDeviceSel.value = id;
+      renderAudioDeviceList();
+    });
+    audioListEl.append(btn);
+  };
+
+  addChip("", "Défaut");
+  for (const d of lastAudioInputs) {
+    addChip(d.deviceId, d.label || `Entrée ${audioListEl.children.length}`);
+  }
+}
+
+async function unlockAudioDevices({ interactive = false } = {}) {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus("Capture audio indisponible sur ce navigateur.");
+    return;
+  }
+  if (!audioPermissionGranted && interactive) {
+    try {
+      const tmp = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+        video: false,
+      });
+      tmp.getTracks().forEach((t) => t.stop());
+      audioPermissionGranted = true;
+    } catch {
+      setStatus("Autorise le micro pour lister les entrées à caster.");
+      return;
+    }
+  }
+  await refreshAudioDevices();
+  if (interactive && audioPermissionGranted && lastAudioInputs.length) {
+    setStatus("Choisis l’entrée à caster, puis Direct ou Rec.");
+  }
+}
+
+async function refreshAudioDevices() {
+  if (!audioDeviceSel || !navigator.mediaDevices?.enumerateDevices) return;
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const inputs = devices.filter(
+      (d) =>
+        d.kind === "audioinput" &&
+        d.deviceId &&
+        d.deviceId !== "communications" &&
+        !isContinuityMic(d.label)
+    );
+    if (inputs.some((d) => d.label)) audioPermissionGranted = true;
+    lastAudioInputs = inputs;
+    const current = audioDeviceSel.value;
+    audioDeviceSel.replaceChildren();
+    const def = document.createElement("option");
+    def.value = "";
+    def.textContent = "Défaut (entrée système)";
+    audioDeviceSel.append(def);
+    for (const d of inputs) {
+      const opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Entrée ${audioDeviceSel.options.length}`;
+      audioDeviceSel.append(opt);
+    }
+    const stillThere = [...audioDeviceSel.options].some((o) => o.value === current);
+    if (stillThere && (current || audioDeviceTouched)) {
+      audioDeviceSel.value = current;
+    } else if (!audioDeviceTouched) {
+      audioDeviceSel.value = preferredInputId(inputs);
+    } else {
+      audioDeviceSel.value = "";
+    }
+    syncAudioSourceUi();
+  } catch (err) {
+    console.warn("[Hakou Studio] devices", err);
+  }
+}
+
 function renderBelts() {
   if (!beltsEl) return;
   beltsEl.replaceChildren();
@@ -137,37 +280,12 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920m");
+    const { initStudioViz } = await import("./studio-viz.js?v=20260920p");
     studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {
     console.warn("[Hakou Studio] 3D", err);
     setStatus("3D bloqué — Cmd+Shift+R.", { sticky: true });
-  }
-}
-
-async function refreshAudioDevices() {
-  if (!audioDeviceSel || !navigator.mediaDevices?.enumerateDevices) return;
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const inputs = devices.filter((d) => d.kind === "audioinput");
-    const current = audioDeviceSel.value;
-    audioDeviceSel.replaceChildren();
-    const def = document.createElement("option");
-    def.value = "";
-    def.textContent = "Défaut";
-    audioDeviceSel.append(def);
-    for (const d of inputs) {
-      const opt = document.createElement("option");
-      opt.value = d.deviceId;
-      opt.textContent = d.label || `Entrée ${audioDeviceSel.options.length}`;
-      audioDeviceSel.append(opt);
-    }
-    if ([...audioDeviceSel.options].some((o) => o.value === current)) {
-      audioDeviceSel.value = current;
-    }
-  } catch (err) {
-    console.warn("[Hakou Studio] devices", err);
   }
 }
 
@@ -456,14 +574,14 @@ function syncButtons() {
       radio.disabled = streaming || startInFlight;
     }
   }
+  const locked = audioControlsLocked();
   const audioRadios =
     audioSrcField?.querySelectorAll('input[name="studio-audio-src"]') || [];
   for (const radio of audioRadios) {
-    radio.disabled = streaming || recording || startInFlight || recInFlight;
+    radio.disabled = locked;
   }
-  if (audioDeviceSel) {
-    audioDeviceSel.disabled = streaming || recording || startInFlight || recInFlight;
-  }
+  if (audioDeviceSel) audioDeviceSel.disabled = locked;
+  syncAudioSourceUi();
 }
 
 function withTimeout(promise, ms, label) {
@@ -1387,6 +1505,16 @@ if (isAppleWebKit()) {
     ?.closest("label")
     ?.setAttribute("hidden", "");
 }
+audioSrcField?.addEventListener("change", () => {
+  syncAudioSourceUi();
+});
+audioUnlockBtn?.addEventListener("click", () => {
+  unlockAudioDevices({ interactive: true }).catch((err) => console.warn(err));
+});
+audioDeviceSel?.addEventListener("change", () => {
+  audioDeviceTouched = true;
+  renderAudioDeviceList();
+});
 refreshAudioDevices().catch(() => {});
 navigator.mediaDevices?.addEventListener?.("devicechange", () => {
   refreshAudioDevices().catch(() => {});

@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./studio.css?v=20260920m" />
+    <link rel="stylesheet" href="./studio.css?v=20260920p" />
     <script type="importmap">
       {
         "imports": {
@@ -48,24 +48,38 @@
         aria-label="Point de vue"
       ></div>
 
-      <div class="studio-dock__row">
-        <fieldset class="studio-dest studio-audio-src" id="studio-audio-src">
-          <legend>Son</legend>
-          <label class="studio-dest__opt">
-            <input type="radio" name="studio-audio-src" value="input" checked />
-            Entrée
-          </label>
-          <label class="studio-dest__opt">
-            <input type="radio" name="studio-audio-src" value="tab" />
-            Onglet
-          </label>
+      <fieldset class="studio-dest studio-audio-src" id="studio-audio-src" data-mode="input">
+        <legend>Son à caster</legend>
+        <p class="studio-dest__hint" id="studio-audio-hint">
+          Clique « Lister les micros » pour voir BlackHole, Rekordbox ou le micro — c’est ce son qui part en live / rec.
+        </p>
+        <label class="studio-dest__opt">
+          <input type="radio" name="studio-audio-src" value="input" checked />
+          Entrée
+        </label>
+        <label class="studio-dest__opt">
+          <input type="radio" name="studio-audio-src" value="tab" />
+          Onglet
+        </label>
+        <button type="button" id="studio-audio-unlock" class="studio-btn studio-btn--ghost studio-btn--tiny">
+          Lister les micros
+        </button>
+        <div class="studio-audio-picker">
           <label class="studio-audio-device" for="studio-audio-device">
-            <select id="studio-audio-device" aria-label="Périphérique">
-              <option value="">Défaut</option>
+            <select id="studio-audio-device" aria-label="Périphérique à caster">
+              <option value="">Défaut (entrée système)</option>
             </select>
           </label>
-        </fieldset>
+          <div
+            id="studio-audio-list"
+            class="studio-audio-list"
+            role="listbox"
+            aria-label="Entrées audio"
+          ></div>
+        </div>
+      </fieldset>
 
+      <div class="studio-dock__row">
         <fieldset class="studio-dest" id="studio-dest">
           <legend>Live</legend>
           <label class="studio-dest__opt">
@@ -184,6 +198,6 @@
       </details>
     </main>
 
-    <script type="module" src="./studio.js?v=20260920m"></script>
+    <script type="module" src="./studio.js?v=20260920p"></script>
   </body>
 </html>
