@@ -1,6 +1,6 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js";
-import { BELTS } from "./studio-belts.js";
-import { createSolarSystem, hash } from "./studio-system.js";
+import * as THREE from "three";
+import { BELTS } from "./studio-belts.js?v=20260920h";
+import { createSolarSystem, hash } from "./studio-system.js?v=20260920h";
 
 export { BELTS };
 
@@ -106,11 +106,11 @@ export function initStudioViz(canvas) {
   renderer.setSize(WIDTH, HEIGHT, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.02;
+  renderer.toneMappingExposure = 1.18;
 
   const system = createSolarSystem({ starCount: 1800 });
   const { scene } = system;
-  const camera = new THREE.PerspectiveCamera(48, WIDTH / HEIGHT, 0.2, 280);
+  const camera = new THREE.PerspectiveCamera(48, WIDTH / HEIGHT, 0.08, 864);
   const look = new THREE.Vector3();
   const camGoal = new THREE.Vector3();
   const lookGoal = new THREE.Vector3();
@@ -156,6 +156,7 @@ export function initStudioViz(canvas) {
   scene.add(lines);
 
   let belt = BELTS[0];
+  let snapCam = true;
   const pointer = { x: 0, y: 0, down: false, az: 0, el: 0 };
   let autoAz = 0;
   const audio = {
@@ -248,6 +249,7 @@ export function initStudioViz(canvas) {
     pointer.az = 0;
     pointer.el = 0;
     autoAz = 0;
+    snapCam = true;
     layoutRocks();
   }
 
@@ -322,8 +324,14 @@ export function initStudioViz(canvas) {
 
     const shake = audio.peak * 0.16;
     camGoal.x += Math.sin(t * 7) * shake;
-    camera.position.lerp(camGoal, 0.07);
-    look.lerp(lookGoal, 0.08);
+    if (snapCam) {
+      camera.position.copy(camGoal);
+      look.copy(lookGoal);
+      snapCam = false;
+    } else {
+      camera.position.lerp(camGoal, 0.07);
+      look.lerp(lookGoal, 0.08);
+    }
     camera.lookAt(look);
   }
 
@@ -342,7 +350,7 @@ export function initStudioViz(canvas) {
 
     const pulse = audio.bass * 1.35 + audio.mid * 0.45;
     lines.material.opacity = 0.1 + audio.mid * 0.5 + audio.bass * 0.22;
-    system.sunGlow.material.opacity = 0.16 + audio.bass * 0.12;
+    system.sunGlow.material.opacity = 0.08 + audio.bass * 0.12;
 
     const wellX = pointer.x * 6;
     const wellY = pointer.y * 3;

@@ -12,7 +12,15 @@
       href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./studio.css?v=20260920f" />
+    <link rel="stylesheet" href="./studio.css?v=20260920h" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+        }
+      }
+    </script>
   </head>
   <body class="studio-body">
     <canvas id="studio-space" width="1280" height="720" aria-label="Système solaire"></canvas>
@@ -176,6 +184,6 @@
       </details>
     </main>
 
-    <script type="module" src="./studio.js?v=20260920f"></script>
+    <script type="module" src="./studio.js?v=20260920h"></script>
   </body>
 </html>
