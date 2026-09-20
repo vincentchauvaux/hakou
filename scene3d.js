@@ -4672,11 +4672,13 @@ function fillStreamSpotCamera(elapsed) {
   if (streamTouchRight.lengthSq() < 1e-6) streamTouchRight.set(1, 0, 0);
   streamTouchRight.normalize();
   streamTouchUp.crossVectors(streamHeroDir, streamTouchRight).normalize();
+  // Même ciel qu’Uranus §2, un peu reculé : les ceintures / plexus restent dans le cadre.
+  const pull = 2.85;
   streamCamOut.position
     .copy(streamCamOut.lookAt)
-    .addScaledVector(streamHeroDir, len * distMul)
-    .addScaledVector(streamTouchRight, az * len)
-    .addScaledVector(streamTouchUp, el * len);
+    .addScaledVector(streamHeroDir, len * distMul * pull)
+    .addScaledVector(streamTouchRight, az * len * pull)
+    .addScaledVector(streamTouchUp, el * len * pull);
   streamCamState.fromIndex = STREAM_SECTION;
   streamCamState.toIndex = STREAM_SECTION;
   streamCamState.fov = streamCamOut.fov ?? 32;

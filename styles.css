@@ -1682,7 +1682,7 @@ body[data-stream-auth="guest"] .radio-player {
   width: 100%;
 }
 
-body[data-stream-auth="guest"] .radio-player__frame {
+body[data-stream-auth="guest"] .radio-player.is-audio-only .radio-player__frame {
   width: 96px;
   height: 54px;
   max-width: 96px;
