@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./studio.css?v=20260920aa" />
+    <link rel="stylesheet" href="./studio.css?v=20260920ac" />
     <script type="importmap">
       {
         "imports": {
@@ -50,39 +50,11 @@
 
       <section class="studio-mix" aria-label="Mix">
         <p class="studio-dest__hint" id="studio-audio-hint">
-          Le cinch blanc/rouge du FLX4 n’entre pas dans Chrome. Allume
-          <strong>PC MASTER OUT</strong> dans Rekordbox (haut-parleur en haut à droite)
-          le temps du live — puis prends le son de l’écran.
+          Partage l’écran et coche « Partager l’audio ». L’image ne part pas.
         </p>
-        <fieldset class="studio-mix-src" id="studio-audio-src" data-mode="display">
-          <legend class="visually-hidden">Source du mix</legend>
-          <label class="studio-src">
-            <input type="radio" name="studio-audio-src" value="display" checked />
-            <span class="studio-src__title">Son de l’écran</span>
-            <span class="studio-src__help">Rekordbox : PC MASTER OUT allumé. Chrome : coche « Partager l’audio ». L’image est jetée.</span>
-          </label>
-          <label class="studio-src">
-            <input type="radio" name="studio-audio-src" value="input" />
-            <span class="studio-src__title">FLX4 / carte son</span>
-            <span class="studio-src__help">Entrée USB du contrôleur, pas le micro du Mac.</span>
-          </label>
-        </fieldset>
         <button type="button" id="studio-audio-unlock" class="studio-btn studio-btn--ghost">
-          Prendre le son
+          Partager l’écran
         </button>
-        <div class="studio-audio-picker">
-          <label class="studio-audio-device" for="studio-audio-device">
-            <select id="studio-audio-device" aria-label="Carte son du mix">
-              <option value="">Défaut (entrée système)</option>
-            </select>
-          </label>
-          <div
-            id="studio-audio-list"
-            class="studio-audio-list"
-            role="listbox"
-            aria-label="Cartes son"
-          ></div>
-        </div>
         <div class="studio-meter" id="studio-meter" data-signal="off">
           <span class="studio-meter__fill" id="studio-meter-fill"></span>
         </div>
@@ -211,6 +183,6 @@
       </details>
     </main>
 
-    <script type="module" src="./studio.js?v=20260920aa"></script>
+    <script type="module" src="./studio.js?v=20260920ac"></script>
   </body>
 </html>

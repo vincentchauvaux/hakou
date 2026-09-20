@@ -2,7 +2,7 @@ import {
   setIntroGateActive,
   startIntroGateZoom,
   isIntroGateActive,
-} from "./scene3d.js";
+} from "./scene3d.js?v=20260920ac";
 import {
   setNavigationLocked,
   goToSectionIndex,

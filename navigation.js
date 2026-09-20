@@ -4,7 +4,7 @@ import {
   isRestOrbitDragging,
   resetRestOrbitOffsets,
   setPlanetFocusMode,
-} from "./scene3d.js";
+} from "./scene3d.js?v=20260920ac";
 
 let sectionCount = 9;
 let scaleSectionMax = 8;

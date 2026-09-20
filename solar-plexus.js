@@ -6,6 +6,37 @@ export function hash(i) {
   return x - Math.floor(x);
 }
 
+function fade(t) {
+  return t * t * (3 - 2 * t);
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function valueNoise(x, y, z) {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const iz = Math.floor(z);
+  const fx = fade(x - ix);
+  const fy = fade(y - iy);
+  const fz = fade(z - iz);
+  const n = (i, j, k) => hash(i * 19.19 + j * 47.13 + k * 91.7 + 3.1);
+  const x00 = lerp(n(ix, iy, iz), n(ix + 1, iy, iz), fx);
+  const x10 = lerp(n(ix, iy + 1, iz), n(ix + 1, iy + 1, iz), fx);
+  const x01 = lerp(n(ix, iy, iz + 1), n(ix + 1, iy, iz + 1), fx);
+  const x11 = lerp(n(ix, iy + 1, iz + 1), n(ix + 1, iy + 1, iz + 1), fx);
+  return lerp(lerp(x00, x10, fy), lerp(x01, x11, fy), fz);
+}
+
+function noiseVec(x, y, z) {
+  return {
+    x: valueNoise(x, y, z) * 2 - 1,
+    y: valueNoise(x + 17.2, y + 9.4, z + 3.7) * 2 - 1,
+    z: valueNoise(x + 4.1, y + 31.8, z + 11.3) * 2 - 1,
+  };
+}
+
 function rockGeometry() {
   const g = new THREE.IcosahedronGeometry(1, 1);
   const pos = g.attributes.position;
@@ -206,34 +237,69 @@ export function createSolarPlexus(scene) {
     const mid = vibe.mid || 0;
     const high = vibe.high || 0;
     const peak = vibe.peak || 0;
-    const swell = bass * 0.92 + mid * 0.38;
+    const earth = getPlanet("Earth");
+    const ex = earth?.position?.x || 0;
+    const ey = earth?.position?.y || 0;
+    const ez = earth?.position?.z || 0;
     const wellX = pointer.x * 8;
     const wellY = pointer.y * 4.5;
+    const noiseScale = 0.18 + mid * 0.2;
+    const noiseTravel = elapsed * (0.22 + mid * 1.1 + high * 0.8);
 
     for (const layer of layers) {
       const n = layer.belt.count;
-      layer.lines.material.opacity = 0.13 + mid * 0.48 + bass * 0.38 + high * 0.16;
-      layer.rocks.material.emissiveIntensity = 0.3 + peak * 1.15 + bass * 0.5;
+      layer.lines.material.opacity = 0.1 + mid * 0.72 + bass * 0.18 + high * 0.28;
+      layer.rocks.material.emissiveIntensity =
+        0.22 + bass * 0.55 + mid * 0.35 + high * (0.9 + 0.8 * (0.5 + 0.5 * Math.sin(elapsed * 14)));
       for (let i = 0; i < n; i++) {
         const bx = layer.base[i * 3];
         const by = layer.base[i * 3 + 1];
         const bz = layer.base[i * 3 + 2];
-        const dist = Math.hypot(bx, by, bz) || 0.001;
-        const nrm = 1 / dist;
-        const breathe = Math.sin(elapsed * 0.32 + i * 0.17);
-        const wobble = breathe * (0.14 + swell * 0.95) + Math.sin(elapsed * 1.1 + i) * high * 0.12;
+        const rx = bx - ex;
+        const ry = by - ey;
+        const rz = bz - ez;
+        const r = Math.hypot(rx, ry, rz) || 0.001;
+        const inv = 1 / r;
+        const nx = rx * inv;
+        const ny = ry * inv;
+        const nz = rz * inv;
+        const tw = Math.hypot(-nz, nx) || 1;
+        const tx = -nz / tw;
+        const tz = nx / tw;
+        const field = noiseVec(
+          bx * noiseScale + nx * noiseTravel,
+          by * noiseScale + 0.41,
+          bz * noiseScale + nz * noiseTravel
+        );
+
+        const bassWave = Math.sin(r * 0.26 - elapsed * (0.5 + bass * 2.6));
+        const bassPush = bass * (2.8 + 3.6 * (0.5 + 0.5 * bassWave));
+
+        const midAng = elapsed * (0.9 + mid * 3.6) + i * 0.11;
+        const midAmt = mid * 3.1;
+        const midX = tx * Math.sin(midAng) * midAmt + field.x * mid * 1.25;
+        const midY = Math.cos(midAng * 0.85) * mid * 1.55;
+        const midZ = tz * Math.sin(midAng) * midAmt + field.z * mid * 1.25;
+
+        const flicker = hash(i * 13.7 + Math.floor(elapsed * 22)) - 0.5;
+        const highAmt = high * 1.35;
+        const highX = field.x * highAmt * 1.9 + nx * flicker * high * 1.1;
+        const highY = field.y * highAmt * 1.9 + flicker * high * 0.8;
+        const highZ = field.z * highAmt * 1.9 + nz * flicker * high * 1.1;
+
+        const idle = Math.sin(elapsed * 0.28 + i * 0.17) * 0.12;
         const pull = pointer.down ? 0.42 : 0.16;
         dummy.position.set(
-          bx + bx * nrm * wobble * 1.7 + (wellX - bx) * pull * 0.016,
-          by + by * nrm * wobble * 1.7 + (wellY - by) * pull * 0.016,
-          bz + bz * nrm * wobble * 1.7
+          bx + nx * (idle + bassPush) + midX + highX + (wellX - bx) * pull * 0.016,
+          by + ny * (idle + bassPush) + midY + highY + (wellY - by) * pull * 0.016,
+          bz + nz * (idle + bassPush) + midZ + highZ
         );
         dummy.rotation.set(
-          elapsed * layer.spins[i] * (0.28 + peak * 0.45),
-          elapsed * layer.spins[i] * (0.7 + bass * 0.4),
+          elapsed * layer.spins[i] * (0.22 + high * 1.1 + peak * 0.2),
+          elapsed * layer.spins[i] * (0.55 + mid * 0.9 + bass * 0.25),
           i * 0.3
         );
-        dummy.scale.setScalar(layer.scales[i] * (1 + bass * 0.62 + peak * 0.28));
+        dummy.scale.setScalar(layer.scales[i] * (1 + bass * 0.95 + mid * 0.22 + high * 0.12));
         dummy.updateMatrix();
         layer.rocks.setMatrixAt(i, dummy.matrix);
       }

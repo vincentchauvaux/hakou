@@ -8,7 +8,7 @@
 - **Stream public** (20 sept. 2026) : spectateurs = HLS public (iPad : HLS **natif**, plus de WHEP en premier). Plexus animés par le **pouls studio** (`GET /api/stream/pulse`, rate-limit). Son : tap **Écouter le live**. Studio simplifié : **Brancher le mix** + vu-mètre (BlackHole / FLX4) puis **En direct**. Chat / rec / WHIP = allowlist.
 - **Enregistrement VPS** (31 août 2026, MAJ 20 sept. 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks MediaRecorder **pipés** dans ffmpeg → MP4 AAC **320 kb/s** + visuel canvas 1280×720. Badge **son d’onglet** vs **entrée audio**. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
 - **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live. **URI Google exacte** : `https://studio.hakou.be/api/studio/youtube/callback` (sinon `redirect_uri_mismatch`). Twitch = **clé de stream collée** (OAuth Helix optionnel). Relais ffmpeg RTSP local `:8554` → RTMP **libx264 GOP 2 s**. WHIP : H264 préféré + **VP8 en repli**. Restream refuse sans piste vidéo — la piste vient du **visualiseur** (`canvas.captureStream`), plus du partage d’écran. Comptes chiffrés `studio/data/live-accounts.bin`.
-- **Studio visuel / ceintures** (20 sept. 2026) : visuel = plexus (jamais l’écran). Son = **PC MASTER OUT Rekordbox** (le cinch analogique du FLX4 n’entre pas dans Chrome) + **partage écran audio** (getDisplayMedia, piste vidéo désactivée, pas stoppée) ; l’USB FLX4 n’est pas le master. CSP `connect-src` + `img-src` = `blob:` (textures GLB Three). Permissions-Policy `camera=(self)` uniquement parce que Chrome classe getDisplayMedia comme camera — pas de webcam. Cache `?v=20260920aa`.
+- **Studio visuel / ceintures** (20 sept. 2026) : visuel = plexus (jamais l’écran). Son = **partage d’écran + audio**. Plexus spectateurs = pouls `GET /api/stream/pulse` (CORS hakou.be/www, ignore pouls à zéro). 3 mouvements depuis la Terre : **bass** onde radiale, **mid** swirl orbital, **high** scintillement. Cache `?v=20260920ac`.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET https://studio.hakou.be/api/stream/status` (alias `/api/radio/status`) — **public** (live / HLS / WHEP) ; `archives` seulement si session allowlist.
@@ -32,7 +32,7 @@
 - **Inbox** : plafond `CONTACT_INBOX_MAX_BYTES` (défaut 5 Mo) + rétention.
 - Snippets : [`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example), [`studio/deploy/nginx-hakou-studio.conf.example`](studio/deploy/nginx-hakou-studio.conf.example).
 - Helpers : [`studio/security.mjs`](studio/security.mjs).
-- **Revue architecture 20 sept. 2026** : canvas [`revue-securite-hakou.canvas.tsx`](/Users/hakou/.cursor/projects/Users-hakou-hakou/canvases/revue-securite-hakou.canvas.tsx). **Patch élevés** : `scene3d.js` servi depuis l’origine studio (`sync-world.sh`, plus d’import hakou.be / retiré de `script-src`) ; `/index.html` derrière `requireAuthHtml` ; `?preview=1` hors prod seulement ; HLS sans `?cookieCheck=1`. **Stream public** : status/HLS/WHEP ouverts, WHIP + chat + archives toujours allowlist. Cache `?v=20260920aa`.
+- **Revue architecture 20 sept. 2026** : canvas [`revue-securite-hakou.canvas.tsx`](/Users/hakou/.cursor/projects/Users-hakou-hakou/canvases/revue-securite-hakou.canvas.tsx). **Patch élevés** : `scene3d.js` servi depuis l’origine studio (`sync-world.sh`, plus d’import hakou.be / retiré de `script-src`) ; `/index.html` derrière `requireAuthHtml` ; `?preview=1` hors prod seulement ; HLS sans `?cookieCheck=1`. **Stream public** : status/HLS/WHEP ouverts, WHIP + chat + archives toujours allowlist. Cache `?v=20260920ac`.
 
 
 ## Revue juridique (août 2026)
@@ -53,7 +53,7 @@
 
 - **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
 - **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
-- **Dernier redéploiement** : 20 sept. 2026 — CSP blob: + camera=(self) pour getDisplayMedia ; hint Rekordbox **PC MASTER OUT** (cinch analogique hors Chrome) ; cache `?v=20260920aa`.
+- **Dernier redéploiement** : 20 sept. 2026 — pouls plexus visible spectateurs + 3 mouvements bass/mid/high ; cache `?v=20260920ac`.
 
 
 

@@ -1,17 +1,11 @@
-import { BELTS } from "./studio-belts.js?v=20260920aa";
+import { BELTS } from "./studio-belts.js?v=20260920ac";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
 const previewWrap = document.querySelector(".studio-preview");
 const beltsEl = document.getElementById("studio-belts");
-const audioSrcField = document.getElementById("studio-audio-src");
-const audioDeviceSel = document.getElementById("studio-audio-device");
 const audioUnlockBtn = document.getElementById("studio-audio-unlock");
 const audioHintEl = document.getElementById("studio-audio-hint");
-const audioListEl = document.getElementById("studio-audio-list");
-let audioPermissionGranted = false;
-let lastAudioInputs = [];
-let audioDeviceTouched = false;
 
 let studioViz = null;
 const startBtn = document.getElementById("studio-start");
@@ -100,10 +94,6 @@ function setAudioBadge(kind) {
     audioBadge.hidden = false;
     audioBadge.classList.remove("is-mic");
     audioBadge.textContent = "Son de l’écran";
-  } else if (kind === "mic") {
-    audioBadge.hidden = false;
-    audioBadge.classList.add("is-mic");
-    audioBadge.textContent = "FLX4 / carte son";
   } else {
     audioBadge.hidden = true;
     audioBadge.textContent = "";
@@ -111,184 +101,16 @@ function setAudioBadge(kind) {
   }
 }
 
-function selectedAudioSource() {
-  const checked = audioSrcField?.querySelector(
-    'input[name="studio-audio-src"]:checked'
-  );
-  const value = checked?.value || "display";
-  if (value === "tab") return "display";
-  return value;
-}
-
 function audioControlsLocked() {
   return streaming || recording || startInFlight || recInFlight;
 }
 
-function isContinuityMic(label) {
-  return /iphone|ipad|ipod|apple watch|\bcontinuity\b/i.test(label || "");
-}
-
-function scoreMixDevice(label) {
-  const s = label || "";
-  if (/ddj|flx4|\bflx\b|pioneer/i.test(s)) return 4;
-  if (/blackhole|loopback|vb-?audio|soundflower|aggregate/i.test(s)) return 3;
-  if (/rekordbox/i.test(s)) return 2;
-  return 0;
-}
-
-function preferredInputId(inputs) {
-  const ranked = [...inputs].sort(
-    (a, b) => scoreMixDevice(b.label) - scoreMixDevice(a.label)
-  );
-  return ranked[0] && scoreMixDevice(ranked[0].label) > 0
-    ? ranked[0].deviceId
-    : "";
-}
-
-function friendlyDeviceLabel(label, fallback) {
-  const raw = String(label || "").trim();
-  const inner = raw.replace(/^(microphone|micro|entrée)\s*\((.+)\)\s*$/i, "$2");
-  const name = inner || raw || fallback || "Carte son";
-  if (/ddj|flx4|pioneer/i.test(name)) return `${name} — contrôleur`;
-  return name;
-}
-
-function syncAudioSourceUi() {
-  const display = selectedAudioSource() === "display";
-  audioSrcField?.setAttribute("data-mode", display ? "display" : "input");
-  const picker = document.querySelector(".studio-audio-picker");
-  if (picker) picker.hidden = display;
-  if (audioUnlockBtn) {
-    audioUnlockBtn.hidden = false;
-    audioUnlockBtn.disabled = audioControlsLocked();
-    audioUnlockBtn.textContent = display
-      ? "Prendre le son (sans l’image)"
-      : audioPermissionGranted
-        ? "Rebrancher le FLX4"
-        : "Brancher le FLX4";
-  }
-  if (audioHintEl) {
-    audioHintEl.textContent = display
-      ? "Allume PC MASTER OUT dans Rekordbox (sinon le mix reste uniquement sur le cinch). Puis Chrome → Partager l’audio. L’image ne part pas."
-      : "L’USB FLX4 n’est souvent pas le master analogique. Préfère PC MASTER OUT + son de l’écran.";
-  }
-  renderAudioDeviceList();
-}
-
-function renderAudioDeviceList() {
-  if (!audioListEl) return;
-  const display = selectedAudioSource() === "display";
-  const locked = audioControlsLocked();
-  const current = audioDeviceSel?.value || "";
-  audioListEl.replaceChildren();
-  if (display) return;
-
-  const addChip = (id, label) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "studio-audio-chip";
-    btn.setAttribute("role", "option");
-    const on = current === id;
-    btn.setAttribute("aria-selected", on ? "true" : "false");
-    btn.classList.toggle("is-active", on);
-    btn.disabled = locked;
-    btn.dataset.deviceId = id;
-    btn.textContent = label;
-    btn.addEventListener("click", () => {
-      if (locked) return;
-      audioDeviceTouched = true;
-      if (audioDeviceSel) audioDeviceSel.value = id;
-      renderAudioDeviceList();
-      if (!audioControlsLocked()) {
-        armMix().catch((err) => console.warn("[Hakou Studio] arm", err));
-      }
-    });
-    audioListEl.append(btn);
-  };
-
-  addChip("", "Défaut");
-  const ordered = [...lastAudioInputs].sort(
-    (a, b) => scoreMixDevice(b.label) - scoreMixDevice(a.label)
-  );
-  for (const d of ordered) {
-    addChip(d.deviceId, friendlyDeviceLabel(d.label, `Carte ${audioListEl.children.length}`));
-  }
-}
-
-async function unlockAudioDevices({ interactive = false } = {}) {
-  if (selectedAudioSource() === "display") {
-    if (interactive) await armMix();
-    return;
-  }
-  if (!navigator.mediaDevices?.getUserMedia) {
-    setStatus("Capture audio indisponible sur ce navigateur.");
-    return;
-  }
-  if (!audioPermissionGranted && interactive) {
-    try {
-      const tmp = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-        video: false,
-      });
-      tmp.getTracks().forEach((t) => t.stop());
-      audioPermissionGranted = true;
-    } catch {
-      setStatus("Autorise l’accès pour lister le FLX4 et les cartes son.");
-      return;
-    }
-  }
-  await refreshAudioDevices();
-  if (interactive && audioPermissionGranted) {
-    await armMix();
-  }
-}
-
-async function refreshAudioDevices() {
-  if (!audioDeviceSel || !navigator.mediaDevices?.enumerateDevices) return;
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const inputs = devices.filter(
-      (d) =>
-        d.kind === "audioinput" &&
-        d.deviceId &&
-        d.deviceId !== "communications" &&
-        !isContinuityMic(d.label)
-    );
-    if (inputs.some((d) => d.label)) audioPermissionGranted = true;
-    lastAudioInputs = [...inputs].sort(
-      (a, b) => scoreMixDevice(b.label) - scoreMixDevice(a.label)
-    );
-    const current = audioDeviceSel.value;
-    audioDeviceSel.replaceChildren();
-    const def = document.createElement("option");
-    def.value = "";
-    def.textContent = "Défaut (entrée système)";
-    audioDeviceSel.append(def);
-    for (const d of lastAudioInputs) {
-      const opt = document.createElement("option");
-      opt.value = d.deviceId;
-      opt.textContent = friendlyDeviceLabel(
-        d.label,
-        `Carte ${audioDeviceSel.options.length}`
-      );
-      audioDeviceSel.append(opt);
-    }
-    const stillThere = [...audioDeviceSel.options].some((o) => o.value === current);
-    if (stillThere && (current || audioDeviceTouched)) {
-      audioDeviceSel.value = current;
-    } else if (!audioDeviceTouched) {
-      audioDeviceSel.value = preferredInputId(inputs);
-    } else {
-      audioDeviceSel.value = "";
-    }
-    syncAudioSourceUi();
-  } catch (err) {
-    console.warn("[Hakou Studio] devices", err);
-  }
+function syncShareButton() {
+  if (!audioUnlockBtn) return;
+  audioUnlockBtn.disabled = audioControlsLocked();
+  audioUnlockBtn.textContent = audioTrackAlive()
+    ? "Reprendre l’écran"
+    : "Partager l’écran";
 }
 
 function renderBelts() {
@@ -318,7 +140,7 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920aa");
+    const { initStudioViz } = await import("./studio-viz.js?v=20260920ac");
     studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {
@@ -612,14 +434,7 @@ function syncButtons() {
       radio.disabled = streaming || startInFlight;
     }
   }
-  const locked = audioControlsLocked();
-  const audioRadios =
-    audioSrcField?.querySelectorAll('input[name="studio-audio-src"]') || [];
-  for (const radio of audioRadios) {
-    radio.disabled = locked;
-  }
-  if (audioDeviceSel) audioDeviceSel.disabled = locked;
-  syncAudioSourceUi();
+  syncShareButton();
 }
 
 function withTimeout(promise, ms, label) {
@@ -843,81 +658,44 @@ function preferH264Video(pc) {
 }
 
 /**
- * Son du mix seulement. L’image d’écran est toujours jetée :
- * le visuel live = plexus (canvas), jamais Rekordbox / le bureau.
+ * Partage d’écran + son, comme au début.
+ * L’image est jetée : le visuel live = plexus (canvas).
  */
 async function acquireAudioStream() {
-  const safari = isAppleWebKit();
-  const mode = selectedAudioSource();
-
-  if (mode === "display") {
-    if (safari) {
-      throw new Error(
-        "Le son d’écran n’est pas dispo dans Safari — choisis le FLX4 en carte son."
-      );
-    }
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      throw new Error("Partage audio indisponible sur ce navigateur (Chrome recommandé).");
-    }
-    setStatus("Choisis l’écran, et coche « Partager l’audio ». L’image ne partira pas.");
-    const display = await withTimeout(
-      navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 1, width: { ideal: 16 }, height: { ideal: 16 } },
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          channelCount: 2,
-        },
-        systemAudio: "include",
-        preferCurrentTab: false,
-        selfBrowserSurface: "exclude",
-      }),
-      90_000,
-      "Dialogue trop long — ferme-le s’il est resté ouvert, puis réessaie."
-    );
-    display.getVideoTracks().forEach((t) => {
-      t.enabled = false;
-    });
-    const audios = display.getAudioTracks();
-    if (!audios.length) {
-      display.getTracks().forEach((t) => t.stop());
-      throw new Error(
-        "Aucun son. Allume PC MASTER OUT dans Rekordbox, puis dans Chrome coche « Partager l’audio »."
-      );
-    }
-    audios.forEach((t) => {
-      t.enabled = true;
-      try {
-        t.contentHint = "music";
-      } catch {
-        /* ignore */
-      }
-    });
-    screenShareKeepalive?.getTracks()?.forEach((t) => t.stop());
-    screenShareKeepalive = display;
-    setAudioBadge("tab");
-    return new MediaStream(audios);
+  if (isAppleWebKit()) {
+    throw new Error("Le son d’écran n’est pas dispo dans Safari — ouvre Chrome.");
   }
-
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("Capture audio indisponible sur ce navigateur.");
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    throw new Error("Partage d’écran indisponible (Chrome recommandé).");
   }
-  setStatus("Autorise la carte son du DDJ-FLX4 (pas le micro du Mac)…");
-  const audio = {
-    echoCancellation: false,
-    noiseSuppression: false,
-    autoGainControl: false,
-    channelCount: 2,
-  };
-  const deviceId = audioDeviceSel?.value;
-  if (deviceId) audio.deviceId = { exact: deviceId };
-  const mix = await withTimeout(
-    navigator.mediaDevices.getUserMedia({ audio, video: false }),
-    60_000,
-    "Carte son non autorisée."
+  setStatus("Choisis l’écran, et coche « Partager l’audio ». L’image ne partira pas.");
+  const display = await withTimeout(
+    navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 1, width: { ideal: 16 }, height: { ideal: 16 } },
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: 2,
+      },
+      systemAudio: "include",
+      preferCurrentTab: false,
+      selfBrowserSurface: "exclude",
+    }),
+    90_000,
+    "Dialogue trop long — ferme-le s’il est resté ouvert, puis réessaie."
   );
-  mix.getAudioTracks().forEach((t) => {
+  display.getVideoTracks().forEach((t) => {
+    t.enabled = false;
+  });
+  const audios = display.getAudioTracks();
+  if (!audios.length) {
+    display.getTracks().forEach((t) => t.stop());
+    throw new Error(
+      "Aucun son. Dans Chrome, coche « Partager l’audio », puis réessaie."
+    );
+  }
+  audios.forEach((t) => {
     t.enabled = true;
     try {
       t.contentHint = "music";
@@ -925,9 +703,10 @@ async function acquireAudioStream() {
       /* ignore */
     }
   });
-  setAudioBadge("mic");
-  refreshAudioDevices().catch(() => {});
-  return mix;
+  screenShareKeepalive?.getTracks()?.forEach((t) => t.stop());
+  screenShareKeepalive = display;
+  setAudioBadge("tab");
+  return new MediaStream(audios);
 }
 
 function audioTrackAlive() {
@@ -955,11 +734,8 @@ async function armMix() {
   audioCaptureStream = await acquireAudioStream();
   studioViz.connectAudio(audioCaptureStream);
   const label = audioCaptureStream.getAudioTracks()[0]?.label || "mix";
-  setStatus(
-    selectedAudioSource() === "display"
-      ? `Son d’écran pris (${label}). L’image est jetée. La barre doit bouger avec le mix.`
-      : `FLX4 / carte son : ${label}. Joue un titre — la barre doit bouger.`
-  );
+  setStatus(`Son d’écran pris (${label}). L’image est jetée. La barre doit bouger avec le mix.`);
+  syncShareButton();
 }
 
 function tickMeter() {
@@ -976,14 +752,11 @@ function tickMeter() {
   meterEl?.setAttribute("data-signal", on ? "on" : "off");
   if (!meterLabel) return;
   if (!audioTrackAlive()) {
-    meterLabel.textContent = "Pas de signal — branche le mix";
+    meterLabel.textContent = "Pas de signal — partage l’écran";
   } else if (on) {
     meterLabel.textContent = "Mix détecté";
   } else {
-    meterLabel.textContent =
-      selectedAudioSource() === "display"
-        ? "Silence — PC MASTER OUT Rekordbox + « Partager l’audio » Chrome"
-        : "Silence — le cinch FLX4 n’entre pas en USB ; allume PC MASTER OUT";
+    meterLabel.textContent = "Silence — recoche « Partager l’audio » dans Chrome";
   }
 }
 
@@ -1009,6 +782,7 @@ function startPulse() {
         mid: vibe.mid,
         high: vibe.high,
         peak: vibe.peak,
+        bands: vibe.bands || [],
       }),
     }).catch(() => {});
   }, 80);
@@ -1648,27 +1422,12 @@ syncButtons();
 renderBelts();
 bootStudio3d();
 tickMeter();
-if (isAppleWebKit()) {
-  const displayRadio = audioSrcField?.querySelector('input[value="display"]');
-  const inputRadio = audioSrcField?.querySelector('input[value="input"]');
-  displayRadio?.closest("label")?.setAttribute("hidden", "");
-  if (displayRadio) displayRadio.disabled = true;
-  if (inputRadio) inputRadio.checked = true;
-  syncAudioSourceUi();
+if (isAppleWebKit() && audioHintEl) {
+  audioHintEl.textContent =
+    "Safari ne capture pas le son d’écran — ouvre Chrome, puis Partager l’écran.";
 }
-audioSrcField?.addEventListener("change", () => {
-  syncAudioSourceUi();
-});
 audioUnlockBtn?.addEventListener("click", () => {
-  unlockAudioDevices({ interactive: true }).catch((err) => console.warn(err));
-});
-audioDeviceSel?.addEventListener("change", () => {
-  audioDeviceTouched = true;
-  renderAudioDeviceList();
-});
-refreshAudioDevices().catch(() => {});
-navigator.mediaDevices?.addEventListener?.("devicechange", () => {
-  refreshAudioDevices().catch(() => {});
+  armMix().catch((err) => console.warn(err));
 });
 loadMe().catch((err) => {
   console.warn(err);

@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { BELTS } from "./studio-belts.js?v=20260920aa";
-import { createSolarSystem } from "./studio-system.js?v=20260920aa";
+import { BELTS } from "./studio-belts.js?v=20260920ac";
+import { createSolarSystem } from "./studio-system.js?v=20260920ac";
 
 export { BELTS };
 
@@ -23,6 +23,12 @@ function avgBand(data, from, to) {
   if (b <= a) return 0;
   for (let i = a; i < b; i++) s += data[i];
   return s / (b - a) / 255;
+}
+
+function lift(x) {
+  const n = Math.max(0, x);
+  if (n <= 0) return 0;
+  return Math.min(1, Math.pow(n, 0.5) * 1.65);
 }
 
 /**
@@ -109,6 +115,7 @@ export async function initStudioViz(canvas) {
     mid: 0,
     high: 0,
     peak: 0,
+    bands: [0, 0, 0, 0, 0, 0, 0, 0],
   };
 
   function applyBelt(next) {
@@ -124,11 +131,13 @@ export async function initStudioViz(canvas) {
   window.addEventListener("resize", syncCameraAspect);
 
   function sampleAudio() {
+    if (audio.ctx?.state === "suspended") audio.ctx.resume?.();
     if (!audio.analyser || !audio.freq) {
       audio.bass *= 0.9;
       audio.mid *= 0.9;
       audio.high *= 0.9;
       audio.peak *= 0.88;
+      for (let b = 0; b < 8; b++) audio.bands[b] *= 0.9;
       return;
     }
     audio.analyser.getByteFrequencyData(audio.freq);
@@ -144,9 +153,17 @@ export async function initStudioViz(canvas) {
       }
       rms = Math.sqrt(rms / audio.time.length);
     }
-    audio.bass += (Math.min(1, bass * 1.35) - audio.bass) * 0.34;
-    audio.mid += (Math.min(1, mid * 1.2) - audio.mid) * 0.24;
-    audio.high += (Math.min(1, high * 1.15) - audio.high) * 0.28;
+    audio.bass += (Math.min(1, bass * 2.2) - audio.bass) * 0.42;
+    audio.mid += (Math.min(1, mid * 1.9) - audio.mid) * 0.32;
+    audio.high += (Math.min(1, high * 1.8) - audio.high) * 0.36;
+    const slice = Math.min(audio.freq.length, 220) / 8;
+    for (let b = 0; b < 8; b++) {
+      const next = Math.min(
+        1,
+        avgBand(audio.freq, Math.floor(b * slice), Math.floor((b + 1) * slice)) * 1.25
+      );
+      audio.bands[b] += (next - audio.bands[b]) * 0.3;
+    }
     const energy = Math.min(
       1,
       audio.bass * 0.5 + audio.mid * 0.28 + audio.high * 0.12 + rms * 1.4
@@ -204,7 +221,13 @@ export async function initStudioViz(canvas) {
     const t = clock.getElapsedTime();
     sampleAudio();
     system.tickPlanets(t, belt.view.section ?? 0);
-    system.tickPlexus?.(t, audio, pointer);
+    system.tickPlexus?.(t, {
+      bass: lift(audio.bass),
+      mid: lift(audio.mid),
+      high: lift(audio.high),
+      peak: lift(audio.peak),
+      bands: audio.bands,
+    }, pointer);
     syncCameraAspect();
     placeCamera(t);
     renderer.render(scene, camera);
@@ -270,9 +293,9 @@ export async function initStudioViz(canvas) {
       audio.gain.gain.value = 2.8;
       audio.analyser = audio.ctx.createAnalyser();
       audio.analyser.fftSize = 2048;
-      audio.analyser.smoothingTimeConstant = 0.42;
-      audio.analyser.minDecibels = -90;
-      audio.analyser.maxDecibels = -22;
+      audio.analyser.smoothingTimeConstant = 0.28;
+      audio.analyser.minDecibels = -100;
+      audio.analyser.maxDecibels = -18;
       audio.source.connect(audio.gain);
       audio.gain.connect(audio.analyser);
       audio.freq = new Uint8Array(audio.analyser.frequencyBinCount);
@@ -303,10 +326,11 @@ export async function initStudioViz(canvas) {
     },
     getVibe() {
       return {
-        bass: audio.bass,
-        mid: audio.mid,
-        high: audio.high,
-        peak: audio.peak,
+        bass: lift(audio.bass),
+        mid: lift(audio.mid),
+        high: lift(audio.high),
+        peak: lift(audio.peak),
+        bands: audio.bands,
       };
     },
     dispose() {

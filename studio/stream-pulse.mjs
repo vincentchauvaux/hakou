@@ -1,5 +1,5 @@
 /**
- * Pouls audio du live — le studio publie bass/mid/high/peak,
+ * Pouls audio du live — le studio publie bass/mid/high/peak + 8 bandes EQ,
  * les spectateurs hakou.be animent les plexus même si Web Audio local est muet (iPad).
  */
 
@@ -10,7 +10,7 @@ function clamp01(value) {
 }
 
 export function attachStreamPulse(app, { requireSession, getClientIp, checkRateLimit }) {
-  let pulse = { bass: 0, mid: 0, high: 0, peak: 0, t: 0 };
+  let pulse = { bass: 0, mid: 0, high: 0, peak: 0, bands: [0, 0, 0, 0, 0, 0, 0, 0], t: 0 };
   let lastPostAt = 0;
 
   app.post("/api/studio/pulse", (req, res) => {
@@ -35,6 +35,9 @@ export function attachStreamPulse(app, { requireSession, getClientIp, checkRateL
       mid: clamp01(req.body?.mid),
       high: clamp01(req.body?.high),
       peak: clamp01(req.body?.peak),
+      bands: Array.isArray(req.body?.bands)
+        ? req.body.bands.slice(0, 8).map(clamp01)
+        : [0, 0, 0, 0, 0, 0, 0, 0],
       t: now,
     };
     res.status(204).end();
@@ -43,10 +46,17 @@ export function attachStreamPulse(app, { requireSession, getClientIp, checkRateL
   app.get("/api/stream/pulse", (req, res) => {
     if (checkRateLimit) {
       const ip = getClientIp(req);
-      if (!checkRateLimit(ip, { max: 20, windowMs: 1000, key: "pulse-get" })) {
+      if (!checkRateLimit(ip, { max: 80, windowMs: 1000, key: "pulse-get" })) {
         res.status(429).json({ error: "slow down" });
         return;
       }
+    }
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "*");
     }
     res.setHeader("Cache-Control", "no-store");
     res.json(pulse);

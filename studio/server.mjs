@@ -183,7 +183,7 @@ if (ALLOWED_EMAILS.size === 0) {
 const CORS_ORIGINS = new Set(
   String(
     env.CORS_ORIGINS ||
-      "https://hakou.be,https://studio.hakou.be,http://localhost:3000,http://127.0.0.1:3000"
+      "https://hakou.be,https://www.hakou.be,https://studio.hakou.be,http://localhost:3000,http://127.0.0.1:3000"
   )
     .split(",")
     .map((o) => o.trim())

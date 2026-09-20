@@ -1,5 +1,5 @@
 import { BELTS } from "./solar-belts.js";
-import { setAudioVibe, setStreamSpot } from "./scene3d.js";
+import { setAudioVibe, setStreamSpot } from "./scene3d.js?v=20260920ac";
 
 const STORAGE_KEY = "hakou-stream-spot";
 const PULSE_URL = "https://studio.hakou.be/api/stream/pulse";
@@ -11,6 +11,16 @@ function avgBand(data, from, to) {
   if (b <= a) return 0;
   for (let i = a; i < b; i++) s += data[i];
   return s / (b - a) / 255;
+}
+
+function lift(x) {
+  const n = Number(x) || 0;
+  if (n <= 0) return 0;
+  return Math.min(1, Math.pow(n, 0.55) * 1.6);
+}
+
+function energyOf(v) {
+  return (v.bass || 0) + (v.mid || 0) + (v.high || 0) + (v.peak || 0);
 }
 
 function initStreamScenes() {
@@ -31,8 +41,9 @@ function initStreamScenes() {
     mid: 0,
     high: 0,
     peak: 0,
+    bands: [0, 0, 0, 0, 0, 0, 0, 0],
   };
-  const remote = { bass: 0, mid: 0, high: 0, peak: 0, t: 0 };
+  const remote = { bass: 0, mid: 0, high: 0, peak: 0, bands: [0, 0, 0, 0, 0, 0, 0, 0], t: 0 };
   let raf = 0;
   let hookedVideo = null;
 
@@ -64,7 +75,6 @@ function initStreamScenes() {
 
   function sample() {
     raf = requestAnimationFrame(sample);
-    let localEnergy = 0;
     if (audio.analyser && audio.freq) {
       audio.analyser.getByteFrequencyData(audio.freq);
       const bass = avgBand(audio.freq, 1, 10);
@@ -73,26 +83,51 @@ function initStreamScenes() {
       audio.bass += (bass - audio.bass) * 0.32;
       audio.mid += (mid - audio.mid) * 0.22;
       audio.high += (high - audio.high) * 0.26;
-      localEnergy = audio.bass * 0.55 + audio.mid * 0.3 + audio.high * 0.15;
-      audio.peak += (localEnergy - audio.peak) * 0.42;
+      const instant = audio.bass * 0.55 + audio.mid * 0.3 + audio.high * 0.15;
+      audio.peak += (instant - audio.peak) * 0.42;
+      const slice = Math.min(audio.freq.length, 220) / 8;
+      for (let b = 0; b < 8; b++) {
+        const next = avgBand(audio.freq, Math.floor(b * slice), Math.floor((b + 1) * slice));
+        audio.bands[b] += (next - audio.bands[b]) * 0.28;
+      }
     } else {
       audio.bass *= 0.92;
       audio.mid *= 0.92;
       audio.high *= 0.92;
       audio.peak *= 0.9;
+      for (let b = 0; b < 8; b++) audio.bands[b] *= 0.92;
     }
 
-    const remoteFresh = Date.now() - remote.t < 2000 && remote.t > 0;
+    const remoteEnergy = energyOf(remote);
+    const localEnergy = energyOf(audio);
+    const remoteFresh = Date.now() - remote.t < 2500 && remote.t > 0 && remoteEnergy > 0.025;
     if (remoteFresh) {
       setAudioVibe({
-        bass: Math.min(1, Math.pow(remote.bass, 0.7) * 1.25),
-        mid: Math.min(1, Math.pow(remote.mid, 0.7) * 1.2),
-        high: Math.min(1, Math.pow(remote.high, 0.75) * 1.15),
-        peak: Math.min(1, Math.pow(remote.peak, 0.65) * 1.35),
+        bass: Math.max(lift(remote.bass), lift(audio.bass)),
+        mid: Math.max(lift(remote.mid), lift(audio.mid)),
+        high: Math.max(lift(remote.high), lift(audio.high)),
+        peak: Math.max(lift(remote.peak), lift(audio.peak)),
+        bands: remoteEnergy >= localEnergy ? remote.bands : audio.bands,
       });
       return;
     }
-    setAudioVibe(audio);
+    if (localEnergy > 0.02) {
+      setAudioVibe({
+        bass: lift(audio.bass),
+        mid: lift(audio.mid),
+        high: lift(audio.high),
+        peak: lift(audio.peak),
+        bands: audio.bands,
+      });
+      return;
+    }
+    setAudioVibe({
+      bass: 0,
+      mid: 0,
+      high: 0,
+      peak: 0,
+      bands: audio.bands,
+    });
   }
 
   function disconnectAudio() {
@@ -179,13 +214,22 @@ function initStreamScenes() {
 
   async function pullPulse() {
     try {
-      const res = await fetch(PULSE_URL, { cache: "no-store" });
+      const res = await fetch(PULSE_URL, {
+        cache: "no-store",
+        mode: "cors",
+        credentials: "omit",
+      });
       if (!res.ok) return;
       const data = await res.json();
       remote.bass = Number(data.bass) || 0;
       remote.mid = Number(data.mid) || 0;
       remote.high = Number(data.high) || 0;
       remote.peak = Number(data.peak) || 0;
+      if (Array.isArray(data.bands)) {
+        for (let i = 0; i < 8; i++) {
+          remote.bands[i] = Math.min(1, Math.max(0, Number(data.bands[i]) || 0));
+        }
+      }
       remote.t = Number(data.t) || 0;
     } catch {
       /* hors ligne */

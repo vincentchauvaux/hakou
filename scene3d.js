@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { BELTS, STREAM_SECTION } from "./solar-belts.js";
-import { createSolarPlexus } from "./solar-plexus.js";
+import { createSolarPlexus } from "./solar-plexus.js?v=20260920ac";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
 const PLANET_GLB_V = "40";
@@ -836,7 +836,13 @@ let fog;
 let solarPlexus = null;
 let streamSpotId = "main";
 let streamSpotSnap = true;
-const audioVibe = { bass: 0, mid: 0, high: 0, peak: 0 };
+const audioVibe = {
+  bass: 0,
+  mid: 0,
+  high: 0,
+  peak: 0,
+  bands: [0, 0, 0, 0, 0, 0, 0, 0],
+};
 const streamCamOut = {
   position: new THREE.Vector3(),
   lookAt: new THREE.Vector3(),
@@ -4626,6 +4632,14 @@ export function setAudioVibe(next = {}) {
   if (typeof next.mid === "number") audioVibe.mid = next.mid;
   if (typeof next.high === "number") audioVibe.high = next.high;
   if (typeof next.peak === "number") audioVibe.peak = next.peak;
+  if (Array.isArray(next.bands) && next.bands.length) {
+    const n = audioVibe.bands.length;
+    const src = next.bands;
+    for (let i = 0; i < n; i++) {
+      const v = Number(src[Math.min(src.length - 1, Math.floor((i * src.length) / n))]);
+      audioVibe.bands[i] = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
+    }
+  }
 }
 
 function streamSpotDef() {
