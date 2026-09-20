@@ -17,10 +17,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260920m" />
+    <link rel="stylesheet" href="./styles.css?v=20260920w" />
     <script type="importmap">
       {
         "imports": {
@@ -33,7 +33,7 @@
   <body data-intro="pending">
     <canvas id="three-canvas" aria-hidden="true"></canvas>
 
-    <div id="intro-gate" class="intro-gate" role="dialog" aria-modal="true" aria-labelledby="intro-brand intro-hint">
+    <div id="intro-gate" class="intro-gate" role="dialog" aria-modal="true" aria-labelledby="intro-brand">
       <button
         type="button"
         id="intro-login"
@@ -53,8 +53,7 @@
         aria-label="Entrer sur le site"
       ></button>
       <div class="intro-copy">
-        <p id="intro-brand" class="intro-brand">hakou.be</p>
-        <p id="intro-hint" class="intro-hint">Cliquer sur le logo</p>
+        <p id="intro-brand" class="intro-brand">hakou</p>
       </div>
     </div>
 
@@ -86,23 +85,16 @@
     <div class="chrome-actions" aria-label="Actions">
       <button
         type="button"
-        id="intro-replay"
-        class="intro-replay"
-        aria-label="Revoir la présentation"
-        title="Revoir la présentation"
+        id="chrome-login"
+        class="chrome-login"
+        aria-label="Se connecter"
+        title="Se connecter — studio réservé à Vincent et Anaïs"
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3.25"/>
-          <path d="M12 3.5v2.2"/>
-          <path d="M12 18.3v2.2"/>
-          <path d="M3.5 12h2.2"/>
-          <path d="M18.3 12h2.2"/>
-          <path d="M6.1 6.1l1.55 1.55"/>
-          <path d="M16.35 16.35l1.55 1.55"/>
-          <path d="M17.9 6.1l-1.55 1.55"/>
-          <path d="M7.65 16.35l-1.55 1.55"/>
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
         </svg>
-        <span class="intro-replay__label">Intro</span>
+        <span class="chrome-login__label">Se connecter</span>
       </button>
       <button
         type="button"
@@ -234,25 +226,13 @@
           <p class="tag">Zone Stream</p>
           <h2>Live mix et diffusion</h2>
           <p>
-            Quatre regards sur le système solaire. En live, les plexus bougent
-            avec le son. Hors antenne, le logo Hakou occupe le player.
+            Quatre regards sur le système solaire. Tout le monde peut les parcourir :
+            la caméra glisse d’un point à l’autre, et les plexus dansent avec le live.
+            Le studio reste réservé à Vincent et Anaïs.
           </p>
         </div>
 
-        <div class="stream-lock" id="stream-lock" role="dialog" aria-labelledby="stream-lock-title">
-          <p class="tag">Accès restreint</p>
-          <h3 id="stream-lock-title">Stream privé</h3>
-          <p class="stream-lock__text">
-            Le live et le chat sont réservés aux comptes autorisés. Connecte-toi
-            avec Google.
-          </p>
-          <button type="button" class="panel-btn panel-btn--primary" id="stream-login">
-            Se connecter avec Google
-          </button>
-          <p class="stream-lock__status" id="stream-lock-status" role="status"></p>
-        </div>
-
-        <div id="stream-content" hidden>
+        <div id="stream-content">
           <div class="radio-layout">
           <div class="radio-main">
             <div class="panel-card radio-card">
@@ -262,7 +242,7 @@
                   Prochain set à venir
                 </p>
                 <a
-                  class="panel-btn panel-btn--secondary stream-studio-link"
+                  class="panel-btn panel-btn--secondary stream-studio-link stream-crew"
                   id="stream-studio-link"
                   href="https://studio.hakou.be/"
                   target="_blank"
@@ -275,6 +255,9 @@
                 role="radiogroup"
                 aria-label="Scène"
               ></div>
+              <button type="button" class="panel-btn panel-btn--ghost" id="stream-listen" hidden>
+                Écouter le live
+              </button>
               <div class="radio-player" id="radio-player">
                 <div class="radio-player__frame" id="radio-player-frame">
                   <div class="consent-placeholder" data-consent-placeholder hidden>
@@ -291,7 +274,7 @@
                   </p>
                 </div>
               </div>
-              <p class="embed-source">
+              <p class="embed-source stream-crew">
                 <a
                   href="https://www.youtube.com/@MrEtibaliomecus"
                   target="_blank"
@@ -300,7 +283,7 @@
                 >
               </p>
             </div>
-            <div class="radio-online" id="radio-online" aria-live="polite">
+            <div class="radio-online stream-crew" id="radio-online" aria-live="polite">
               <p class="radio-online__title">
                 <span id="radio-chat-count">0</span> en ligne
               </p>
@@ -308,7 +291,7 @@
             </div>
           </div>
 
-          <aside class="radio-chat" id="radio-chat" aria-label="Chat Stream">
+          <aside class="radio-chat stream-crew" id="radio-chat" aria-label="Chat Stream">
             <header class="radio-chat__header">
               <p class="radio-chat__title">Chat</p>
             </header>
@@ -359,7 +342,7 @@
           </div>
 
           <section
-            class="stream-recordings"
+            class="stream-recordings stream-crew"
             id="stream-recordings"
             aria-labelledby="stream-recordings-title"
           >
@@ -1029,14 +1012,14 @@
     </div>
 
     <script src="./consent.js" defer></script>
-    <script type="module" src="./stream-gate.js"></script>
+    <script type="module" src="./stream-gate.js?v=20260920t"></script>
     <script type="module" src="./stream-recordings.js"></script>
     <script src="./youtube-videos.js" defer></script>
-    <script src="./radio.js?v=20260920q" defer></script>
+    <script src="./radio.js?v=20260920t" defer></script>
     <script src="./radio-chat.js" defer></script>
     <script src="./instagram-gallery.js" defer></script>
     <script src="./contact.js" defer></script>
-    <script type="module" src="./main.js?v=20260920q"></script>
-    <script type="module" src="./stream-scenes.js?v=20260920q"></script>
+    <script type="module" src="./main.js?v=20260920w"></script>
+    <script type="module" src="./stream-scenes.js?v=20260920w"></script>
   </body>
 </html>

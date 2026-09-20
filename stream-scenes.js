@@ -1,5 +1,5 @@
-import { BELTS } from "./solar-belts.js?v=20260920q";
-import { setAudioVibe, setStreamSpot } from "./scene3d.js?v=20260920q";
+import { BELTS } from "./solar-belts.js";
+import { setAudioVibe, setStreamSpot } from "./scene3d.js";
 
 const STORAGE_KEY = "hakou-stream-spot";
 

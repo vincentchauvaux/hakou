@@ -17,6 +17,7 @@
   let hlsPlayer = null;
   let hlsScriptPromise = null;
   let whepPc = null;
+  let liveVideoEl = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -48,9 +49,9 @@
   }
 
   /**
-   * HLS derrière nginx `auth_request` + cookie `hakou_media` (withCredentials).
-   * Pas de `?cookieCheck=1` : MediaMTX sinon réécrit les playlists en `?session=`
-   * partageable. Safari / iOS lit le live en WHEP.
+   * HLS public (CORS credentials). Pas de `?cookieCheck=1` :
+   * MediaMTX sinon réécrit les playlists en `?session=` partageable.
+   * Safari / iOS lit le live en WHEP.
    */
   function hlsPlaybackUrl(hlsUrl) {
     return String(hlsUrl || "");
@@ -104,9 +105,47 @@
     }
   }
 
+  function isStreamCrew() {
+    return document.body.dataset.streamAuth === "ok";
+  }
+
+  function syncListenButton() {
+    const btn = $("stream-listen");
+    if (!btn) return;
+    const live = Boolean(liveVideoEl);
+    btn.hidden = !live || isStreamCrew();
+    if (!live) return;
+    const on = !liveVideoEl.muted && liveVideoEl.volume > 0;
+    btn.textContent = on ? "Couper le son" : "Écouter le live";
+  }
+
+  function bindListenButton() {
+    const btn = $("stream-listen");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      if (!liveVideoEl) return;
+      if (liveVideoEl.muted || liveVideoEl.volume === 0) {
+        liveVideoEl.muted = false;
+        liveVideoEl.volume = 1;
+        liveVideoEl.play().catch(() => {});
+      } else {
+        liveVideoEl.muted = true;
+      }
+      syncListenButton();
+    });
+    window.addEventListener("hakou:stream-allowed", syncListenButton);
+  }
+
   function emitStreamMedia(video) {
+    liveVideoEl = video || null;
+    if (liveVideoEl) {
+      liveVideoEl.addEventListener("volumechange", syncListenButton);
+    }
+    syncListenButton();
     window.dispatchEvent(
-      new CustomEvent("hakou:stream-media", { detail: { video: video || null } })
+      new CustomEvent("hakou:stream-media", { detail: { video: liveVideoEl } })
     );
   }
 
@@ -163,6 +202,7 @@
       video.volume = 1;
       video.play().catch(() => {});
       btn.remove();
+      syncListenButton();
     };
 
     btn.addEventListener("click", (ev) => {
@@ -701,37 +741,20 @@
   }
 
   async function init() {
+    bindListenButton();
     await refresh();
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(refresh, POLL_MS);
   }
 
   function boot() {
-    const start = () => {
-      init().catch((err) => console.warn(LOG, err));
-      if (window.HakouConsent?.onMediaReady) {
-        window.HakouConsent.onMediaReady(() => {
-          lastAppliedKey = "";
-          refresh().catch((err) => console.warn(LOG, err));
-        });
-      }
-    };
-
-    if (window.HakouStreamGate?.whenAllowed) {
-      window.HakouStreamGate.whenAllowed(start);
-      return;
+    init().catch((err) => console.warn(LOG, err));
+    if (window.HakouConsent?.onMediaReady) {
+      window.HakouConsent.onMediaReady(() => {
+        lastAppliedKey = "";
+        refresh().catch((err) => console.warn(LOG, err));
+      });
     }
-    window.addEventListener(
-      "hakou:stream-allowed",
-      () => start(),
-      { once: true }
-    );
-    // Filet : si le gate n’existe pas (page partielle), ne démarre pas le player public
-    window.setTimeout(() => {
-      if (!window.HakouStreamGate?.isAllowed?.()) {
-        console.info(LOG, "en attente d’auth Stream");
-      }
-    }, 0);
   }
 
   if (document.readyState === "loading") {

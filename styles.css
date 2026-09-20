@@ -171,22 +171,17 @@ body[data-intro="playing"] {
 
 .intro-brand {
   margin: 0;
-  font-family: Italiana, Didot, "Bodoni MT", "Hoefler Text", Georgia, serif;
-  font-size: clamp(2.1rem, 7vw, 3.4rem);
-  font-weight: 400;
-  letter-spacing: 0.18em;
-  line-height: 1;
-  color: rgba(232, 237, 247, 0.96);
-  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.7);
-}
-
-.intro-hint {
-  margin: 0;
-  color: rgba(232, 237, 247, 0.72);
-  font-size: 0.85rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+  padding-left: 0.38em;
+  font-family: Orbitron, "Segoe UI", Helvetica, sans-serif;
+  font-size: clamp(3.2rem, 12vw, 7rem);
+  font-weight: 700;
+  letter-spacing: 0.38em;
+  line-height: 0.95;
+  text-transform: lowercase;
+  color: rgba(236, 242, 255, 0.96);
+  text-shadow:
+    0 0 28px rgba(127, 157, 255, 0.28),
+    0 2px 22px rgba(0, 0, 0, 0.75);
 }
 
 @media (max-height: 540px) {
@@ -196,7 +191,9 @@ body[data-intro="playing"] {
   }
 
   .intro-brand {
-    font-size: clamp(1.6rem, 5.5vh, 2.4rem);
+    font-size: clamp(2.2rem, 9vh, 4rem);
+    letter-spacing: 0.32em;
+    padding-left: 0.32em;
   }
 }
 
@@ -234,7 +231,7 @@ body[data-intro="done"] .intro-gate,
   display: none !important;
 }
 
-/* Actions bas gauche : Intro + focus planète */
+/* Actions bas gauche : Se connecter + focus planète */
 .chrome-actions {
   position: fixed;
   z-index: var(--chrome-z);
@@ -246,7 +243,7 @@ body[data-intro="done"] .intro-gate,
   pointer-events: none;
 }
 
-.intro-replay,
+.chrome-login,
 .planet-focus {
   pointer-events: auto;
   display: inline-flex;
@@ -274,7 +271,7 @@ body[data-intro="done"] .intro-gate,
     transform 0.35s ease;
 }
 
-.intro-replay svg,
+.chrome-login svg,
 .planet-focus svg {
   width: 14px;
   height: 14px;
@@ -282,19 +279,24 @@ body[data-intro="done"] .intro-gate,
   opacity: 0.9;
 }
 
-.intro-replay__label,
+.chrome-login__label,
 .planet-focus__label {
   line-height: 1;
 }
 
-.intro-replay:hover,
-.intro-replay:focus-visible,
+.chrome-login:hover,
+.chrome-login:focus-visible,
 .planet-focus:hover,
 .planet-focus:focus-visible {
   color: #fff;
   background: rgba(127, 157, 255, 0.22);
   border-color: rgba(255, 255, 255, 0.42);
   outline: none;
+}
+
+.chrome-login.is-stub {
+  border-color: rgba(127, 157, 255, 0.7);
+  transform: scale(1.04);
 }
 
 body:not([data-intro="done"]) .chrome-actions {
@@ -326,7 +328,7 @@ body[data-webgl="unavailable"] .planet-focus {
 body[data-planet-focus="on"] .side-nav,
 body[data-planet-focus="on"] #solar-scale,
 body[data-planet-focus="on"] #overlay,
-body[data-planet-focus="on"] .intro-replay,
+body[data-planet-focus="on"] .chrome-login,
 body[data-planet-focus="on"] .scroll-gate {
   opacity: 0;
   visibility: hidden;
@@ -336,7 +338,7 @@ body[data-planet-focus="on"] .scroll-gate {
 body[data-planet-focus="on"] .side-nav,
 body[data-planet-focus="on"] #solar-scale,
 body[data-planet-focus="on"] #overlay,
-body[data-planet-focus="on"] .intro-replay,
+body[data-planet-focus="on"] .chrome-login,
 body[data-planet-focus="on"] .scroll-gate {
   transition:
     opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
@@ -346,7 +348,7 @@ body[data-planet-focus="on"] .scroll-gate {
 body:not([data-planet-focus="on"]) .side-nav,
 body:not([data-planet-focus="on"]) #solar-scale,
 body:not([data-planet-focus="on"]) #overlay,
-body:not([data-planet-focus="on"]) .intro-replay,
+body:not([data-planet-focus="on"]) .chrome-login,
 body:not([data-planet-focus="on"]) .scroll-gate {
   transition:
     opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1),
@@ -1672,6 +1674,26 @@ audio {
   color: var(--panel-muted, var(--muted));
 }
 
+body:not([data-stream-auth="ok"]) .stream-crew {
+  display: none !important;
+}
+
+body[data-stream-auth="guest"] .radio-player {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+#stream-listen {
+  margin: 0.35rem 0 0;
+}
+
+#stream-listen[hidden] {
+  display: none !important;
+}
+
 #stream-content[hidden] {
   display: none !important;
 }
@@ -2164,11 +2186,20 @@ audio {
   color: var(--panel-text, var(--text));
   font: inherit;
   cursor: pointer;
+  transition:
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .stream-scene:hover,
 .stream-scene:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 55%, white);
+  transform: translateY(-1px);
+}
+
+.stream-scene:active {
+  transform: translateY(1px) scale(0.97);
 }
 
 .stream-scene.is-active {
@@ -3451,9 +3482,9 @@ body.youtube-video-modal-open {
   }
 
   /* Sur Stream, INTRO recouvrait le champ message — on le range */
-  body:has(#stream.panel.is-active) .intro-replay {
-    opacity: 0;
-    pointer-events: none;
+  body:has(#stream.panel.is-active) .chrome-login {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   body[data-planet-focus="on"] .chrome-actions {

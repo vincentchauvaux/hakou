@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { BELTS, STREAM_SECTION } from "./solar-belts.js";
 import { createSolarPlexus } from "./solar-plexus.js";
 
@@ -843,6 +843,14 @@ const streamCamOut = {
   fov: 32,
 };
 const streamHeroDir = new THREE.Vector3();
+const streamLookSmooth = new THREE.Vector3();
+let streamLookReady = false;
+const plexusPointer = { x: 0, y: 0, down: false };
+const plexusPointerSmooth = { x: 0, y: 0 };
+const streamTouchFwd = new THREE.Vector3();
+const streamTouchRight = new THREE.Vector3();
+const streamTouchUp = new THREE.Vector3();
+let plexusPointerBound = false;
 
 const atmosphereVertexShader = `
   varying vec3 vNormal;
@@ -1927,6 +1935,49 @@ function disposeRestOrbitInteraction() {
   orbitCanvas.removeEventListener("wheel", onOrbitWheel);
   endOrbitDrag();
   orbitCanvas = null;
+}
+
+function isPlexusPointerUi(target) {
+  const el = target instanceof Element ? target : null;
+  return Boolean(
+    el?.closest?.(
+      "button, a, input, textarea, select, label, .side-nav, .chrome-actions, .scroll-gate, #solar-scale, .intro-gate, .intro-login, .radio-chat, .stream-recordings"
+    )
+  );
+}
+
+function onPlexusPointerMove(event) {
+  plexusPointer.x = (event.clientX / Math.max(window.innerWidth, 1)) * 2 - 1;
+  plexusPointer.y = -((event.clientY / Math.max(window.innerHeight, 1)) * 2 - 1);
+}
+
+function onPlexusPointerDown(event) {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  if (isPlexusPointerUi(event.target)) return;
+  plexusPointer.down = true;
+}
+
+function onPlexusPointerUp() {
+  plexusPointer.down = false;
+}
+
+function initPlexusPointer() {
+  if (plexusPointerBound) return;
+  plexusPointerBound = true;
+  window.addEventListener("pointermove", onPlexusPointerMove, { passive: true });
+  window.addEventListener("pointerdown", onPlexusPointerDown);
+  window.addEventListener("pointerup", onPlexusPointerUp);
+  window.addEventListener("pointercancel", onPlexusPointerUp);
+}
+
+function disposePlexusPointer() {
+  if (!plexusPointerBound) return;
+  plexusPointerBound = false;
+  window.removeEventListener("pointermove", onPlexusPointerMove);
+  window.removeEventListener("pointerdown", onPlexusPointerDown);
+  window.removeEventListener("pointerup", onPlexusPointerUp);
+  window.removeEventListener("pointercancel", onPlexusPointerUp);
+  plexusPointer.down = false;
 }
 
 export function isRestOrbitDragging() {
@@ -4136,8 +4187,8 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 }
 
 /* —— Intro gate (logo vectoriel + zoom caméra) —— */
-const INTRO_GATE_MS = 3400;
-const INTRO_LOGO_URL = "./assets/logo-hakou.svg";
+const INTRO_GATE_MS = 5200;
+const INTRO_LOGO_URL = "./assets/logo-hakou.svg?v=41";
 
 let introGateActive = false;
 let introGateGroup = null;
@@ -4149,6 +4200,7 @@ let introGateCamStart = new THREE.Vector3();
 let introGateCamEnd = new THREE.Vector3();
 let introGateLookStart = new THREE.Vector3();
 let introGateLookEnd = new THREE.Vector3();
+let introGateThrough = new THREE.Vector3();
 let introGateLogoBaseScale = 1;
 let introSceneBgRestore = null;
 const introGateTmp = new THREE.Vector3();
@@ -4166,8 +4218,10 @@ function setIntroLogoOpacity(opacity) {
     if (!obj.isMesh || !obj.material) return;
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
     mats.forEach((mat) => {
-      mat.transparent = true;
+      mat.transparent = o < 0.999;
       mat.opacity = o;
+      mat.depthTest = true;
+      mat.depthWrite = o > 0.2;
       mat.needsUpdate = true;
     });
   });
@@ -4196,22 +4250,26 @@ function buildIntroLogoFromSvg(data) {
   for (const path of data.paths) {
     const style = path.userData?.style || {};
     const fill = style.fill;
-    if (!fill || fill === "none") continue;
+    if (fill === "none") continue;
 
-    const color = new THREE.Color();
-    try {
-      color.setStyle(fill);
-    } catch {
-      color.set(0xffffff);
+    const color = new THREE.Color(0xffffff);
+    if (fill && fill !== "none") {
+      try {
+        color.setStyle(fill);
+      } catch {
+        color.set(0xffffff);
+      }
     }
 
     const material = new THREE.MeshBasicMaterial({
       color,
-      transparent: true,
-      opacity: style.fillOpacity ?? 1,
+      transparent: false,
+      opacity: 1,
       side: THREE.DoubleSide,
-      depthWrite: false,
+      depthTest: true,
+      depthWrite: true,
       toneMapped: false,
+      fog: false,
     });
 
     const shapes = SVGLoader.createShapes(path);
@@ -4227,7 +4285,6 @@ function buildIntroLogoFromSvg(data) {
     throw new Error("SVG logo sans formes");
   }
 
-  // Centrer + inverser Y (SVG → Three)
   const box = new THREE.Box3().setFromObject(content);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
@@ -4246,6 +4303,7 @@ function buildIntroLogoFromSvg(data) {
   const targetH = 3.4;
   const s = targetH / Math.max(size.y, 0.001);
   root.scale.setScalar(s);
+  disposeIntroLogo();
   introGateLogoBaseScale = s;
   introLogoMesh = root;
   introGateGroup.add(introLogoMesh);
@@ -4265,7 +4323,7 @@ function applyIntroSceneBackground(active) {
     scene.background = new THREE.Color(INTRO_SCENE_BG);
     if (fog) {
       fog.color.setHex(INTRO_SCENE_BG);
-      fog.density = 0.035;
+      fog.density = 0;
     }
   } else if (introSceneBgRestore != null) {
     scene.background = new THREE.Color(introSceneBgRestore);
@@ -4289,6 +4347,14 @@ function setUniverseVisible(visible) {
   orbitMeshes.forEach((m) => {
     m.visible = flag;
   });
+  if (solarPlexus?.layers) {
+    for (const layer of solarPlexus.layers) {
+      if (!flag) {
+        layer.rocks.visible = false;
+        layer.lines.visible = false;
+      }
+    }
+  }
 }
 
 function buildIntroGate() {
@@ -4324,6 +4390,7 @@ function layoutIntroGate(elapsed = 0) {
   const camStart = introGateCamStart
     .copy(logoPos)
     .addScaledVector(introGateTmp, 9.5);
+  introGateThrough.copy(logoPos).addScaledVector(introGateTmp, -1.35);
   introGateCamEnd.copy(home.position);
   introGateLookStart.copy(logoPos);
   introGateLookEnd.copy(home.lookAt);
@@ -4369,7 +4436,6 @@ function finishIntroZoomToLive(elapsed) {
 function updateIntroGate(elapsed) {
   if (!introGateActive || !camera) return;
 
-  // Logo stable (pas de bounce) tant que le zoom n’a pas commencé
   if (introLogoMesh && !introGateZooming) {
     introLogoMesh.scale.setScalar(introGateLogoBaseScale);
     introLogoMesh.rotation.z = 0;
@@ -4382,36 +4448,36 @@ function updateIntroGate(elapsed) {
   }
 
   const t = clamp((performance.now() - introGateZoomStartMs) / INTRO_GATE_MS, 0, 1);
-  const e = easeInOutCubicLocal(t);
+  const punch = 0.7;
   const endFov = focalMmToFov(FOCAL_REST_MM[0]);
 
-  // Destination = cadrage §0 **live** (planètes qui tournent) — pas un snapshot elapsed=0
   syncIntroZoomDestination(elapsed);
 
-  camera.position.lerpVectors(introGateCamStart, introGateCamEnd, e);
-  introGateTmp.lerpVectors(introGateLookStart, introGateLookEnd, e);
-  camera.lookAt(introGateTmp);
-  camera.fov = THREE.MathUtils.lerp(38, endFov, e);
+  if (t <= punch) {
+    const u = easeInOutCubicLocal(t / punch);
+    camera.position.lerpVectors(introGateCamStart, introGateThrough, u);
+    camera.lookAt(introGateLookStart);
+    camera.fov = THREE.MathUtils.lerp(38, 24, u);
+  } else {
+    const u = easeInOutCubicLocal((t - punch) / (1 - punch));
+    camera.position.lerpVectors(introGateThrough, introGateCamEnd, u);
+    introGateTmp.lerpVectors(introGateLookStart, introGateLookEnd, u);
+    camera.lookAt(introGateTmp);
+    camera.fov = THREE.MathUtils.lerp(24, endFov, u);
+  }
   camera.updateProjectionMatrix();
   smoothedCamPos.copy(camera.position);
 
-  // Fond noir pendant tout le zoom ; brouillard qui s’éclaircit (pas de wash couleur)
-  const reveal = easeInOutCubicLocal(clamp((t - 0.05) / 0.7, 0, 1));
   if (scene?.background?.isColor) {
     scene.background.setHex(INTRO_SCENE_BG);
   }
   if (fog) {
     fog.color.setHex(INTRO_SCENE_BG);
-    fog.density = THREE.MathUtils.lerp(0.035, 0.005, reveal);
+    fog.density = 0;
   }
 
-  // Logo : fondu doux (sans explosion d’échelle)
   if (introLogoMesh) {
-    const through = clamp((t - 0.28) / 0.55, 0, 1);
-    introLogoMesh.scale.setScalar(
-      introGateLogoBaseScale * (1 + easeInOutCubicLocal(through) * 0.28)
-    );
-    setIntroLogoOpacity(1 - clamp((t - 0.42) / 0.48, 0, 1));
+    setIntroLogoOpacity(1 - clamp((t - 0.72) / 0.22, 0, 1));
   }
 
   if (t >= 1) {
@@ -4516,13 +4582,24 @@ function attachSolarPlexus() {
 
 function tickAttachedPlexus(elapsed, displaySection, glideState) {
   if (!solarPlexus) return;
-  const show = isOnStreamPanel(displaySection, glideState);
+  const show =
+    !introGateActive && isOnStreamPanel(displaySection, glideState);
   for (const layer of solarPlexus.layers) {
     layer.rocks.visible = show;
     layer.lines.visible = show;
   }
   if (!show) return;
-  solarPlexus.tick(elapsed, { getPlanet: scenePlanet, vibe: audioVibe });
+  plexusPointerSmooth.x += (plexusPointer.x - plexusPointerSmooth.x) * 0.18;
+  plexusPointerSmooth.y += (plexusPointer.y - plexusPointerSmooth.y) * 0.18;
+  solarPlexus.tick(elapsed, {
+    getPlanet: scenePlanet,
+    vibe: audioVibe,
+    pointer: {
+      x: plexusPointerSmooth.x,
+      y: plexusPointerSmooth.y,
+      down: plexusPointer.down,
+    },
+  });
 }
 
 export { BELTS, STREAM_SECTION };
@@ -4532,7 +4609,7 @@ export function setStreamSpot(id) {
   const changed = next !== streamSpotId;
   streamSpotId = next;
   if (!changed) return;
-  streamSpotSnap = true;
+  streamSpotSnap = false;
   lastAtRestSectionIndex = streamVisualSection();
   if (planetFocusMode) {
     clearSectionUserOrbit(lastAtRestSectionIndex);
@@ -4608,17 +4685,39 @@ function fillStreamSpotCamera(elapsed) {
 
 function applyStreamSpotCamera(elapsed, snap) {
   fillStreamSpotCamera(elapsed);
-  if (snap) {
+  const jump = snap || !streamLookReady;
+  if (jump) {
     camera.position.copy(streamCamOut.position);
     smoothedCamPos.copy(streamCamOut.position);
+    streamLookSmooth.copy(streamCamOut.lookAt);
     camera.fov = streamCamOut.fov ?? camera.fov;
+    streamLookReady = true;
   } else {
-    smoothedCamPos.lerp(streamCamOut.position, 0.14);
+    smoothedCamPos.lerp(streamCamOut.position, 0.07);
+    streamLookSmooth.lerp(streamCamOut.lookAt, 0.08);
     camera.position.copy(smoothedCamPos);
     const fov = streamCamOut.fov ?? camera.fov;
-    camera.fov += (fov - camera.fov) * 0.16;
+    camera.fov += (fov - camera.fov) * 0.09;
   }
-  camera.lookAt(streamCamOut.lookAt);
+  const peek = plexusPointer.down ? 2.6 : 1.05;
+  streamTouchFwd.copy(streamLookSmooth).sub(camera.position);
+  if (streamTouchFwd.lengthSq() > 1e-6) {
+    streamTouchFwd.normalize();
+    streamTouchRight.crossVectors(streamTouchFwd, camera.up);
+    if (streamTouchRight.lengthSq() > 1e-6) {
+      streamTouchRight.normalize();
+      streamTouchUp.crossVectors(streamTouchRight, streamTouchFwd).normalize();
+      camera.position.addScaledVector(
+        streamTouchRight,
+        plexusPointerSmooth.x * peek
+      );
+      camera.position.addScaledVector(
+        streamTouchUp,
+        plexusPointerSmooth.y * peek * 0.7
+      );
+    }
+  }
+  camera.lookAt(streamLookSmooth);
   camera.updateProjectionMatrix();
 }
 
@@ -4678,6 +4777,7 @@ export function initScene(canvas) {
   introSnapFrames = 0;
   window.addEventListener("resize", onResize);
   initRestOrbitInteraction(canvas);
+  initPlexusPointer();
   return true;
 }
 
@@ -4813,6 +4913,7 @@ export function renderScene(displaySection, glideState = null) {
   if (introGateActive) {
     updateIntroGate(elapsed);
   } else {
+    if (!onStream) streamLookReady = false;
     updateCamera(displaySection, elapsed, glideState, settleT);
   }
 
@@ -4826,6 +4927,7 @@ export function renderScene(displaySection, glideState = null) {
 export function disposeScene() {
   window.removeEventListener("resize", onResize);
   disposeRestOrbitInteraction();
+  disposePlexusPointer();
   disposeIntroGate();
   if (sunKeyLight) {
     scene?.remove(sunKeyLight);

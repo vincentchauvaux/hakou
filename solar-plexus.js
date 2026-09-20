@@ -206,8 +206,8 @@ export function createSolarPlexus(scene) {
     const mid = vibe.mid || 0;
     const peak = vibe.peak || 0;
     const pulse = bass * 1.55 + mid * 0.55;
-    const wellX = pointer.x * 6;
-    const wellY = pointer.y * 3;
+    const wellX = pointer.x * 8;
+    const wellY = pointer.y * 4.5;
 
     for (const layer of layers) {
       const n = layer.belt.count;
@@ -221,10 +221,10 @@ export function createSolarPlexus(scene) {
         const nrm = 1 / dist;
         const wobble =
           Math.sin(elapsed * (0.6 + layer.spins[i]) + i) * (0.1 + pulse * 0.7);
-        const pull = pointer.down ? 0.35 : 0.08;
+        const pull = pointer.down ? 0.42 : 0.16;
         dummy.position.set(
-          bx + bx * nrm * wobble * 1.8 + (wellX - bx) * pull * 0.01 * mid,
-          by + by * nrm * wobble * 1.8 + (wellY - by) * pull * 0.01,
+          bx + bx * nrm * wobble * 1.8 + (wellX - bx) * pull * 0.016,
+          by + by * nrm * wobble * 1.8 + (wellY - by) * pull * 0.016,
           bz + bz * nrm * wobble * 1.8
         );
         dummy.rotation.set(

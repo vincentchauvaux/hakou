@@ -3,7 +3,7 @@
  * GLB planètes : https://hakou.be/assets/… (binaire, pas de JS).
  */
 
-const SCENE3D_V = "20260920q";
+const SCENE3D_V = "20260920r";
 
 function scene3dUrls() {
   const here = import.meta.url;

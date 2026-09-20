@@ -274,7 +274,7 @@ app.get("/api/media/gate", (req, res) => {
   res.status(204).end();
 });
 
-/** Stream status — allowlist Google uniquement. */
+/** Stream status — public (live/HLS) ; archives seulement si session allowlist. */
 async function sendStreamStatus(req, res) {
   const ip = getClientIp(req);
   if (
@@ -288,15 +288,7 @@ async function sendStreamStatus(req, res) {
     return;
   }
   const session = verifySession(req.cookies?.[SESSION_COOKIE]);
-  if (!session) {
-    res.status(401).json({
-      ok: false,
-      error: "connexion requise",
-      authenticated: false,
-    });
-    return;
-  }
-  setMediaCookie(res, session);
+  if (session) setMediaCookie(res, session);
   try {
     const status = await getRadioStatus({
       channelId: RADIO_CHANNEL_ID,
@@ -313,8 +305,15 @@ async function sendStreamStatus(req, res) {
       hlsPublicUrl: HLS_PUBLIC_URL,
       whepPublicUrl: WHEP_PUBLIC_URL,
     });
-    res.setHeader("Cache-Control", "private, no-store");
-    res.json({ ...status, authenticated: true });
+    res.setHeader(
+      "Cache-Control",
+      session ? "private, no-store" : "public, max-age=12"
+    );
+    res.json({
+      ...status,
+      archives: session ? status.archives || [] : [],
+      authenticated: Boolean(session),
+    });
   } catch (err) {
     console.error("[Hakou Studio] stream status", err.message || err);
     res.status(502).json({
@@ -327,6 +326,7 @@ async function sendStreamStatus(req, res) {
       hlsUrl: null,
       whepUrl: null,
       archives: [],
+      authenticated: Boolean(session),
       error: "statut stream indisponible",
     });
   }

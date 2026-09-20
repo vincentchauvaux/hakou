@@ -1,8 +1,7 @@
 /**
- * Stream réservé aux comptes Google allowlist.
- * Déverrouille radio.js / radio-chat.js + contenu #stream.
+ * Stream public (scènes + plexus) ; chat / recordings / studio = allowlist.
  */
-import { fetchStudioSession, initGoogleLogin } from "./auth-client.js";
+import { fetchStudioSession } from "./auth-client.js";
 
 const LOG = "[Hakou StreamGate]";
 const allowedCbs = [];
@@ -23,27 +22,18 @@ function flushAllowed() {
   );
 }
 
+function revealPublic() {
+  const content = document.getElementById("stream-content");
+  if (content) content.hidden = false;
+  if (!allowed) document.body.dataset.streamAuth = "guest";
+}
+
 function setAllowed(profile) {
   allowed = true;
   session = profile;
   document.body.dataset.streamAuth = "ok";
-  const lock = document.getElementById("stream-lock");
-  const content = document.getElementById("stream-content");
-  if (lock) lock.hidden = true;
-  if (content) content.hidden = false;
+  revealPublic();
   flushAllowed();
-}
-
-function setLocked(message) {
-  allowed = false;
-  session = null;
-  document.body.dataset.streamAuth = "locked";
-  const lock = document.getElementById("stream-lock");
-  const content = document.getElementById("stream-content");
-  if (lock) lock.hidden = false;
-  if (content) content.hidden = true;
-  const status = document.getElementById("stream-lock-status");
-  if (status && message) status.textContent = message;
 }
 
 function whenAllowed(fn) {
@@ -66,45 +56,16 @@ window.HakouStreamGate = {
 };
 
 async function init() {
-  const lock = document.getElementById("stream-lock");
-  const loginBtn = document.getElementById("stream-login");
-  if (!lock || !document.getElementById("stream")) {
-    // Pas de zone Stream : ne bloque pas (dev partiel)
+  if (!document.getElementById("stream")) {
     setAllowed(null);
     return;
   }
 
-  setLocked("Vérification de la session…");
+  revealPublic();
 
   const existing = await fetchStudioSession();
   if (existing) {
     setAllowed(existing);
-    return;
-  }
-
-  setLocked(
-    "Réservé aux comptes autorisés. Connecte-toi avec Google."
-  );
-
-  if (!loginBtn) return;
-
-  try {
-    await initGoogleLogin(loginBtn, {
-      onSuccess: ({ email, name }) => {
-        setAllowed({ email, name: name || null });
-        const status = document.getElementById("stream-lock-status");
-        if (status) status.textContent = "Connecté.";
-      },
-      onError: (message) => {
-        const status = document.getElementById("stream-lock-status");
-        if (status) status.textContent = message;
-        loginBtn.classList.add("is-stub");
-        window.setTimeout(() => loginBtn.classList.remove("is-stub"), 2400);
-      },
-    });
-  } catch (err) {
-    console.warn(LOG, err);
-    setLocked("Auth Google indisponible pour le moment.");
   }
 }
 

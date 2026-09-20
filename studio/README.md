@@ -4,8 +4,8 @@ Service Node : auth Google (allowlist) + studio live + APIs Stream / Contact / c
 
 ## Sécurité (août 2026)
 
-- **Stream status + chat** : session Google allowlist obligatoire.
-- **HLS / WHEP** : nginx `auth_request` → `GET /api/media/gate` (cookie `hakou_media`).
+- **Chat / recordings / WHIP** : session Google allowlist obligatoire.
+- **Stream status + HLS + WHEP** : lecture publique ; archives et WHIP publish restent allowlist (`auth_request` cookie `hakou_media`).
 - **Captcha contact** : preuve HMAC sans `a`/`b` dans le jeton ; `SESSION_SECRET` fort requis en prod.
 - **IP** : nginx pose `X-Forwarded-For $remote_addr` (pas d’append spoofable).
 - **Ingest WHIP** : credentials publish uniquement pour session allowlist (`Cache-Control: no-store`).

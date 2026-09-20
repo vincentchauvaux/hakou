@@ -8,7 +8,7 @@ import {
   goToSectionIndex,
   getSectionCount,
 } from "./navigation.js";
-import { initGoogleLogin } from "./auth-client.js";
+import { fetchStudioSession, getAuthConfig, initGoogleLogin } from "./auth-client.js";
 
 const INTRO_STORAGE_KEY = "hakou-intro-done";
 
@@ -20,13 +20,12 @@ function getEls() {
     gateEl: document.getElementById("intro-gate"),
     enterBtn: document.getElementById("intro-enter"),
     loginBtn: document.getElementById("intro-login"),
-    hintEl: document.getElementById("intro-hint"),
-    replayBtn: document.getElementById("intro-replay"),
+    chromeLogin: document.getElementById("chrome-login"),
   };
 }
 
 function finishIntro({ redirectUrl } = {}) {
-  const { gateEl, hintEl } = getEls();
+  const { gateEl } = getEls();
   document.body.dataset.intro = "done";
   try {
     sessionStorage.setItem(INTRO_STORAGE_KEY, "1");
@@ -35,10 +34,6 @@ function finishIntro({ redirectUrl } = {}) {
   }
   setNavigationLocked(false);
   gateEl?.setAttribute("hidden", "");
-  if (hintEl) {
-    hintEl.hidden = true;
-    hintEl.textContent = "Cliquer sur le logo";
-  }
   if (redirectUrl) {
     window.location.assign(redirectUrl);
   }
@@ -70,7 +65,7 @@ function flyToSunThenStudio(studioUrl) {
 }
 
 function playEnterZoom(after) {
-  const { enterBtn, loginBtn, hintEl } = getEls();
+  const { enterBtn, loginBtn } = getEls();
   if (document.body.dataset.intro === "playing") return;
   if (!isIntroGateActive()) {
     after?.();
@@ -79,49 +74,56 @@ function playEnterZoom(after) {
   document.body.dataset.intro = "playing";
   enterBtn?.setAttribute("disabled", "");
   loginBtn?.setAttribute("disabled", "");
-  if (hintEl) hintEl.hidden = true;
   const started = startIntroGateZoom(() => {
     after?.();
   });
   if (!started) after?.();
 }
 
-/**
- * Reaffiche la porte d’entrée logo (depuis le site déjà ouvert).
- */
-export function replayIntroGate() {
-  const { gateEl, enterBtn, loginBtn, hintEl } = getEls();
-  if (document.body.dataset.intro === "pending") return;
-  if (document.body.dataset.intro === "playing") return;
+function markChromeLoggedIn() {
+  const { chromeLogin } = getEls();
+  if (!chromeLogin) return;
+  const label = chromeLogin.querySelector(".chrome-login__label");
+  if (label) label.textContent = "Studio";
+  chromeLogin.setAttribute("aria-label", "Ouvrir le studio");
+  chromeLogin.title = "Studio — Vincent & Anaïs";
+  chromeLogin.dataset.mode = "studio";
+}
 
-  try {
-    sessionStorage.removeItem(INTRO_STORAGE_KEY);
-  } catch {
-    /* private mode */
-  }
+function bindChromeLogin(studioUrl) {
+  const { chromeLogin } = getEls();
+  if (!chromeLogin) return;
 
-  // Aller à §0 avant de verrouiller (goToSection ignore si navigationLocked)
-  if (!document.body.dataset.intro || document.body.dataset.intro === "done") {
-    goToSectionIndex(0);
-  }
+  chromeLogin.addEventListener("click", (event) => {
+    if (chromeLogin.dataset.mode !== "studio") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (studioUrl) window.location.assign(studioUrl);
+  });
 
-  document.body.dataset.intro = "pending";
-  setNavigationLocked(true);
-  setIntroGateActive(true);
-  gateEl?.removeAttribute("hidden");
-  enterBtn?.removeAttribute("disabled");
-  loginBtn?.removeAttribute("disabled");
-  if (hintEl) {
-    hintEl.hidden = false;
-    hintEl.textContent = "Cliquer sur le logo";
-  }
+  initGoogleLogin(chromeLogin, {
+    onSuccess: ({ studioUrl: url }) => {
+      markChromeLoggedIn();
+      const dest = url || studioUrl;
+      if (isIntroGateActive()) {
+        playEnterZoom(() => flyToSunThenStudio(dest));
+        return;
+      }
+      if (dest) window.location.assign(dest);
+    },
+    onError: (message) => {
+      chromeLogin.classList.add("is-stub");
+      chromeLogin.title = message;
+      window.setTimeout(() => chromeLogin.classList.remove("is-stub"), 2400);
+    },
+  }).catch((err) => console.warn("[Hakou Intro] chrome login", err));
 }
 
 function bindIntroUi() {
   if (introBound) return;
   introBound = true;
 
-  const { enterBtn, loginBtn, hintEl, replayBtn } = getEls();
+  const { enterBtn, loginBtn } = getEls();
 
   const onEnter = () => {
     if (document.body.dataset.intro !== "pending") return;
@@ -136,22 +138,15 @@ function bindIntroUi() {
     }
   });
 
-  replayBtn?.addEventListener("click", () => {
-    replayIntroGate();
-  });
-
   if (loginBtn) {
     const setLoginMessage = (msg) => {
       loginBtn.title = msg;
-      if (hintEl) {
-        hintEl.hidden = false;
-        hintEl.textContent = msg;
-      }
     };
 
     initGoogleLogin(loginBtn, {
       onSuccess: ({ studioUrl }) => {
         setLoginMessage("Connecté");
+        markChromeLoggedIn();
         playEnterZoom(() => flyToSunThenStudio(studioUrl));
       },
       onError: (message) => {
@@ -173,6 +168,25 @@ function bindIntroUi() {
         });
       });
   }
+
+  fetchStudioSession()
+    .then(async (session) => {
+      const cfg = await getAuthConfig();
+      const studioUrl = cfg.studioUrl || "";
+      const chromeLogin = getEls().chromeLogin;
+      if (!chromeLogin) return;
+      if (session) {
+        markChromeLoggedIn();
+        chromeLogin.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (studioUrl) window.location.assign(studioUrl);
+        });
+        return;
+      }
+      bindChromeLogin(studioUrl);
+    })
+    .catch((err) => console.warn("[Hakou Intro] session chrome", err));
 }
 
 /**
@@ -192,17 +206,13 @@ export async function initIntroGate() {
     return false;
   }
 
-  const { gateEl, enterBtn, loginBtn, hintEl } = getEls();
+  const { gateEl, enterBtn, loginBtn } = getEls();
   document.body.dataset.intro = "pending";
   setNavigationLocked(true);
   setIntroGateActive(true);
   gateEl?.removeAttribute("hidden");
   enterBtn?.removeAttribute("disabled");
   loginBtn?.removeAttribute("disabled");
-  if (hintEl) {
-    hintEl.hidden = false;
-    hintEl.textContent = "Cliquer sur le logo";
-  }
 
   return true;
 }
