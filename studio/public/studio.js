@@ -1,4 +1,4 @@
-import { BELTS } from "./studio-belts.js?v=20260920i";
+import { BELTS } from "./studio-belts.js?v=20260920m";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
@@ -137,7 +137,7 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920i");
+    const { initStudioViz } = await import("./studio-viz.js?v=20260920m");
     studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {

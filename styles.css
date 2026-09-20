@@ -2146,6 +2146,47 @@ audio {
   font-size: 0.78rem;
 }
 
+.stream-scenes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0 0 0.75rem;
+}
+
+.stream-scene {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  padding: 0.38rem 0.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.28));
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--panel-text, var(--text));
+  font: inherit;
+  cursor: pointer;
+}
+
+.stream-scene:hover,
+.stream-scene:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 55%, white);
+}
+
+.stream-scene.is-active {
+  border-color: color-mix(in srgb, var(--accent) 80%, white);
+  background: color-mix(in srgb, var(--accent) 18%, rgba(0, 0, 0, 0.45));
+}
+
+.stream-scene__label {
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+@media (max-width: 680px) {
+  .stream-scenes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .stream-recordings {
   width: 100%;
   padding: 0.85rem 0.95rem 1rem;

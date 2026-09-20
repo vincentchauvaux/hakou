@@ -110,7 +110,14 @@
     }
   }
 
+  function emitStreamMedia(video) {
+    window.dispatchEvent(
+      new CustomEvent("hakou:stream-media", { detail: { video: video || null } })
+    );
+  }
+
   function clearFrame(frame) {
+    emitStreamMedia(null);
     destroyHls();
     destroyWhep();
     frame
@@ -245,6 +252,7 @@
     video.setAttribute("webkit-playsinline", "");
     video.title = title || "Hakou Radio Live";
     frame.appendChild(video);
+    emitStreamMedia(video);
 
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -313,6 +321,7 @@
     video.crossOrigin = "use-credentials";
     video.title = title || "Hakou Radio Live";
     frame.appendChild(video);
+    emitStreamMedia(video);
 
     const tryPlay = async () => {
       try {

@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { BELTS, STREAM_SECTION } from "./solar-belts.js";
+import { createSolarPlexus } from "./solar-plexus.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
 const PLANET_GLB_V = "40";
@@ -823,6 +825,16 @@ let starBase = [];
 let starPositions;
 let clock;
 let fog;
+let solarPlexus = null;
+let streamSpotId = "main";
+let streamSpotSnap = true;
+const audioVibe = { bass: 0, mid: 0, high: 0, peak: 0 };
+const streamCamOut = {
+  position: new THREE.Vector3(),
+  lookAt: new THREE.Vector3(),
+  fov: 32,
+};
+const streamHeroDir = new THREE.Vector3();
 
 const atmosphereVertexShader = `
   varying vec3 vNormal;
@@ -3869,11 +3881,20 @@ function updateAccentLight(displaySection, elapsed, glideState) {
 }
 
 function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
+  const inGlide = glideState?.animating && glideState.from !== glideState.to;
+  if (isStreamSpotRest(displaySection, glideState)) {
+    applyStreamSpotCamera(elapsed, streamSpotSnap);
+    streamSpotSnap = false;
+    if (fog) {
+      fog.density = 0.005 + STREAM_SECTION * 0.00085;
+    }
+    return;
+  }
+
   const cam = sampleCameraState(displaySection, elapsed, glideState);
   const inLongGlide = isLongGlide(glideState);
   const sectionIndex = getActiveSectionIndex(displaySection, glideState);
   const framing = SECTION_FRAMING[sectionIndex] ?? SECTION_FRAMING[0];
-  const inGlide = glideState?.animating && glideState.from !== glideState.to;
   const heroConverging = inGlide && cam.legT >= GLIDE_HERO_BLEND_START;
   const atRestFrame = !inGlide || cam.fromIndex === cam.toIndex;
   const activeBlend = inLongGlide
@@ -4451,6 +4472,95 @@ export function getSectionFraming(sectionIndex) {
   };
 }
 
+function scenePlanet(name) {
+  const entry = planetEntries.find((e) => e.data.name === name);
+  if (!entry) return undefined;
+  const mesh = entry.mesh;
+  const d = entry.data;
+  mesh.userData.name = d.name;
+  mesh.userData.r = d.orbitRadius;
+  mesh.userData.size = d.size;
+  mesh.userData.axialTilt = d.axialTilt || 0;
+  if (mesh.userData.angle == null) mesh.userData.angle = d.startAngle;
+  return mesh;
+}
+
+function attachSolarPlexus() {
+  if (solarPlexus || !scene) return;
+  solarPlexus = createSolarPlexus(scene);
+}
+
+function tickAttachedPlexus(elapsed, displaySection, glideState) {
+  if (!solarPlexus) return;
+  const show = isStreamSpotRest(displaySection, glideState);
+  for (const layer of solarPlexus.layers) {
+    layer.rocks.visible = show;
+    layer.lines.visible = show;
+  }
+  if (!show) return;
+  solarPlexus.tick(elapsed, { getPlanet: scenePlanet, vibe: audioVibe });
+}
+
+export { BELTS, STREAM_SECTION };
+
+export function setStreamSpot(id) {
+  const next = BELTS.some((b) => b.id === id) ? id : "main";
+  if (next !== streamSpotId) streamSpotSnap = true;
+  streamSpotId = next;
+}
+
+export function getStreamSpot() {
+  return streamSpotId;
+}
+
+export function setAudioVibe(next = {}) {
+  if (typeof next.bass === "number") audioVibe.bass = next.bass;
+  if (typeof next.mid === "number") audioVibe.mid = next.mid;
+  if (typeof next.high === "number") audioVibe.high = next.high;
+  if (typeof next.peak === "number") audioVibe.peak = next.peak;
+}
+
+function streamSpotDef() {
+  return BELTS.find((b) => b.id === streamSpotId) || BELTS[0];
+}
+
+function isStreamSpotRest(displaySection, glideState) {
+  const inGlide = Boolean(glideState?.animating && glideState.from !== glideState.to);
+  return (
+    !introGateActive &&
+    !planetFocusMode &&
+    !inGlide &&
+    Math.abs(displaySection - STREAM_SECTION) < 0.08
+  );
+}
+
+function applyStreamSpotCamera(elapsed, snap) {
+  const v = streamSpotDef().view;
+  const section = v.section ?? 0;
+  getHeroCamera(section, elapsed, section, streamCamOut);
+  if (v.distMul > 1) {
+    streamHeroDir.copy(streamCamOut.position).sub(streamCamOut.lookAt);
+    const len = streamHeroDir.length();
+    if (len > 1e-4) {
+      streamCamOut.position
+        .copy(streamCamOut.lookAt)
+        .addScaledVector(streamHeroDir.normalize(), len * v.distMul);
+    }
+  }
+  if (snap) {
+    camera.position.copy(streamCamOut.position);
+    smoothedCamPos.copy(streamCamOut.position);
+    camera.fov = streamCamOut.fov ?? camera.fov;
+  } else {
+    smoothedCamPos.lerp(streamCamOut.position, 0.14);
+    camera.position.copy(smoothedCamPos);
+    const fov = streamCamOut.fov ?? camera.fov;
+    camera.fov += (fov - camera.fov) * 0.16;
+  }
+  camera.lookAt(streamCamOut.lookAt);
+  camera.updateProjectionMatrix();
+}
+
 export function initScene(canvas) {
   try {
     renderer = new THREE.WebGLRenderer({
@@ -4495,6 +4605,7 @@ export function initScene(canvas) {
   buildPlanets();
   buildStars();
   buildIntroGate();
+  attachSolarPlexus();
 
   clock = new THREE.Clock();
   refreshSectionCameras(0, 0);
@@ -4510,8 +4621,29 @@ export function initScene(canvas) {
 }
 
 /**
+ * Cadrage héro d’une section (même caméra que hakou.be).
+ * @param {number} sectionIndex
+ * @param {number} elapsed
+ * @param {number} [displaySection]
+ * @param {{ position: import("three").Vector3, lookAt: import("three").Vector3, fov?: number }} out
+ */
+export function getHeroCamera(sectionIndex, elapsed, displaySection = sectionIndex, out) {
+  const i = clamp(Math.round(sectionIndex), 0, SECTION_COUNT - 1);
+  const planet = PLANETS[i];
+  const angle = getOrbitAngleForSection(planet, i, elapsed, displaySection, null);
+  tmpPlanetPos.set(
+    Math.cos(angle) * planet.orbitRadius,
+    0,
+    Math.sin(angle) * planet.orbitRadius
+  );
+  computeSectionCamera(i, planet, tmpPlanetPos, elapsed, out);
+  out.fov = focalMmToFov(FOCAL_REST_MM[i] ?? 42);
+  return out;
+}
+
+/**
  * Même système solaire que hakou.be (Soleil, planètes GLB, Cérès, Lune, étoiles).
- * Sans intro / sections / caméra héro — pour le studio.
+ * Sans intro / overlay — le studio pose sa propre caméra (cadrage héro).
  */
 export function createSolarSystem() {
   scene = new THREE.Scene();
@@ -4524,6 +4656,7 @@ export function createSolarSystem() {
   buildSunKeyLight();
   buildPlanets();
   buildStars();
+  attachSolarPlexus();
 
   function bindUserData(entry) {
     const mesh = entry.mesh;
@@ -4545,48 +4678,21 @@ export function createSolarSystem() {
     return entry ? bindUserData(entry) : undefined;
   }
 
-  function tickPlanets(elapsed) {
+  function tickPlanets(elapsed, displaySection = 0) {
+    updatePlanets(elapsed, displaySection, null);
     planetEntries.forEach((entry) => {
-      const { data } = entry;
       const mesh = bindUserData(entry);
-      const angle = getContinuousOrbitAngle(data, elapsed);
-      mesh.userData.angle = angle;
-      mesh.position.set(
-        Math.cos(angle) * data.orbitRadius,
-        0,
-        Math.sin(angle) * data.orbitRadius
-      );
-      const axial = data.axialScale ?? 1;
-      const spinY = elapsed * data.spinSpeed * PLANET_SPIN_MUL * axial;
-      if (entry.equator && data.axialTilt != null) {
-        entry.equator.rotation.z = data.axialTilt;
-      }
-      const bodySpin = entry.bodySpin || entry.earthSpin;
-      if (entry.isGltf && bodySpin) {
-        bodySpin.rotation.y = spinY;
-        if (entry.cloudSpin) {
-          entry.cloudSpin.rotation.y =
-            data.name === "Venus"
-              ? elapsed *
-                spinSpeedFromPeriodHours(96, { retrograde: true }) *
-                PLANET_SPIN_MUL
-              : spinY * 0.78;
-        }
-        if (entry.moonPivot) {
-          entry.moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED;
-          if (entry.moonSpin) entry.moonSpin.rotation.y = entry.moonPivot.rotation.y;
-        }
-      } else {
-        mesh.rotation.y = spinY;
-        if (data.axialTilt) mesh.rotation.z = data.axialTilt * 0.35;
-      }
-      if (entry.mat?.userData?.shaderUniforms) {
-        entry.mat.userData.shaderUniforms.uTime.value = elapsed * PLANET_SPIN_MUL;
-      }
+      const sec = entry.data.section;
+      mesh.userData.angle =
+        sec == null
+          ? getContinuousOrbitAngle(entry.data, elapsed)
+          : getOrbitAngleForSection(entry.data, sec, elapsed, displaySection, null);
     });
-    if (sunGlow) {
-      sunGlow.scale.setScalar(1 + Math.sin(elapsed * 0.6) * 0.03);
-    }
+  }
+
+  function tickPlexus(elapsed, vibe = audioVibe, pointer) {
+    if (vibe && vibe !== audioVibe) setAudioVibe(vibe);
+    solarPlexus?.tick(elapsed, { getPlanet: planet, vibe: audioVibe, pointer });
   }
 
   return {
@@ -4594,6 +4700,8 @@ export function createSolarSystem() {
     sun,
     sunGlow,
     tickPlanets,
+    tickPlexus,
+    getHeroCamera,
     planet,
     planetByName: {
       get: planet,
@@ -4630,10 +4738,16 @@ export function renderScene(displaySection, glideState = null) {
     );
   }
   tickFocusOrbitInertia();
-  updatePlanets(elapsed, displaySection, glideState);
+  const streamRest = isStreamSpotRest(displaySection, glideState);
+  const planetSection = streamRest
+    ? (streamSpotDef().view.section ?? 0)
+    : displaySection;
+  const planetGlide = streamRest ? null : glideState;
+  updatePlanets(elapsed, planetSection, planetGlide);
   updateOrbitRings(displaySection, glideState);
   updateStars(elapsed, camera.position, displaySection, glideState);
   updateAccentLight(displaySection, elapsed, glideState);
+  tickAttachedPlexus(elapsed, displaySection, glideState);
 
   if (introGateActive) {
     updateIntroGate(elapsed);
