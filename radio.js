@@ -134,7 +134,9 @@
   function resumeLiveAudio() {
     if (!liveVideoEl) return false;
     liveVideoEl.muted = false;
+    liveVideoEl.defaultMuted = false;
     liveVideoEl.volume = 1;
+    liveVideoEl.removeAttribute("muted");
     liveVideoEl.play().catch(() => {});
     window.dispatchEvent(new CustomEvent("hakou:stream-listen"));
     syncListenButton();

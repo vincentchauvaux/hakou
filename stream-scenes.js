@@ -143,50 +143,34 @@ function initStreamScenes() {
   }
 
   function hookMedia(video, stream) {
+    const ms =
+      stream instanceof MediaStream
+        ? stream
+        : video?.srcObject instanceof MediaStream
+          ? video.srcObject
+          : null;
+    if (!ms?.getAudioTracks?.().length) return;
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
     try {
       if (!audio.ctx) audio.ctx = new Ctx();
-      const ms =
-        stream instanceof MediaStream
-          ? stream
-          : video?.srcObject instanceof MediaStream
-            ? video.srcObject
-            : null;
-      if (ms?.getAudioTracks?.().length) {
-        if (
-          audio.source &&
-          hookedVideo === video &&
-          audio.analyser &&
-          audio.source.mediaStream
-        ) {
-          audio.ctx.resume?.();
-          return;
-        }
-        disconnectAudio();
-        audio.source = audio.ctx.createMediaStreamSource(ms);
-        audio.analyser = audio.ctx.createAnalyser();
-        audio.analyser.fftSize = 2048;
-        audio.analyser.smoothingTimeConstant = 0.55;
-        audio.source.connect(audio.analyser);
-        audio.freq = new Uint8Array(audio.analyser.frequencyBinCount);
-        hookedVideo = video || null;
-        audio.ctx.resume?.();
-        return;
-      }
-      if (!video || hookedVideo === video) {
+      if (
+        audio.source &&
+        hookedVideo === video &&
+        audio.analyser &&
+        audio.source.mediaStream === ms
+      ) {
         audio.ctx.resume?.();
         return;
       }
       disconnectAudio();
-      audio.source = audio.ctx.createMediaElementSource(video);
+      audio.source = audio.ctx.createMediaStreamSource(ms);
       audio.analyser = audio.ctx.createAnalyser();
       audio.analyser.fftSize = 2048;
       audio.analyser.smoothingTimeConstant = 0.55;
       audio.source.connect(audio.analyser);
-      audio.analyser.connect(audio.ctx.destination);
       audio.freq = new Uint8Array(audio.analyser.frequencyBinCount);
-      hookedVideo = video;
+      hookedVideo = video || null;
       audio.ctx.resume?.();
     } catch (err) {
       console.warn("[Hakou Stream] analyse audio", err);
@@ -202,7 +186,6 @@ function initStreamScenes() {
   });
   window.addEventListener("hakou:stream-listen", () => {
     audio.ctx?.resume?.();
-    if (hookedVideo) hookMedia(hookedVideo, hookedVideo.srcObject);
   });
   document.addEventListener(
     "pointerdown",
