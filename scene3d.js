@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { BELTS, STREAM_SECTION } from "./solar-belts.js";
-import { createSolarPlexus } from "./solar-plexus.js?v=20260920ac";
+import { createSolarPlexus } from "./solar-plexus.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
 const PLANET_GLB_V = "40";
@@ -835,7 +835,6 @@ let clock;
 let fog;
 let solarPlexus = null;
 let streamSpotId = "main";
-let streamSpotSnap = true;
 const audioVibe = {
   bass: 0,
   mid: 0,
@@ -3949,24 +3948,16 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
   const inGlide = glideState?.animating && glideState.from !== glideState.to;
   const onStream = isOnStreamPanel(displaySection, glideState);
   if (isStreamSpotHub(displaySection, glideState)) {
-    applyStreamSpotCamera(elapsed, streamSpotSnap);
-    streamSpotSnap = false;
-    lastAtRestSectionIndex = streamVisualSection();
-    if (fog) {
-      fog.density = 0.005 + STREAM_SECTION * 0.00085;
-    }
+    applyStreamSpotCamera(elapsed);
+    lastAtRestSectionIndex = STREAM_SECTION;
     return;
   }
 
-  const cam = onStream
-    ? fillStreamSpotCamera(elapsed)
-    : sampleCameraState(displaySection, elapsed, glideState);
+  const cam = sampleCameraState(displaySection, elapsed, glideState);
   const inLongGlide = isLongGlide(glideState);
-  const sectionIndex = onStream
-    ? streamVisualSection()
-    : getActiveSectionIndex(displaySection, glideState);
-  const planetDisplay = onStream ? sectionIndex : displaySection;
-  const planetGlide = onStream ? null : glideState;
+  const sectionIndex = getActiveSectionIndex(displaySection, glideState);
+  const planetDisplay = displaySection;
+  const planetGlide = glideState;
   const framing = SECTION_FRAMING[sectionIndex] ?? SECTION_FRAMING[0];
   const heroConverging = inGlide && cam.legT >= GLIDE_HERO_BLEND_START;
   const atRestFrame = !inGlide || cam.fromIndex === cam.toIndex;
@@ -4612,15 +4603,9 @@ export { BELTS, STREAM_SECTION };
 
 export function setStreamSpot(id) {
   const next = BELTS.some((b) => b.id === id) ? id : "main";
-  const changed = next !== streamSpotId;
+  if (next === streamSpotId) return;
   streamSpotId = next;
-  if (!changed) return;
-  streamSpotSnap = false;
-  lastAtRestSectionIndex = streamVisualSection();
-  if (planetFocusMode) {
-    clearSectionUserOrbit(lastAtRestSectionIndex);
-    beginFocusEnterBlend();
-  }
+  lastAtRestSectionIndex = STREAM_SECTION;
 }
 
 export function getStreamSpot() {
@@ -4644,10 +4629,6 @@ export function setAudioVibe(next = {}) {
 
 function streamSpotDef() {
   return BELTS.find((b) => b.id === streamSpotId) || BELTS[0];
-}
-
-function streamVisualSection() {
-  return clamp(Math.round(streamSpotDef().view.section ?? 0), 0, SECTION_COUNT - 1);
 }
 
 function isOnStreamPanel(displaySection, glideState) {
@@ -4679,40 +4660,40 @@ const streamCamState = {
 };
 
 function fillStreamSpotCamera(elapsed) {
-  const v = streamSpotDef().view;
-  const section = streamVisualSection();
-  getHeroCamera(section, elapsed, section, streamCamOut);
-  if (v.distMul > 1) {
-    streamHeroDir.copy(streamCamOut.position).sub(streamCamOut.lookAt);
-    const len = streamHeroDir.length();
-    if (len > 1e-4) {
-      streamCamOut.position
-        .copy(streamCamOut.lookAt)
-        .addScaledVector(streamHeroDir.normalize(), len * v.distMul);
-    }
-  }
-  streamCamState.fromIndex = section;
-  streamCamState.toIndex = section;
+  getHeroCamera(STREAM_SECTION, elapsed, STREAM_SECTION, streamCamOut);
+  const v = streamSpotDef().view || {};
+  const distMul = Number(v.distMul) > 0 ? Number(v.distMul) : 1;
+  const az = Number(v.az) || 0;
+  const el = Number(v.el) || 0;
+  streamHeroDir.copy(streamCamOut.position).sub(streamCamOut.lookAt);
+  const len = streamHeroDir.length() || 1;
+  streamHeroDir.normalize();
+  streamTouchRight.crossVectors(tmpUp, streamHeroDir);
+  if (streamTouchRight.lengthSq() < 1e-6) streamTouchRight.set(1, 0, 0);
+  streamTouchRight.normalize();
+  streamTouchUp.crossVectors(streamHeroDir, streamTouchRight).normalize();
+  streamCamOut.position
+    .copy(streamCamOut.lookAt)
+    .addScaledVector(streamHeroDir, len * distMul)
+    .addScaledVector(streamTouchRight, az * len)
+    .addScaledVector(streamTouchUp, el * len);
+  streamCamState.fromIndex = STREAM_SECTION;
+  streamCamState.toIndex = STREAM_SECTION;
   streamCamState.fov = streamCamOut.fov ?? 32;
   return streamCamState;
 }
 
-function applyStreamSpotCamera(elapsed, snap) {
+function applyStreamSpotCamera(elapsed) {
   fillStreamSpotCamera(elapsed);
-  const jump = snap || !streamLookReady;
-  if (jump) {
-    camera.position.copy(streamCamOut.position);
-    smoothedCamPos.copy(streamCamOut.position);
+  if (!streamLookReady) {
     streamLookSmooth.copy(streamCamOut.lookAt);
-    camera.fov = streamCamOut.fov ?? camera.fov;
     streamLookReady = true;
-  } else {
-    smoothedCamPos.lerp(streamCamOut.position, 0.07);
-    streamLookSmooth.lerp(streamCamOut.lookAt, 0.08);
-    camera.position.copy(smoothedCamPos);
-    const fov = streamCamOut.fov ?? camera.fov;
-    camera.fov += (fov - camera.fov) * 0.09;
   }
+  smoothedCamPos.lerp(streamCamOut.position, 0.08);
+  streamLookSmooth.lerp(streamCamOut.lookAt, 0.09);
+  camera.position.copy(smoothedCamPos);
+  const fov = streamCamOut.fov ?? camera.fov;
+  camera.fov += (fov - camera.fov) * 0.09;
   const peek = plexusPointer.down ? 2.6 : 1.05;
   streamTouchFwd.copy(streamLookSmooth).sub(camera.position);
   if (streamTouchFwd.lengthSq() > 1e-6) {
@@ -4919,17 +4900,11 @@ export function renderScene(displaySection, glideState = null) {
     prevSettleT < 1 &&
     !lastGlideAnimating
   ) {
-    resetRestOrbitOffsets(
-      isOnStreamPanel(displaySection, glideState)
-        ? streamVisualSection()
-        : getActiveSectionIndex(displaySection, glideState)
-    );
+    resetRestOrbitOffsets(getActiveSectionIndex(displaySection, glideState));
   }
   tickFocusOrbitInertia();
   const onStream = isOnStreamPanel(displaySection, glideState);
-  const planetSection = onStream ? streamVisualSection() : displaySection;
-  const planetGlide = onStream ? null : glideState;
-  updatePlanets(elapsed, planetSection, planetGlide);
+  updatePlanets(elapsed, displaySection, glideState);
   updateOrbitRings(displaySection, glideState);
   updateStars(elapsed, camera.position, displaySection, glideState);
   updateAccentLight(displaySection, elapsed, glideState);

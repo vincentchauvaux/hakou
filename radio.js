@@ -120,27 +120,66 @@
     }
   }
 
+  let wantAudible = false;
+  let unmuteTries = 0;
+
   function syncListenButton() {
     const btn = $("stream-listen");
     if (!btn) return;
     const live = Boolean(liveVideoEl);
     btn.hidden = !live;
     if (!live) return;
-    const on = !liveVideoEl.muted && liveVideoEl.volume > 0;
+    const on =
+      wantAudible &&
+      liveVideoEl &&
+      !liveVideoEl.muted &&
+      liveVideoEl.volume > 0;
     btn.textContent = on ? "Couper le son" : "Écouter le live";
     btn.classList.toggle("is-on", on);
   }
 
   function resumeLiveAudio() {
     if (!liveVideoEl) return false;
+    wantAudible = true;
+    unmuteTries = 0;
     liveVideoEl.muted = false;
     liveVideoEl.defaultMuted = false;
     liveVideoEl.volume = 1;
     liveVideoEl.removeAttribute("muted");
-    liveVideoEl.play().catch(() => {});
+    liveVideoEl.play().catch(() => {
+      wantAudible = false;
+      syncListenButton();
+    });
     window.dispatchEvent(new CustomEvent("hakou:stream-listen"));
     syncListenButton();
     return true;
+  }
+
+  function muteLiveAudio() {
+    wantAudible = false;
+    if (liveVideoEl) liveVideoEl.muted = true;
+    syncListenButton();
+  }
+
+  function onLiveVolumeChange() {
+    if (!liveVideoEl) return;
+    if (wantAudible && liveVideoEl.muted) {
+      if (unmuteTries >= 2) {
+        wantAudible = false;
+        syncListenButton();
+        return;
+      }
+      unmuteTries += 1;
+      liveVideoEl.muted = false;
+      liveVideoEl.volume = 1;
+      liveVideoEl.play().catch(() => {
+        wantAudible = false;
+        syncListenButton();
+      });
+      return;
+    }
+    if (wantAudible && !liveVideoEl.muted) unmuteTries = 0;
+    syncListenButton();
   }
 
   function bindListenButton() {
@@ -154,34 +193,19 @@
         ev.preventDefault();
         ev.stopPropagation();
         if (!liveVideoEl) return;
-        if (liveVideoEl.muted || liveVideoEl.volume === 0) {
-          resumeLiveAudio();
-        } else {
-          liveVideoEl.muted = true;
-          syncListenButton();
-        }
+        if (wantAudible && !liveVideoEl.muted) muteLiveAudio();
+        else resumeLiveAudio();
       });
-    }
-    const panel = $("stream");
-    if (panel && !panel.dataset.listenBound) {
-      panel.dataset.listenBound = "1";
-      panel.addEventListener(
-        "pointerdown",
-        (ev) => {
-          const t = ev.target;
-          if (t instanceof Element && t.closest("#stream-listen")) return;
-          if (liveVideoEl?.muted) resumeLiveAudio();
-        },
-        { passive: true }
-      );
     }
     window.addEventListener("hakou:stream-allowed", syncListenButton);
   }
 
   function emitStreamMedia(video, stream) {
     liveVideoEl = video || null;
-    if (liveVideoEl) {
-      liveVideoEl.addEventListener("volumechange", syncListenButton);
+    if (!video) wantAudible = false;
+    if (liveVideoEl && liveVideoEl.dataset.volumeBound !== "1") {
+      liveVideoEl.dataset.volumeBound = "1";
+      liveVideoEl.addEventListener("volumechange", onLiveVolumeChange);
     }
     syncListenButton();
     window.dispatchEvent(

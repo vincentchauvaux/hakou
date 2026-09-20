@@ -1679,11 +1679,22 @@ body:not([data-stream-auth="ok"]) .stream-crew {
 }
 
 body[data-stream-auth="guest"] .radio-player {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+  width: 100%;
+}
+
+body[data-stream-auth="guest"] .radio-player__frame {
+  width: 48px;
+  height: 48px;
+  max-width: 48px;
+  aspect-ratio: auto;
+  opacity: 0.06;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  pointer-events: none;
+}
+
+body[data-stream-auth="guest"] .radio-player__empty,
+body[data-stream-auth="guest"] .consent-placeholder {
+  display: none;
 }
 
 #stream-listen {
