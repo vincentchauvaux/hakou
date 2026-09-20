@@ -204,15 +204,16 @@ export function createSolarPlexus(scene) {
 
     const bass = vibe.bass || 0;
     const mid = vibe.mid || 0;
+    const high = vibe.high || 0;
     const peak = vibe.peak || 0;
-    const pulse = bass * 1.55 + mid * 0.55;
+    const pulse = bass * 2.35 + mid * 0.95 + high * 0.4;
     const wellX = pointer.x * 8;
     const wellY = pointer.y * 4.5;
 
     for (const layer of layers) {
       const n = layer.belt.count;
-      layer.lines.material.opacity = 0.12 + mid * 0.55 + bass * 0.28;
-      layer.rocks.material.emissiveIntensity = 0.35 + peak * 0.85;
+      layer.lines.material.opacity = 0.1 + mid * 0.72 + bass * 0.5 + high * 0.28;
+      layer.rocks.material.emissiveIntensity = 0.28 + peak * 1.55 + bass * 0.7;
       for (let i = 0; i < n; i++) {
         const bx = layer.base[i * 3];
         const by = layer.base[i * 3 + 1];
@@ -220,19 +221,21 @@ export function createSolarPlexus(scene) {
         const dist = Math.hypot(bx, by, bz) || 0.001;
         const nrm = 1 / dist;
         const wobble =
-          Math.sin(elapsed * (0.6 + layer.spins[i]) + i) * (0.1 + pulse * 0.7);
+          Math.sin(elapsed * (0.55 + layer.spins[i] * 1.4) + i * 0.31) *
+            (0.16 + pulse * 1.25) +
+          Math.sin(elapsed * (3.2 + high * 6) + i) * high * 0.22;
         const pull = pointer.down ? 0.42 : 0.16;
         dummy.position.set(
-          bx + bx * nrm * wobble * 1.8 + (wellX - bx) * pull * 0.016,
-          by + by * nrm * wobble * 1.8 + (wellY - by) * pull * 0.016,
-          bz + bz * nrm * wobble * 1.8
+          bx + bx * nrm * wobble * 2.15 + (wellX - bx) * pull * 0.016,
+          by + by * nrm * wobble * 2.15 + (wellY - by) * pull * 0.016,
+          bz + bz * nrm * wobble * 2.15
         );
         dummy.rotation.set(
-          elapsed * layer.spins[i] * 0.4,
-          elapsed * layer.spins[i],
+          elapsed * layer.spins[i] * (0.4 + peak * 1.1),
+          elapsed * layer.spins[i] * (1 + bass * 0.8),
           i * 0.3
         );
-        dummy.scale.setScalar(layer.scales[i] * (1 + bass * 0.42));
+        dummy.scale.setScalar(layer.scales[i] * (1 + bass * 0.95 + peak * 0.4));
         dummy.updateMatrix();
         layer.rocks.setMatrixAt(i, dummy.matrix);
       }

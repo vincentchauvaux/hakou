@@ -39,13 +39,28 @@
     return safari;
   }
 
+  function prefersStudioHost(url) {
+    return String(url || "").replace(
+      /^https:\/\/vps-e09ed6db\.vps\.ovh\.net/i,
+      "https://studio.hakou.be"
+    );
+  }
+
+  function canPlayNativeHls() {
+    const probe = document.createElement("video");
+    return Boolean(
+      probe.canPlayType("application/vnd.apple.mpegurl") ||
+        probe.canPlayType("application/x-mpegURL")
+    );
+  }
+
   function whepUrlFromHls(hlsUrl) {
     if (!hlsUrl) return null;
     const m = String(hlsUrl).match(
       /^(https?:\/\/[^/]+)\/hakou-live\/hls\/([^/]+)\//i
     );
     if (!m) return null;
-    return `${m[1]}/hakou-live/whip/${m[2]}/whep`;
+    return prefersStudioHost(`${m[1]}/hakou-live/whip/${m[2]}/whep`);
   }
 
   /**
@@ -54,7 +69,7 @@
    * Safari / iOS lit le live en WHEP.
    */
   function hlsPlaybackUrl(hlsUrl) {
-    return String(hlsUrl || "");
+    return prefersStudioHost(String(hlsUrl || ""));
   }
 
   function hasMediaConsent() {
@@ -105,47 +120,69 @@
     }
   }
 
-  function isStreamCrew() {
-    return document.body.dataset.streamAuth === "ok";
-  }
-
   function syncListenButton() {
     const btn = $("stream-listen");
     if (!btn) return;
     const live = Boolean(liveVideoEl);
-    btn.hidden = !live || isStreamCrew();
+    btn.hidden = !live;
     if (!live) return;
     const on = !liveVideoEl.muted && liveVideoEl.volume > 0;
     btn.textContent = on ? "Couper le son" : "Écouter le live";
+    btn.classList.toggle("is-on", on);
+  }
+
+  function resumeLiveAudio() {
+    if (!liveVideoEl) return false;
+    liveVideoEl.muted = false;
+    liveVideoEl.volume = 1;
+    liveVideoEl.play().catch(() => {});
+    window.dispatchEvent(new CustomEvent("hakou:stream-listen"));
+    syncListenButton();
+    return true;
   }
 
   function bindListenButton() {
     const btn = $("stream-listen");
-    if (!btn || btn.dataset.bound) return;
-    btn.dataset.bound = "1";
-    btn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      if (!liveVideoEl) return;
-      if (liveVideoEl.muted || liveVideoEl.volume === 0) {
-        liveVideoEl.muted = false;
-        liveVideoEl.volume = 1;
-        liveVideoEl.play().catch(() => {});
-      } else {
-        liveVideoEl.muted = true;
-      }
-      syncListenButton();
-    });
+    if (btn && !btn.dataset.bound) {
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        if (!liveVideoEl) return;
+        if (liveVideoEl.muted || liveVideoEl.volume === 0) {
+          resumeLiveAudio();
+        } else {
+          liveVideoEl.muted = true;
+          syncListenButton();
+        }
+      });
+    }
+    const panel = $("stream");
+    if (panel && !panel.dataset.listenBound) {
+      panel.dataset.listenBound = "1";
+      panel.addEventListener(
+        "pointerdown",
+        () => {
+          if (liveVideoEl?.muted) resumeLiveAudio();
+        },
+        { passive: true }
+      );
+    }
     window.addEventListener("hakou:stream-allowed", syncListenButton);
   }
 
-  function emitStreamMedia(video) {
+  function emitStreamMedia(video, stream) {
     liveVideoEl = video || null;
     if (liveVideoEl) {
       liveVideoEl.addEventListener("volumechange", syncListenButton);
     }
     syncListenButton();
     window.dispatchEvent(
-      new CustomEvent("hakou:stream-media", { detail: { video: liveVideoEl } })
+      new CustomEvent("hakou:stream-media", {
+        detail: {
+          video: liveVideoEl,
+          stream: stream || liveVideoEl?.srcObject || null,
+        },
+      })
     );
   }
 
@@ -201,6 +238,7 @@
       video.muted = false;
       video.volume = 1;
       video.play().catch(() => {});
+      window.dispatchEvent(new CustomEvent("hakou:stream-listen"));
       btn.remove();
       syncListenButton();
     };
@@ -271,13 +309,9 @@
     });
   }
 
-  async function playWhep(frame, emptyEl, whepUrl, title) {
-    if (!frame || !whepUrl) return;
-    clearFrame(frame);
-    if (emptyEl) emptyEl.hidden = true;
-
+  function makeLiveVideo(className, title) {
     const video = document.createElement("video");
-    video.className = "radio-hls radio-whep";
+    video.className = className;
     video.controls = true;
     video.playsInline = true;
     video.autoplay = true;
@@ -285,8 +319,16 @@
     video.setAttribute("playsinline", "");
     video.setAttribute("webkit-playsinline", "");
     video.title = title || "Hakou Radio Live";
+    return video;
+  }
+
+  async function playWhep(frame, emptyEl, whepUrl, title) {
+    if (!frame || !whepUrl) return;
+    clearFrame(frame);
+    if (emptyEl) emptyEl.hidden = true;
+
+    const video = makeLiveVideo("radio-hls radio-whep", title);
     frame.appendChild(video);
-    emitStreamMedia(video);
 
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -298,10 +340,32 @@
 
     const remoteStream = new MediaStream();
     video.srcObject = remoteStream;
-    pc.ontrack = (ev) => {
-      remoteStream.addTrack(ev.track);
-      video.play().catch(() => {});
-    };
+
+    const gotMedia = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("WHEP timeout")), 6000);
+      const fail = () => {
+        if (pc.connectionState === "failed") {
+          clearTimeout(timer);
+          reject(new Error("WHEP ICE"));
+        }
+      };
+      pc.addEventListener("connectionstatechange", fail);
+      pc.ontrack = (ev) => {
+        if (ev.streams?.[0]) {
+          ev.streams[0].getTracks().forEach((track) => {
+            if (!remoteStream.getTracks().includes(track)) remoteStream.addTrack(track);
+          });
+        } else if (!remoteStream.getTracks().includes(ev.track)) {
+          remoteStream.addTrack(ev.track);
+        }
+        video.play().catch(() => {});
+        emitStreamMedia(video, remoteStream);
+        if (remoteStream.getAudioTracks().length || remoteStream.getVideoTracks().length) {
+          clearTimeout(timer);
+          resolve();
+        }
+      };
+    });
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -327,13 +391,30 @@
     }
     const answer = await res.text();
     await pc.setRemoteDescription({ type: "answer", sdp: answer });
-    console.info(LOG, "studio WHEP (Safari/WebKit)", whepUrl);
+    await gotMedia;
+    emitStreamMedia(video, remoteStream);
+    console.info(LOG, "studio WHEP", whepUrl);
     attachUnmuteControl(frame, video);
     try {
       await video.play();
     } catch {
       /* autoplay : controls */
     }
+  }
+
+  async function playNativeHls(frame, emptyEl, hlsUrl, title) {
+    const sourceUrl = hlsPlaybackUrl(hlsUrl);
+    const video = makeLiveVideo("radio-hls radio-hls-native", title);
+    frame.appendChild(video);
+    video.src = sourceUrl;
+    emitStreamMedia(video);
+    attachUnmuteControl(frame, video);
+    try {
+      await video.play();
+    } catch {
+      /* autoplay : tap Écouter */
+    }
+    console.info(LOG, "studio HLS natif", sourceUrl);
   }
 
   async function playHls(frame, emptyEl, hlsUrl, title) {
@@ -343,17 +424,13 @@
 
     const sourceUrl = hlsPlaybackUrl(hlsUrl);
 
-    const video = document.createElement("video");
-    video.className = "radio-hls";
-    video.controls = true;
-    video.playsInline = true;
-    video.autoplay = true;
-    // Autoplay navigateur : muet d’abord (l’utilisateur peut réactiver le son).
-    video.muted = true;
-    video.setAttribute("playsinline", "");
-    // Cookie média (auth nginx) : credentials cross-origin vers le VPS.
-    video.crossOrigin = "use-credentials";
-    video.title = title || "Hakou Radio Live";
+    if (canPlayNativeHls()) {
+      await playNativeHls(frame, emptyEl, hlsUrl, title);
+      return;
+    }
+
+    const video = makeLiveVideo("radio-hls", title);
+    video.crossOrigin = "anonymous";
     frame.appendChild(video);
     emitStreamMedia(video);
 
@@ -375,7 +452,6 @@
       );
     };
 
-    // Safari : ne pas utiliser le HLS natif (Opus / cookies) — géré via WHEP en amont.
     let Hls;
     try {
       Hls = await loadHlsScript();
@@ -399,6 +475,7 @@
     hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
       selectHlsAudioTrack(hlsPlayer);
       attachUnmuteControl(frame, video);
+      emitStreamMedia(video);
       tryPlay();
     });
     hlsPlayer.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
@@ -423,15 +500,16 @@
   async function playStudioLive(frame, emptyEl, { hlsUrl, whepUrl, title }) {
     const ph = frame?.querySelector("[data-consent-placeholder]");
     if (ph) ph.hidden = true;
-    const whep =
-      (typeof whepUrl === "string" && whepUrl.trim()) ||
-      whepUrlFromHls(hlsUrl);
+    const whep = prefersStudioHost(
+      (typeof whepUrl === "string" && whepUrl.trim()) || whepUrlFromHls(hlsUrl)
+    );
     if (prefersStudioWebRtc() && whep) {
       try {
         await playWhep(frame, emptyEl, whep, title);
         return;
       } catch (err) {
-        console.warn(LOG, "WHEP échoué — repli HLS", err);
+        console.warn(LOG, "WHEP échoué — repli HLS natif", err);
+        destroyWhep();
       }
     }
     await playHls(frame, emptyEl, hlsUrl, title);

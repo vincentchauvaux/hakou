@@ -4717,6 +4717,17 @@ function applyStreamSpotCamera(elapsed, snap) {
       );
     }
   }
+  const throb = audioVibe.bass * 0.9 + audioVibe.peak * 0.55;
+  if (throb > 0.01 && streamTouchFwd.lengthSq() > 1e-6) {
+    camera.position.addScaledVector(
+      streamTouchFwd,
+      Math.sin(elapsed * 7.2) * throb * 0.28
+    );
+    camera.position.y += Math.sin(elapsed * 5.1) * audioVibe.mid * 0.12;
+  }
+  if (fog) {
+    fog.density = 0.005 + STREAM_SECTION * 0.00085 + audioVibe.bass * 0.0045;
+  }
   camera.lookAt(streamLookSmooth);
   camera.updateProjectionMatrix();
 }

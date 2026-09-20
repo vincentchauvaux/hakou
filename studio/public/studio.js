@@ -1,4 +1,4 @@
-import { BELTS } from "./studio-belts.js?v=20260920r";
+import { BELTS } from "./studio-belts.js?v=20260920x";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
@@ -48,6 +48,7 @@ const ytCopyUri = document.getElementById("studio-yt-copy-uri");
 
 let localStream = null;
 let audioCaptureStream = null;
+let pulseTimer = null;
 let peerConnection = null;
 let whipResourceUrl = null;
 let whipAuthHeader = null;
@@ -280,7 +281,7 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920r");
+    const { initStudioViz } = await import("./studio-viz.js?v=20260920x");
     studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {
@@ -877,6 +878,33 @@ function captureAlive() {
   );
 }
 
+function stopPulse() {
+  if (pulseTimer) {
+    clearInterval(pulseTimer);
+    pulseTimer = null;
+  }
+}
+
+function startPulse() {
+  stopPulse();
+  pulseTimer = setInterval(() => {
+    if (!streaming) return;
+    const vibe = studioViz?.getVibe?.();
+    if (!vibe) return;
+    fetch("./api/studio/pulse", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bass: vibe.bass,
+        mid: vibe.mid,
+        high: vibe.high,
+        peak: vibe.peak,
+      }),
+    }).catch(() => {});
+  }, 80);
+}
+
 function showPreview() {
   previewWrap?.classList.add("is-live");
 }
@@ -1281,6 +1309,7 @@ async function startStream() {
     const ingest = await fetchIngestConfig();
     await publishWhip(localStream, ingest);
     streaming = true;
+    startPulse();
     const dest = selectedDestination();
     if (dest !== "hakou") {
       setStatus(
@@ -1358,6 +1387,7 @@ async function stopStream({ keepCapture = true } = {}) {
   }
   await stopWhip();
   streaming = false;
+  stopPulse();
   startInFlight = false;
   releaseCapture();
   syncButtons();

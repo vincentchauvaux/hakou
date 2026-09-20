@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { BELTS } from "./studio-belts.js?v=20260920r";
-import { createSolarSystem } from "./studio-system.js?v=20260920r";
+import { BELTS } from "./studio-belts.js?v=20260920x";
+import { createSolarSystem } from "./studio-system.js?v=20260920x";
 
 export { BELTS };
 
@@ -168,7 +168,7 @@ export async function initStudioViz(canvas) {
       }
     }
 
-    const shake = audio.peak * 0.05;
+    const shake = audio.peak * 0.14 + audio.bass * 0.08;
     camGoal.x += Math.sin(t * 7) * shake;
     if (snapCam) {
       camera.position.copy(camGoal);
@@ -278,6 +278,14 @@ export async function initStudioViz(canvas) {
     captureStream(fps = 30) {
       if (!capture) capture = canvas.captureStream(fps);
       return capture;
+    },
+    getVibe() {
+      return {
+        bass: audio.bass,
+        mid: audio.mid,
+        high: audio.high,
+        peak: audio.peak,
+      };
     },
     dispose() {
       cancelAnimationFrame(raf);

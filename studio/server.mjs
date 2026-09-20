@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getRadioStatus } from "./radio-status.mjs";
 import { attachRadioChat } from "./radio-chat.mjs";
+import { attachStreamPulse } from "./stream-pulse.mjs";
 import { createRecordController } from "./record.mjs";
 import { createLiveAccounts } from "./live-accounts.mjs";
 import { createRestreamController } from "./restream.mjs";
@@ -334,6 +335,7 @@ async function sendStreamStatus(req, res) {
 
 app.get("/api/stream/status", sendStreamStatus);
 app.get("/api/radio/status", sendStreamStatus);
+attachStreamPulse(app, { requireSession });
 
 /**
  * Public — challenge anti-spam arithmétique (HMAC, usage unique).
