@@ -9,7 +9,9 @@
 #
 # MediaMTX cookieCheck :
 # - NE PAS envoyer `Cookie: cookieCheck=1` côté proxy.
-# - Utiliser `?cookieCheck=1` (client radio.js).
+# - NE PAS utiliser `?cookieCheck=1` côté client (jetons `?session=` partageables).
+# - Le gate est auth_request + cookie hakou_media sur CHAQUE requête HLS/WHEP,
+#   y compris celles qui auraient encore `?session=` dans l’URL.
 
 location = /internal-hakou-media-auth {
     internal;

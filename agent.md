@@ -8,7 +8,7 @@
 - **Accès restreint** (4 août 2026) : player + chat uniquement si session Google allowlist. Gate [`stream-gate.js`](stream-gate.js) + login Google ; API `GET /api/stream/status` et WebSocket chat exigent le cookie studio. Contenu masqué (`#stream-lock` / `#stream-content`) tant que non connecté. **Noms des comptes** : plus affichés dans l’UI publique (lock, messages « Connecté », aria-label e-mail) — allowlist reste `ALLOWED_EMAILS` côté VPS. Mentions légales / responsable RGPD conservent l’identité éditeur (obligation BE/UE).
 - **Enregistrement VPS** (31 août 2026, MAJ 20 sept. 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks MediaRecorder **pipés** dans ffmpeg → MP4 AAC **320 kb/s** + visuel canvas 1280×720. Badge **son d’onglet** vs **entrée audio**. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
 - **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live. **URI Google exacte** : `https://studio.hakou.be/api/studio/youtube/callback` (sinon `redirect_uri_mismatch`). Twitch = **clé de stream collée** (OAuth Helix optionnel). Relais ffmpeg RTSP local `:8554` → RTMP **libx264 GOP 2 s**. WHIP : H264 préféré + **VP8 en repli**. Restream refuse sans piste vidéo — la piste vient du **visualiseur** (`canvas.captureStream`), plus du partage d’écran. Comptes chiffrés `studio/data/live-accounts.bin`.
-- **Studio visuel / ceintures** (20 sept. 2026) : **un seul système solaire** = [`scene3d.js`](scene3d.js) + plexus [`solar-plexus.js`](solar-plexus.js) (4 ceintures toujours visibles). **Spectateur Stream** (§2) : 4 scènes (Principale / L4 / Kuiper / Saturne) via [`stream-scenes.js`](stream-scenes.js) — caméra **et Voir** suivent le spot (L4 → Jupiter, pas Uranus). **Studio rec/live** : audio → `setAudioVibe` / `tickPlexus`, tous les plexus dansent. **Son à caster** : canvas 3D `pointer-events: none` (le dock reste cliquable) ; bouton **Lister les micros** (permission + labels BlackHole/Rekordbox) ; puces d’entrées ; iPhone/Continuity filtrés. Cache-bust site `?v=20260920n`, studio `?v=20260920p`. **Login Google Cursor** : tester dans Chrome. Aperçu : `index.html?preview=1`.
+- **Studio visuel / ceintures** (20 sept. 2026) : **un seul système solaire** = [`scene3d.js`](scene3d.js) + plexus [`solar-plexus.js`](solar-plexus.js) (4 ceintures toujours visibles). **Spectateur Stream** (§2) : 4 scènes (Principale / L4 / Kuiper / Saturne) via [`stream-scenes.js`](stream-scenes.js) — caméra **et Voir** suivent le spot (L4 → Jupiter, pas Uranus). **Studio rec/live** : audio → `setAudioVibe` / `tickPlexus`, tous les plexus dansent. **Son à caster** : canvas 3D `pointer-events: none` (le dock reste cliquable) ; bouton **Lister les micros** (permission + labels BlackHole/Rekordbox) ; puces d’entrées ; iPhone/Continuity filtrés. Cache-bust site + studio `?v=20260920q`. **Login Google Cursor** : tester dans Chrome. Aperçu studio : `?preview=1` **hors prod seulement**.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET https://studio.hakou.be/api/stream/status` (alias `/api/radio/status`) — **auth requise**.
@@ -18,12 +18,12 @@
   - Redirect : `https://studio.hakou.be/api/studio/twitch/callback`
   - Miroir optionnel : `twitchLogin` dans [`content/radio.json`](content/radio.json) (lien UI hors live)
 - Embed : `https://player.twitch.tv/?channel=…&parent=hakou.be` (consentement médias tiers).
-- Note : le chemin HLS MediaMTX `/hakou-live/` peut rester joignable si l’URL est connue — le verrou porte sur l’UI Stream + statut + chat.
+- Note : le chemin HLS `/hakou-live/` exige le cookie `hakou_media` (nginx `auth_request`) ; plus de jetons `?session=` côté client.
 
 
 ## Sécurité (août 2026)
 
-- **HLS / WHEP** : nginx `auth_request` → `GET /api/media/gate` ; cookie HttpOnly `hakou_media` (Path=`/`, TTL 4 h) posé au login / status / studio. Client [`radio.js`](radio.js) : `xhr.withCredentials = true` + WHEP `credentials: "include"`.
+- **HLS / WHEP** : nginx `auth_request` → `GET /api/media/gate` ; cookie HttpOnly `hakou_media` (Path=`/`, TTL 4 h) posé au login / status / studio. Client [`radio.js`](radio.js) : `xhr.withCredentials = true` + WHEP `credentials: "include"`. Plus de `?cookieCheck=1`.
 - **Captcha contact** : jeton v2 sans `a`/`b` exposés ; preuve HMAC serveur ; secret = `CONTACT_CAPTCHA_SECRET` || `SESSION_SECRET` (refus boot si faible + `HAKOU_STUDIO_PROD=1`).
 - **Origin contact** : obligatoire (`CONTACT_REQUIRE_ORIGIN=0` pour désactiver en debug).
 - **IP** : `X-Real-IP` / `X-Forwarded-For $remote_addr` (nginx snippets) ; rate-limits auth / status / ingest / contact / chat.
@@ -32,6 +32,7 @@
 - **Inbox** : plafond `CONTACT_INBOX_MAX_BYTES` (défaut 5 Mo) + rétention.
 - Snippets : [`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example), [`studio/deploy/nginx-hakou-studio.conf.example`](studio/deploy/nginx-hakou-studio.conf.example).
 - Helpers : [`studio/security.mjs`](studio/security.mjs).
+- **Revue architecture 20 sept. 2026** : canvas [`revue-securite-hakou.canvas.tsx`](/Users/hakou/.cursor/projects/Users-hakou-hakou/canvases/revue-securite-hakou.canvas.tsx). **Patch élevés** : `scene3d.js` servi depuis l’origine studio (`sync-world.sh`, plus d’import hakou.be / retiré de `script-src`) ; `/index.html` derrière `requireAuthHtml` ; `?preview=1` hors prod seulement ; HLS sans `?cookieCheck=1` (cookie nginx). Cache `?v=20260920q`.
 
 
 ## Revue juridique (août 2026)
@@ -52,7 +53,7 @@
 
 - **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
 - **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
-- **Dernier redéploiement** : 20 sept. 2026 — Stream : 4 scènes spectateur + plexus audio rec/live ; rsync `studio/` ; `pm2 restart hakou-studio` ; GitHub Pages `scene3d.js` / `solar-plexus.js`.
+- **Dernier redéploiement** : 20 sept. 2026 — patch sécu élevés (scene3d même origine, gate `/index.html`, HLS sans `?session=`) ; `sync-world.sh` + rsync `studio/` ; `pm2 restart hakou-studio` ; GitHub Pages `radio.js` / `scene3d.js` ; cache `?v=20260920q`.
 
 
 
@@ -411,7 +412,7 @@ Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Pl
   - Setup détaillé : [`studio/README.md`](studio/README.md).
 - **Live studio (Étape 3)** :
   - **MediaMTX** `/opt/mediamtx` (systemd `mediamtx`) : WHIP publish path `hakou` (:8889) + HLS (:8888) + ICE UDP **8189** + API :9997.
-  - Nginx : `/hakou-live/whip/` → WHIP/WHEP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). **cookieCheck** : ne **pas** injecter `Cookie: cookieCheck=1` (sinon playlists sans `?session=` + 401 enfants si `Set-Cookie` masqué). Client : `?cookieCheck=1` → `?session=` dans les m3u8. CORS HLS `*` sans credentials (`hls.js` `withCredentials: false`).
+  - Nginx : `/hakou-live/whip/` → WHIP/WHEP, `/hakou-live/hls/` → HLS ([`studio/deploy/nginx-hakou-live.conf.example`](studio/deploy/nginx-hakou-live.conf.example)). Gate = `auth_request` + cookie `hakou_media` sur chaque requête. **Pas** de `?cookieCheck=1` (évite les jetons MediaMTX `?session=` partageables). Client [`radio.js`](radio.js) : `xhr.withCredentials = true`. Safari / iOS : WHEP.
   - Studio (auth) : `GET /api/studio/ingest` → URL WHIP + Basic auth publisher ; [`studio/public/studio.js`](studio/public/studio.js) **entrée audio** (ou son d’onglet Chrome) + **canvas visualiseur** → WHIP **H264** (`setCodecPreferences`). Plus de partage d’écran comme image du live. Badge **son d’onglet** vs **entrée audio**. **Enregistrement VPS** : bouton séparé, MediaRecorder (viz + audio) → pipe ffmpeg `/api/studio/record/*` (pas MediaMTX). **Destination** : Hakou / YouTube / Twitch ; restream RTMP via RTSP local. Spectateurs : autoplay **muet** + bouton **Activer le son**.
   - Spectateurs : [`radio.js`](radio.js) si auth Stream + `studioLive` / Twitch / YouTube. Hors antenne : **logo Hakou**. Priorité studio > Twitch live > YouTube live.
   - Nginx WHIP/WHEP : CORS origines hakou.be (+ localhost / VPS), headers `Content-Type` / `Accept` pour SDP ; ICE UDP **8189** ouvert (média WebRTC hors nginx).

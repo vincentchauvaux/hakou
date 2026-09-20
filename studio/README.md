@@ -32,6 +32,12 @@ Nginx :
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+Monde 3D **même origine** (pas d’`import()` hakou.be) :
+
+```bash
+bash studio/deploy/sync-world.sh   # copie scene3d.js + solar-plexus.js → public/
+```
+
 ## Google Cloud
 
 1. Client OAuth **Application Web**.

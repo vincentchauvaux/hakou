@@ -73,6 +73,8 @@ function loadEnv() {
 
 const env = loadEnv();
 const PORT = Number(env.PORT || 8787);
+const IS_PROD =
+  Boolean(env.HAKOU_STUDIO_PROD) || env.NODE_ENV === "production";
 const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID || "";
 const YOUTUBE_API_KEY = env.YOUTUBE_API_KEY || "";
 const RADIO_CHANNEL_ID =
@@ -1027,7 +1029,14 @@ app.post("/api/auth/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+function wantsStudioPreview(req) {
+  if (IS_PROD) return false;
+  const q = req.query?.preview;
+  return q === "1" || q === "true" || q === "";
+}
+
 function requireAuthPage(req, res, next) {
+  if (wantsStudioPreview(req)) return next();
   const session = verifySession(req.cookies?.[SESSION_COOKIE]);
   if (!session) {
     res.status(401).send(`<!doctype html>
@@ -1049,12 +1058,42 @@ function requireAuthPage(req, res, next) {
   next();
 }
 
+function requireAuthHtml(req, res, next) {
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  const path = String(req.path || "").split("?")[0];
+  if (path === "/index.html" || /\.html$/i.test(path)) {
+    res.setHeader("Cache-Control", "no-store");
+    return requireAuthPage(req, res, next);
+  }
+  next();
+}
+
+function sendWorldModule(filename) {
+  return (_req, res) => {
+    const local = join(__dirname, "public", filename);
+    const sibling = join(__dirname, "..", filename);
+    const file = existsSync(local) ? local : sibling;
+    if (!existsSync(file)) {
+      res.status(404).type("text/plain").send("module introuvable");
+      return;
+    }
+    res.setHeader("Cache-Control", "public, max-age=120");
+    res.type("application/javascript");
+    res.sendFile(file);
+  };
+}
+
 app.get("/api/auth/session-check", (req, res) => {
   const session = verifySession(req.cookies?.[SESSION_COOKIE]);
   if (session) setMediaCookie(res, session);
   res.json({ authenticated: Boolean(session) });
 });
 
+app.get("/scene3d.js", sendWorldModule("scene3d.js"));
+app.get("/solar-plexus.js", sendWorldModule("solar-plexus.js"));
+app.get("/solar-belts.js", sendWorldModule("solar-belts.js"));
+
+app.use(requireAuthHtml);
 app.use(express.static(join(__dirname, "public"), { index: false }));
 
 app.get("/", requireAuthPage, (_req, res) => {

@@ -6,8 +6,16 @@ import { createSolarPlexus } from "./solar-plexus.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
 const PLANET_GLB_V = "40";
-/** Absolu via ce module — même fichiers si le studio importe scene3d.js depuis hakou.be. */
+/** GLB toujours depuis hakou.be quand ce module tourne sur le studio (binaire, pas de JS). */
 function worldUrl(rel) {
+  try {
+    const here = new URL(import.meta.url);
+    if (here.hostname === "studio.hakou.be" || /\/studio\/public\//.test(here.pathname)) {
+      return new URL(rel.replace(/^\.\//, ""), "https://hakou.be/").href;
+    }
+  } catch {
+    /* ignore */
+  }
   return new URL(rel, import.meta.url).href;
 }
 const PLANET_GLB = {

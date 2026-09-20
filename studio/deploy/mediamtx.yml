@@ -54,7 +54,7 @@ authInternalUsers:
 hls: true
 hlsAddress: 127.0.0.1:8888
 hlsEncryption: false
-hlsAllowOrigins: ["https://hakou.be", "http://localhost:3000", "http://127.0.0.1:3000", "https://vps-e09ed6db.vps.ovh.net"]
+hlsAllowOrigins: ["https://hakou.be", "https://studio.hakou.be", "http://localhost:3000", "http://127.0.0.1:3000", "https://vps-e09ed6db.vps.ovh.net"]
 hlsAlwaysRemux: true
 hlsVariant: fmp4
 hlsSegmentDuration: 2s
@@ -69,7 +69,7 @@ hlsMuxerCloseAfter: 30s
 webrtc: true
 webrtcAddress: 127.0.0.1:8889
 webrtcEncryption: false
-webrtcAllowOrigins: ["https://hakou.be", "http://localhost:3000", "http://127.0.0.1:3000", "https://vps-e09ed6db.vps.ovh.net"]
+webrtcAllowOrigins: ["https://hakou.be", "https://studio.hakou.be", "http://localhost:3000", "http://127.0.0.1:3000", "https://vps-e09ed6db.vps.ovh.net"]
 webrtcLocalUDPAddress: :8189
 webrtcAdditionalHosts: [vps-e09ed6db.vps.ovh.net, 51.178.44.114]
 webrtcICEServers2:

@@ -1,4 +1,4 @@
-import { BELTS } from "./studio-belts.js?v=20260920p";
+import { BELTS } from "./studio-belts.js?v=20260920q";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
@@ -280,7 +280,7 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920p");
+    const { initStudioViz } = await import("./studio-viz.js?v=20260920q");
     studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {
@@ -603,9 +603,14 @@ async function loadMe() {
   const res = await fetch("./api/auth/me", { credentials: "include" });
   if (!res.ok) {
     if (res.status === 401) {
-      // Navigateur Cursor : GIS ouvre des onglets au lieu de popups, le login
-      // Google ne revient jamais. ?preview=1 garde l’UI (APIs toujours 401).
-      if (new URLSearchParams(window.location.search).has("preview")) return;
+      // Navigateur Cursor : GIS ouvre des onglets au lieu de popups.
+      // ?preview=1 n’est autorisé qu’hors prod (jamais sur studio.hakou.be).
+      if (
+        location.hostname !== "studio.hakou.be" &&
+        new URLSearchParams(window.location.search).has("preview")
+      ) {
+        return;
+      }
       window.location.href = "https://hakou.be/";
       return;
     }

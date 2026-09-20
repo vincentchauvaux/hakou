@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { BELTS } from "./studio-belts.js?v=20260920p";
-import { createSolarSystem } from "./studio-system.js?v=20260920p";
+import { BELTS } from "./studio-belts.js?v=20260920q";
+import { createSolarSystem } from "./studio-system.js?v=20260920q";
 
 export { BELTS };
 

@@ -1,35 +1,31 @@
 /**
- * Monde hakou.be (`scene3d.js`) — un seul système solaire, plexus inclus.
+ * Monde hakou.be (`scene3d.js`) — même origine que le studio (jamais hakou.be).
+ * GLB planètes : https://hakou.be/assets/… (binaire, pas de JS).
  */
 
-const SCENE3D_V = "20260920m";
+const SCENE3D_V = "20260920q";
 
 function scene3dUrls() {
   const here = import.meta.url;
-  const urls = [];
+  const urls = [new URL(`./scene3d.js?v=${SCENE3D_V}`, here).href];
   if (/\/studio\/public\//.test(here)) {
     urls.push(new URL(`../../scene3d.js?v=${SCENE3D_V}`, here).href);
   }
-  urls.push(new URL(`/scene3d.js?v=${SCENE3D_V}`, here).href);
-  urls.push(`https://hakou.be/scene3d.js?v=${SCENE3D_V}`);
   return urls;
 }
 
 async function loadHakouWorld() {
-  let fallback;
   let lastErr;
   for (const url of scene3dUrls()) {
     try {
       const mod = await import(url);
       if (typeof mod.createSolarSystem !== "function") continue;
       if (typeof mod.getHeroCamera === "function") return mod;
-      fallback = fallback || mod;
     } catch (err) {
       lastErr = err;
     }
   }
-  if (fallback) return fallback;
-  throw lastErr || new Error("scene3d.js introuvable");
+  throw lastErr || new Error("scene3d.js introuvable (origine studio uniquement)");
 }
 
 /**

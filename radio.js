@@ -47,19 +47,13 @@
     return `${m[1]}/hakou-live/whip/${m[2]}/whep`;
   }
 
-  /** MediaMTX : ?cookieCheck=1 → playlists avec ?session= (sans cookies tiers). */
-  function hlsUrlWithSessionBootstrap(hlsUrl) {
-    try {
-      const u = new URL(hlsUrl);
-      if (!u.searchParams.has("session") && !u.searchParams.has("cookieCheck")) {
-        u.searchParams.set("cookieCheck", "1");
-      }
-      return u.href;
-    } catch {
-      return String(hlsUrl).includes("?")
-        ? `${hlsUrl}&cookieCheck=1`
-        : `${hlsUrl}?cookieCheck=1`;
-    }
+  /**
+   * HLS derrière nginx `auth_request` + cookie `hakou_media` (withCredentials).
+   * Pas de `?cookieCheck=1` : MediaMTX sinon réécrit les playlists en `?session=`
+   * partageable. Safari / iOS lit le live en WHEP.
+   */
+  function hlsPlaybackUrl(hlsUrl) {
+    return String(hlsUrl || "");
   }
 
   function hasMediaConsent() {
@@ -307,7 +301,7 @@
     clearFrame(frame);
     if (emptyEl) emptyEl.hidden = true;
 
-    const sourceUrl = hlsUrlWithSessionBootstrap(hlsUrl);
+    const sourceUrl = hlsPlaybackUrl(hlsUrl);
 
     const video = document.createElement("video");
     video.className = "radio-hls";
