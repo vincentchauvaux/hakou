@@ -2185,17 +2185,22 @@ body[data-stream-auth="guest"] .radio-player {
 }
 
 .stream-scenes {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
   margin: 0 0 0.75rem;
 }
 
 .stream-scene {
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
   min-height: 36px;
-  padding: 0.38rem 0.3rem;
+  padding: 0.42rem 0.95rem;
   border-radius: 999px;
   border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.28));
   background: rgba(0, 0, 0, 0.22);
@@ -2226,12 +2231,8 @@ body[data-stream-auth="guest"] .radio-player {
 .stream-scene__label {
   font-size: 0.78rem;
   font-weight: 650;
-}
-
-@media (max-width: 680px) {
-  .stream-scenes {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .stream-recordings {
