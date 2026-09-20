@@ -1683,13 +1683,18 @@ body[data-stream-auth="guest"] .radio-player {
 }
 
 body[data-stream-auth="guest"] .radio-player__frame {
-  width: 48px;
-  height: 48px;
-  max-width: 48px;
+  width: 96px;
+  height: 54px;
+  max-width: 96px;
   aspect-ratio: auto;
-  opacity: 0.06;
+  opacity: 0.2;
   overflow: hidden;
   pointer-events: none;
+  border-radius: 10px;
+}
+
+body[data-stream-auth="guest"] .radio-unmute {
+  display: none !important;
 }
 
 body[data-stream-auth="guest"] .radio-player__empty,
@@ -2368,14 +2373,15 @@ body[data-stream-auth="guest"] .consent-placeholder {
 }
 
 .radio-player.is-audio-only .radio-player__frame {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 44px;
-  height: 44px;
-  opacity: 0.02;
+  position: relative;
+  left: auto;
+  bottom: auto;
+  width: 96px;
+  height: 54px;
+  opacity: 0.2;
   overflow: hidden;
   pointer-events: none;
+  border-radius: 10px;
 }
 
 .radio-player.is-audio-only .radio-unmute {

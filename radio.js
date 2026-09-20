@@ -123,17 +123,22 @@
   let wantAudible = false;
   let unmuteTries = 0;
 
+  function applyWantedMute() {
+    if (!liveVideoEl) return;
+    liveVideoEl.muted = !wantAudible;
+    liveVideoEl.defaultMuted = !wantAudible;
+    liveVideoEl.volume = 1;
+    if (wantAudible) liveVideoEl.removeAttribute("muted");
+    else liveVideoEl.setAttribute("muted", "");
+  }
+
   function syncListenButton() {
     const btn = $("stream-listen");
     if (!btn) return;
     const live = Boolean(liveVideoEl);
     btn.hidden = !live;
     if (!live) return;
-    const on =
-      wantAudible &&
-      liveVideoEl &&
-      !liveVideoEl.muted &&
-      liveVideoEl.volume > 0;
+    const on = wantAudible && !liveVideoEl.muted && liveVideoEl.volume > 0;
     btn.textContent = on ? "Couper le son" : "Écouter le live";
     btn.classList.toggle("is-on", on);
   }
@@ -142,14 +147,19 @@
     if (!liveVideoEl) return false;
     wantAudible = true;
     unmuteTries = 0;
-    liveVideoEl.muted = false;
-    liveVideoEl.defaultMuted = false;
-    liveVideoEl.volume = 1;
-    liveVideoEl.removeAttribute("muted");
-    liveVideoEl.play().catch(() => {
-      wantAudible = false;
-      syncListenButton();
-    });
+    applyWantedMute();
+    const play = liveVideoEl.play();
+    if (play && typeof play.then === "function") {
+      play.then(syncListenButton).catch(() => {
+        if (liveVideoEl && !liveVideoEl.paused) {
+          applyWantedMute();
+          syncListenButton();
+          return;
+        }
+        wantAudible = false;
+        syncListenButton();
+      });
+    }
     window.dispatchEvent(new CustomEvent("hakou:stream-listen"));
     syncListenButton();
     return true;
@@ -157,25 +167,20 @@
 
   function muteLiveAudio() {
     wantAudible = false;
-    if (liveVideoEl) liveVideoEl.muted = true;
+    applyWantedMute();
     syncListenButton();
   }
 
   function onLiveVolumeChange() {
     if (!liveVideoEl) return;
     if (wantAudible && liveVideoEl.muted) {
-      if (unmuteTries >= 2) {
-        wantAudible = false;
+      if (unmuteTries >= 8) {
         syncListenButton();
         return;
       }
       unmuteTries += 1;
-      liveVideoEl.muted = false;
-      liveVideoEl.volume = 1;
-      liveVideoEl.play().catch(() => {
-        wantAudible = false;
-        syncListenButton();
-      });
+      applyWantedMute();
+      liveVideoEl.play().catch(() => {});
       return;
     }
     if (wantAudible && !liveVideoEl.muted) unmuteTries = 0;
@@ -202,10 +207,13 @@
 
   function emitStreamMedia(video, stream) {
     liveVideoEl = video || null;
-    if (!video) wantAudible = false;
     if (liveVideoEl && liveVideoEl.dataset.volumeBound !== "1") {
       liveVideoEl.dataset.volumeBound = "1";
       liveVideoEl.addEventListener("volumechange", onLiveVolumeChange);
+    }
+    if (liveVideoEl && wantAudible) {
+      applyWantedMute();
+      liveVideoEl.play().catch(() => {});
     }
     syncListenButton();
     window.dispatchEvent(
@@ -267,8 +275,12 @@
     btn.setAttribute("aria-label", "Activer le son du live");
 
     const unmute = () => {
+      wantAudible = true;
+      unmuteTries = 0;
       video.muted = false;
+      video.defaultMuted = false;
       video.volume = 1;
+      video.removeAttribute("muted");
       video.play().catch(() => {});
       window.dispatchEvent(new CustomEvent("hakou:stream-listen"));
       btn.remove();
@@ -591,7 +603,6 @@
       data.live ? "1" : "0",
       data.studioLive ? "s" : data.twitchLive ? "t" : "y",
       data.hlsUrl || "",
-      data.whepUrl || "",
       data.twitchLogin || "",
       data.liveVideoId || "",
     ].join("|");
@@ -789,6 +800,7 @@
       }
     } else {
       mode = "offline";
+      wantAudible = false;
       setStatus("offline", "Prochain set à venir");
       showOfflineLogo(frame, emptyEl);
     }
