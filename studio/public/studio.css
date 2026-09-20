@@ -7,8 +7,14 @@
   --border: rgba(147, 170, 219, 0.28);
 }
 
-* {
-  box-sizing: border-box;
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 html,
@@ -177,9 +183,49 @@ body {
   margin-bottom: 0.65rem;
 }
 
+.studio-mix-src {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.45rem 0 0.5rem;
+  padding: 0;
+  border: 0;
+}
+
+.studio-src {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.studio-src:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 70%, white);
+  background: color-mix(in srgb, var(--accent) 16%, rgba(0, 0, 0, 0.4));
+}
+
+.studio-src input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.studio-src__title {
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.studio-src__help {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .studio-mix #studio-audio-unlock {
   width: 100%;
-  margin: 0.35rem 0 0.5rem;
+  margin: 0.15rem 0 0.5rem;
 }
 
 .studio-audio-device {
@@ -230,8 +276,8 @@ body {
   min-width: 0;
 }
 
-.studio-audio-src[data-mode="tab"] .studio-audio-picker,
-.studio-audio-src[data-mode="tab"] #studio-audio-unlock {
+.studio-audio-src[data-mode="display"] .studio-audio-picker,
+.studio-audio-src[data-mode="tab"] .studio-audio-picker {
   display: none;
 }
 

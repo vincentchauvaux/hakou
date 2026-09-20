@@ -1,4 +1,4 @@
-import { BELTS } from "./studio-belts.js?v=20260920y";
+import { BELTS } from "./studio-belts.js?v=20260920z";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
@@ -48,6 +48,7 @@ const ytCopyUri = document.getElementById("studio-yt-copy-uri");
 
 let localStream = null;
 let audioCaptureStream = null;
+let screenShareKeepalive = null;
 let pulseTimer = null;
 let peerConnection = null;
 let whipResourceUrl = null;
@@ -98,11 +99,11 @@ function setAudioBadge(kind) {
   if (kind === "tab") {
     audioBadge.hidden = false;
     audioBadge.classList.remove("is-mic");
-    audioBadge.textContent = "Son d’onglet";
+    audioBadge.textContent = "Son de l’écran";
   } else if (kind === "mic") {
     audioBadge.hidden = false;
     audioBadge.classList.add("is-mic");
-    audioBadge.textContent = "Entrée audio";
+    audioBadge.textContent = "FLX4 / carte son";
   } else {
     audioBadge.hidden = true;
     audioBadge.textContent = "";
@@ -114,7 +115,9 @@ function selectedAudioSource() {
   const checked = audioSrcField?.querySelector(
     'input[name="studio-audio-src"]:checked'
   );
-  return checked?.value || "input";
+  const value = checked?.value || "display";
+  if (value === "tab") return "display";
+  return value;
 }
 
 function audioControlsLocked() {
@@ -125,43 +128,60 @@ function isContinuityMic(label) {
   return /iphone|ipad|ipod|apple watch|\bcontinuity\b/i.test(label || "");
 }
 
+function scoreMixDevice(label) {
+  const s = label || "";
+  if (/ddj|flx4|\bflx\b|pioneer/i.test(s)) return 4;
+  if (/blackhole|loopback|vb-?audio|soundflower|aggregate/i.test(s)) return 3;
+  if (/rekordbox/i.test(s)) return 2;
+  return 0;
+}
+
 function preferredInputId(inputs) {
-  const hit = inputs.find((d) =>
-    /blackhole|loopback|rekordbox|vb-?audio|soundflower|aggregate|ddj|flx|pioneer/i.test(
-      d.label || ""
-    )
+  const ranked = [...inputs].sort(
+    (a, b) => scoreMixDevice(b.label) - scoreMixDevice(a.label)
   );
-  return hit?.deviceId || "";
+  return ranked[0] && scoreMixDevice(ranked[0].label) > 0
+    ? ranked[0].deviceId
+    : "";
+}
+
+function friendlyDeviceLabel(label, fallback) {
+  const raw = String(label || "").trim();
+  const inner = raw.replace(/^(microphone|micro|entrée)\s*\((.+)\)\s*$/i, "$2");
+  const name = inner || raw || fallback || "Carte son";
+  if (/ddj|flx4|pioneer/i.test(name)) return `${name} — contrôleur`;
+  return name;
 }
 
 function syncAudioSourceUi() {
-  const tab = selectedAudioSource() === "tab";
-  audioSrcField?.setAttribute("data-mode", tab ? "tab" : "input");
-  if (audioDeviceSel) audioDeviceSel.hidden = tab;
+  const display = selectedAudioSource() === "display";
+  audioSrcField?.setAttribute("data-mode", display ? "display" : "input");
+  const picker = document.querySelector(".studio-audio-picker");
+  if (picker) picker.hidden = display;
   if (audioUnlockBtn) {
-    audioUnlockBtn.hidden = tab;
+    audioUnlockBtn.hidden = false;
     audioUnlockBtn.disabled = audioControlsLocked();
-    audioUnlockBtn.textContent = audioPermissionGranted
-      ? "Rebrancher le mix"
-      : "Brancher le mix";
+    audioUnlockBtn.textContent = display
+      ? "Prendre le son (sans l’image)"
+      : audioPermissionGranted
+        ? "Rebrancher le FLX4"
+        : "Brancher le FLX4";
   }
   if (audioHintEl) {
-    audioHintEl.textContent = tab
-      ? "Au Direct, Chrome demandera l’onglet — coche « Partager l’audio »."
-      : audioPermissionGranted
-        ? "Le master Rekordbox doit passer par BlackHole (ou Multi-sortie FLX4 + BlackHole)."
-        : "Rekordbox / Serato : master → BlackHole, puis « Brancher le mix ».";
+    audioHintEl.textContent = display
+      ? "Chrome va demander l’écran. Coche « Partager l’audio ». L’image est jetée : seuls les plexus partent en visuel."
+      : "Choisis le DDJ-FLX4 (contrôleur), pas le micro du Mac.";
   }
   renderAudioDeviceList();
 }
 
 function renderAudioDeviceList() {
   if (!audioListEl) return;
-  const tab = selectedAudioSource() === "tab";
+  const display = selectedAudioSource() === "display";
   const locked = audioControlsLocked();
   const current = audioDeviceSel?.value || "";
   audioListEl.replaceChildren();
-  if (tab) return;
+  if (display) return;
 
   const addChip = (id, label) => {
     const btn = document.createElement("button");
@@ -187,12 +207,19 @@ function renderAudioDeviceList() {
   };
 
   addChip("", "Défaut");
-  for (const d of lastAudioInputs) {
-    addChip(d.deviceId, d.label || `Entrée ${audioListEl.children.length}`);
+  const ordered = [...lastAudioInputs].sort(
+    (a, b) => scoreMixDevice(b.label) - scoreMixDevice(a.label)
+  );
+  for (const d of ordered) {
+    addChip(d.deviceId, friendlyDeviceLabel(d.label, `Carte ${audioListEl.children.length}`));
   }
 }
 
 async function unlockAudioDevices({ interactive = false } = {}) {
+  if (selectedAudioSource() === "display") {
+    if (interactive) await armMix();
+    return;
+  }
   if (!navigator.mediaDevices?.getUserMedia) {
     setStatus("Capture audio indisponible sur ce navigateur.");
     return;
@@ -210,7 +237,7 @@ async function unlockAudioDevices({ interactive = false } = {}) {
       tmp.getTracks().forEach((t) => t.stop());
       audioPermissionGranted = true;
     } catch {
-      setStatus("Autorise le micro pour lister les entrées à caster.");
+      setStatus("Autorise l’accès pour lister le FLX4 et les cartes son.");
       return;
     }
   }
@@ -232,17 +259,22 @@ async function refreshAudioDevices() {
         !isContinuityMic(d.label)
     );
     if (inputs.some((d) => d.label)) audioPermissionGranted = true;
-    lastAudioInputs = inputs;
+    lastAudioInputs = [...inputs].sort(
+      (a, b) => scoreMixDevice(b.label) - scoreMixDevice(a.label)
+    );
     const current = audioDeviceSel.value;
     audioDeviceSel.replaceChildren();
     const def = document.createElement("option");
     def.value = "";
     def.textContent = "Défaut (entrée système)";
     audioDeviceSel.append(def);
-    for (const d of inputs) {
+    for (const d of lastAudioInputs) {
       const opt = document.createElement("option");
       opt.value = d.deviceId;
-      opt.textContent = d.label || `Entrée ${audioDeviceSel.options.length}`;
+      opt.textContent = friendlyDeviceLabel(
+        d.label,
+        `Carte ${audioDeviceSel.options.length}`
+      );
       audioDeviceSel.append(opt);
     }
     const stillThere = [...audioDeviceSel.options].some((o) => o.value === current);
@@ -286,7 +318,7 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920y");
+    const { initStudioViz } = await import("./studio-viz.js?v=20260920z");
     studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {
@@ -811,51 +843,67 @@ function preferH264Video(pc) {
 }
 
 /**
- * Capture son seulement (plus d’écran).
- * Entrée audio : BlackHole / micro / Rekordbox.
- * Chrome : option son d’onglet (getDisplayMedia, piste vidéo jetée).
+ * Son du mix seulement. L’image d’écran est toujours jetée :
+ * le visuel live = plexus (canvas), jamais Rekordbox / le bureau.
  */
 async function acquireAudioStream() {
   const safari = isAppleWebKit();
   const mode = selectedAudioSource();
 
-  if (mode === "tab") {
+  if (mode === "display") {
     if (safari) {
       throw new Error(
-        "Le son d’onglet n’est pas dispo dans Safari — choisis une entrée audio (BlackHole)."
+        "Le son d’écran n’est pas dispo dans Safari — choisis le FLX4 en carte son."
       );
     }
     if (!navigator.mediaDevices?.getDisplayMedia) {
-      throw new Error("Son d’onglet indisponible sur ce navigateur.");
+      throw new Error("Partage audio indisponible sur ce navigateur (Chrome recommandé).");
     }
-    setStatus("Choisis un onglet et coche « Partager l’audio »…");
+    setStatus("Choisis l’écran, et coche « Partager l’audio ». L’image ne partira pas.");
     const display = await withTimeout(
       navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: 1, width: { ideal: 16 }, height: { ideal: 16 } },
-        audio: true,
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+          channelCount: 2,
+        },
         systemAudio: "include",
+        preferCurrentTab: false,
+        selfBrowserSurface: "exclude",
       }),
       90_000,
       "Dialogue trop long — ferme-le s’il est resté ouvert, puis réessaie."
     );
-    display.getVideoTracks().forEach((t) => t.stop());
+    display.getVideoTracks().forEach((t) => {
+      t.enabled = false;
+    });
     const audios = display.getAudioTracks();
     if (!audios.length) {
       display.getTracks().forEach((t) => t.stop());
-      throw new Error("Aucun son d’onglet — coche « Partager l’audio ».");
+      throw new Error(
+        "Aucun son capturé. Dans la fenêtre Chrome, coche « Partager l’audio », puis réessaie."
+      );
     }
     audios.forEach((t) => {
       t.enabled = true;
+      try {
+        t.contentHint = "music";
+      } catch {
+        /* ignore */
+      }
     });
+    screenShareKeepalive?.getTracks()?.forEach((t) => t.stop());
+    screenShareKeepalive = display;
     setAudioBadge("tab");
-    refreshAudioDevices().catch(() => {});
     return new MediaStream(audios);
   }
 
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error("Capture audio indisponible sur ce navigateur.");
   }
-  setStatus("Autorise l’entrée audio (BlackHole / micro / Rekordbox)…");
+  setStatus("Autorise la carte son du DDJ-FLX4 (pas le micro du Mac)…");
   const audio = {
     echoCancellation: false,
     noiseSuppression: false,
@@ -864,17 +912,22 @@ async function acquireAudioStream() {
   };
   const deviceId = audioDeviceSel?.value;
   if (deviceId) audio.deviceId = { exact: deviceId };
-  const mic = await withTimeout(
+  const mix = await withTimeout(
     navigator.mediaDevices.getUserMedia({ audio, video: false }),
     60_000,
-    "Entrée audio non autorisée."
+    "Carte son non autorisée."
   );
-  mic.getAudioTracks().forEach((t) => {
+  mix.getAudioTracks().forEach((t) => {
     t.enabled = true;
+    try {
+      t.contentHint = "music";
+    } catch {
+      /* ignore */
+    }
   });
   setAudioBadge("mic");
   refreshAudioDevices().catch(() => {});
-  return mic;
+  return mix;
 }
 
 function audioTrackAlive() {
@@ -895,12 +948,18 @@ async function armMix() {
     throw new Error("Visualiseur indisponible (WebGL).");
   }
   audioCaptureStream?.getTracks()?.forEach((t) => t.stop());
+  screenShareKeepalive?.getTracks()?.forEach((t) => t.stop());
+  screenShareKeepalive = null;
   audioCaptureStream = null;
   studioViz.disconnectAudio();
   audioCaptureStream = await acquireAudioStream();
   studioViz.connectAudio(audioCaptureStream);
-  const label = audioCaptureStream.getAudioTracks()[0]?.label || "entrée audio";
-  setStatus(`Mix branché : ${label}. Joue un titre — la barre doit bouger.`);
+  const label = audioCaptureStream.getAudioTracks()[0]?.label || "mix";
+  setStatus(
+    selectedAudioSource() === "display"
+      ? `Son d’écran pris (${label}). L’image est jetée. La barre doit bouger avec le mix.`
+      : `FLX4 / carte son : ${label}. Joue un titre — la barre doit bouger.`
+  );
 }
 
 function tickMeter() {
@@ -922,7 +981,9 @@ function tickMeter() {
     meterLabel.textContent = "Mix détecté";
   } else {
     meterLabel.textContent =
-      "Silence — master Rekordbox vers BlackHole, pas seulement le FLX4";
+      selectedAudioSource() === "display"
+        ? "Silence — recoche « Partager l’audio » dans Chrome"
+        : "Silence — choisis le DDJ-FLX4, pas le micro du Mac";
   }
 }
 
@@ -1010,7 +1071,9 @@ async function ensureCapture() {
 function releaseCapture() {
   if (streaming || recording) return;
   audioCaptureStream?.getTracks()?.forEach((t) => t.stop());
+  screenShareKeepalive?.getTracks()?.forEach((t) => t.stop());
   audioCaptureStream = null;
+  screenShareKeepalive = null;
   localStream = null;
   captureEndedBound = false;
   captureAudioKind = null;
@@ -1400,7 +1463,7 @@ async function startStream() {
     const quiet = !vibe || vibe.peak < 0.04;
     setStatus(
       quiet
-        ? `En direct (${destLabel}, ${audioLabels}) — mais silence. Master Rekordbox → BlackHole, puis Rebrancher le mix.`
+        ? `En direct (${destLabel}, ${audioLabels}) — silence. Recoche « Partager l’audio » ou le FLX4.`
         : `En direct (${destLabel}, ${audioLabels}). Sur l’iPad : Stream → Écouter le live.`
     );
     loadDestinations().catch(() => {});
@@ -1414,7 +1477,7 @@ async function startStream() {
       setStatus("Capture audio annulée ou refusée — réessaie « Passer en direct ».");
     } else if (name === "NotReadableError") {
       setStatus(
-        "Impossible de lire l’entrée audio — vérifie le périphérique (BlackHole / micro)."
+        "Impossible de lire la carte son — choisis le DDJ-FLX4, pas le micro."
       );
     } else {
       setStatus(err?.message || "Impossible de démarrer le live.");
@@ -1586,10 +1649,12 @@ renderBelts();
 bootStudio3d();
 tickMeter();
 if (isAppleWebKit()) {
-  audioSrcField
-    ?.querySelector('input[value="tab"]')
-    ?.closest("label")
-    ?.setAttribute("hidden", "");
+  const displayRadio = audioSrcField?.querySelector('input[value="display"]');
+  const inputRadio = audioSrcField?.querySelector('input[value="input"]');
+  displayRadio?.closest("label")?.setAttribute("hidden", "");
+  if (displayRadio) displayRadio.disabled = true;
+  if (inputRadio) inputRadio.checked = true;
+  syncAudioSourceUi();
 }
 audioSrcField?.addEventListener("change", () => {
   syncAudioSourceUi();
