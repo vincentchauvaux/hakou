@@ -59,7 +59,7 @@ export function applySecurityHeaders(_req, res, next) {
       "base-uri 'self'",
       "frame-ancestors 'none'",
       "form-action 'self'",
-      "script-src 'self' https://cdn.jsdelivr.net 'sha256-RiGkKRagE99FmhyYmo0dpJmbqYifHIuIFbxy5MaYby8='",
+      "script-src 'self' https://cdn.jsdelivr.net https://hakou.be 'sha256-RiGkKRagE99FmhyYmo0dpJmbqYifHIuIFbxy5MaYby8='",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: https:",

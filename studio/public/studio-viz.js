@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { BELTS } from "./studio-belts.js?v=20260920h";
-import { createSolarSystem, hash } from "./studio-system.js?v=20260920h";
+import { BELTS } from "./studio-belts.js?v=20260920i";
+import { createSolarSystem, hash } from "./studio-system.js?v=20260920i";
 
 export { BELTS };
 
@@ -87,7 +87,7 @@ function sampleActive(belt, i, jupiter, saturn) {
  * Visualiseur live : le système solaire, 4 spots caméra, plexus réactif au son.
  * @param {HTMLCanvasElement | null} canvas
  */
-export function initStudioViz(canvas) {
+export async function initStudioViz(canvas) {
   if (!canvas) return null;
 
   const WIDTH = 1280;
@@ -108,7 +108,7 @@ export function initStudioViz(canvas) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.18;
 
-  const system = createSolarSystem({ starCount: 1800 });
+  const system = await createSolarSystem({ starCount: 1800 });
   const { scene } = system;
   const camera = new THREE.PerspectiveCamera(48, WIDTH / HEIGHT, 0.08, 864);
   const look = new THREE.Vector3();

@@ -4,18 +4,22 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
 const PLANET_GLB_V = "40";
+/** Absolu via ce module — même fichiers si le studio importe scene3d.js depuis hakou.be. */
+function worldUrl(rel) {
+  return new URL(rel, import.meta.url).href;
+}
 const PLANET_GLB = {
-  pluto: `assets/planets/pluto.glb?v=${PLANET_GLB_V}`,
-  neptune: `assets/planets/neptune.glb?v=${PLANET_GLB_V}`,
-  saturn: `assets/planets/saturn.glb?v=${PLANET_GLB_V}`,
-  jupiter: `assets/planets/jupiter.glb?v=${PLANET_GLB_V}`,
-  uranus: `assets/planets/uranus.glb?v=${PLANET_GLB_V}`,
-  mars: `assets/planets/mars.glb?v=${PLANET_GLB_V}`,
-  venus: `assets/planets/venus.glb?v=${PLANET_GLB_V}`,
-  earth: `assets/planets/earth.glb?v=${PLANET_GLB_V}`,
-  mercury: `assets/planets/mercury.glb?v=${PLANET_GLB_V}`,
+  pluto: worldUrl(`./assets/planets/pluto.glb?v=${PLANET_GLB_V}`),
+  neptune: worldUrl(`./assets/planets/neptune.glb?v=${PLANET_GLB_V}`),
+  saturn: worldUrl(`./assets/planets/saturn.glb?v=${PLANET_GLB_V}`),
+  jupiter: worldUrl(`./assets/planets/jupiter.glb?v=${PLANET_GLB_V}`),
+  uranus: worldUrl(`./assets/planets/uranus.glb?v=${PLANET_GLB_V}`),
+  mars: worldUrl(`./assets/planets/mars.glb?v=${PLANET_GLB_V}`),
+  venus: worldUrl(`./assets/planets/venus.glb?v=${PLANET_GLB_V}`),
+  earth: worldUrl(`./assets/planets/earth.glb?v=${PLANET_GLB_V}`),
+  mercury: worldUrl(`./assets/planets/mercury.glb?v=${PLANET_GLB_V}`),
 };
-const SUN_GLB_URL = `assets/planets/sun.glb?v=${PLANET_GLB_V}`;
+const SUN_GLB_URL = worldUrl(`./assets/planets/sun.glb?v=${PLANET_GLB_V}`);
 
 const DEG = Math.PI / 180;
 /** Rayon Terre en unités scène — ancre des proportions. */
@@ -4503,6 +4507,101 @@ export function initScene(canvas) {
   window.addEventListener("resize", onResize);
   initRestOrbitInteraction(canvas);
   return true;
+}
+
+/**
+ * Même système solaire que hakou.be (Soleil, planètes GLB, Cérès, Lune, étoiles).
+ * Sans intro / sections / caméra héro — pour le studio.
+ */
+export function createSolarSystem() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x020408);
+  fog = new THREE.FogExp2(0x020408, 0.005);
+  scene.fog = fog;
+  scene.add(new THREE.AmbientLight(0x12182a, 0.09));
+  scene.add(new THREE.HemisphereLight(0x3a5080, 0x050508, 0.2));
+  buildSun();
+  buildSunKeyLight();
+  buildPlanets();
+  buildStars();
+
+  function bindUserData(entry) {
+    const mesh = entry.mesh;
+    const d = entry.data;
+    mesh.userData.name = d.name;
+    mesh.userData.r = d.orbitRadius;
+    mesh.userData.startAngle = d.startAngle;
+    mesh.userData.orbitSpeed = d.orbitSpeed;
+    mesh.userData.spinSpeed = d.spinSpeed;
+    mesh.userData.size = d.size;
+    mesh.userData.axialTilt = d.axialTilt || 0;
+    mesh.userData.hasRings = Boolean(d.hasRings);
+    if (mesh.userData.angle == null) mesh.userData.angle = d.startAngle;
+    return mesh;
+  }
+
+  function planet(name) {
+    const entry = planetEntries.find((e) => e.data.name === name);
+    return entry ? bindUserData(entry) : undefined;
+  }
+
+  function tickPlanets(elapsed) {
+    planetEntries.forEach((entry) => {
+      const { data } = entry;
+      const mesh = bindUserData(entry);
+      const angle = getContinuousOrbitAngle(data, elapsed);
+      mesh.userData.angle = angle;
+      mesh.position.set(
+        Math.cos(angle) * data.orbitRadius,
+        0,
+        Math.sin(angle) * data.orbitRadius
+      );
+      const axial = data.axialScale ?? 1;
+      const spinY = elapsed * data.spinSpeed * PLANET_SPIN_MUL * axial;
+      if (entry.equator && data.axialTilt != null) {
+        entry.equator.rotation.z = data.axialTilt;
+      }
+      const bodySpin = entry.bodySpin || entry.earthSpin;
+      if (entry.isGltf && bodySpin) {
+        bodySpin.rotation.y = spinY;
+        if (entry.cloudSpin) {
+          entry.cloudSpin.rotation.y =
+            data.name === "Venus"
+              ? elapsed *
+                spinSpeedFromPeriodHours(96, { retrograde: true }) *
+                PLANET_SPIN_MUL
+              : spinY * 0.78;
+        }
+        if (entry.moonPivot) {
+          entry.moonPivot.rotation.y = elapsed * HERO_MOON_ORBIT_SPEED;
+          if (entry.moonSpin) entry.moonSpin.rotation.y = entry.moonPivot.rotation.y;
+        }
+      } else {
+        mesh.rotation.y = spinY;
+        if (data.axialTilt) mesh.rotation.z = data.axialTilt * 0.35;
+      }
+      if (entry.mat?.userData?.shaderUniforms) {
+        entry.mat.userData.shaderUniforms.uTime.value = elapsed * PLANET_SPIN_MUL;
+      }
+    });
+    if (sunGlow) {
+      sunGlow.scale.setScalar(1 + Math.sin(elapsed * 0.6) * 0.03);
+    }
+  }
+
+  return {
+    scene,
+    sun,
+    sunGlow,
+    tickPlanets,
+    planet,
+    planetByName: {
+      get: planet,
+    },
+    get planetMeshes() {
+      return planetEntries.map((e) => e.mesh);
+    },
+  };
 }
 
 function onResize() {

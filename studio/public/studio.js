@@ -1,4 +1,4 @@
-import { BELTS } from "./studio-belts.js?v=20260920h";
+import { BELTS } from "./studio-belts.js?v=20260920i";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
@@ -137,8 +137,8 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920h");
-    studioViz = initStudioViz(document.getElementById("studio-space"));
+    const { initStudioViz } = await import("./studio-viz.js?v=20260920i");
+    studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {
     console.warn("[Hakou Studio] 3D", err);
