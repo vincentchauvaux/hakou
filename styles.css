@@ -1714,6 +1714,52 @@ body[data-stream-auth="guest"] .consent-placeholder {
   background: rgba(8, 12, 22, 0.72);
 }
 
+.stream-unlock {
+  margin: 0.35rem 0 0.55rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.stream-unlock[hidden] {
+  display: none !important;
+}
+
+.stream-unlock__label {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #92a0ba);
+}
+
+.stream-unlock__row {
+  display: flex;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
+.stream-unlock__row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 237, 247, 0.28);
+  background: rgba(8, 12, 22, 0.72);
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.stream-unlock__row .panel-btn {
+  flex: 0 0 auto;
+}
+
+.stream-unlock__error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #ffb4b4;
+}
+
 #stream-listen:not([hidden]) {
   display: inline-flex;
 }

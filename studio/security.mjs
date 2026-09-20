@@ -93,6 +93,7 @@ export function createSessionHelpers({
   mediaCookie = "hakou_media",
   mediaCookiePath = "/",
   mediaMaxAgeS = 60 * 60 * 4,
+  listenCookie = "hakou_listen",
   allowedEmails,
 }) {
   function sign(payload) {
@@ -166,14 +167,59 @@ export function createSessionHelpers({
     });
   }
 
+  function verifyListenToken(token) {
+    if (!token || typeof token !== "string" || !token.includes(".")) return null;
+    const [body, sig] = token.split(".");
+    if (!body || !sig) return null;
+    const expected = createHmac("sha256", secret)
+      .update(body)
+      .digest("base64url");
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    try {
+      const json = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+      if (json?.purpose !== "listen" || !json?.exp || Date.now() > json.exp) {
+        return null;
+      }
+      return json;
+    } catch {
+      return null;
+    }
+  }
+
+  function setListenCookie(res) {
+    const token = sign({
+      purpose: "listen",
+      exp: Date.now() + mediaMaxAgeS * 1000,
+    });
+    res.cookie(listenCookie, token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: mediaMaxAgeS * 1000,
+      path: mediaCookiePath,
+    });
+  }
+
+  function clearListenCookie(res) {
+    res.clearCookie(listenCookie, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      path: mediaCookiePath,
+    });
+  }
+
   function verifySession(token) {
     return verify(token);
   }
 
   function verifyMediaAccess(req) {
+    const listen = verifyListenToken(req.cookies?.[listenCookie]);
+    if (listen) return listen;
     const media = verify(req.cookies?.[mediaCookie], { purpose: "media" });
     if (media) return media;
-    // Session studio (auth_request peut aussi recevoir ce cookie sur /hakou-studio)
     return verify(req.cookies?.[sessionCookie]);
   }
 
@@ -181,11 +227,15 @@ export function createSessionHelpers({
     sign,
     verifySession,
     verifyMediaAccess,
+    verifyListenToken,
     setSessionCookie,
     clearSessionCookie,
     setMediaCookie,
     clearMediaCookie,
+    setListenCookie,
+    clearListenCookie,
     mediaCookie,
+    listenCookie,
     sessionCookie,
   };
 }

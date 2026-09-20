@@ -26,6 +26,9 @@ const timelineTicks = document.getElementById("studio-timeline-ticks");
 const recordingsList = document.getElementById("studio-recordings-list");
 const audioBadge = document.getElementById("studio-audio-badge");
 const destFieldset = document.getElementById("studio-dest");
+const listenCodeWrap = document.getElementById("studio-listen-code");
+const listenCodeValue = document.getElementById("studio-listen-code-value");
+const listenCodeCopy = document.getElementById("studio-listen-copy");
 const ytStatusEl = document.getElementById("studio-yt-status");
 const twStatusEl = document.getElementById("studio-tw-status");
 const ytConnect = document.getElementById("studio-yt-connect");
@@ -411,6 +414,42 @@ function stopChrono() {
 
 function pauseSupported() {
   return Boolean(mediaRecorder && typeof mediaRecorder.pause === "function");
+}
+
+function showListenCode(code) {
+  if (!listenCodeWrap) return;
+  if (code) {
+    listenCodeWrap.hidden = false;
+    if (listenCodeValue) listenCodeValue.textContent = code;
+  } else {
+    listenCodeWrap.hidden = true;
+    if (listenCodeValue) listenCodeValue.textContent = "";
+  }
+}
+
+async function issueListenCode() {
+  const res = await fetch("./api/studio/listen-code", {
+    method: "POST",
+    credentials: "include",
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.code) {
+    throw new Error(body.error || "Impossible de créer le code spectateur.");
+  }
+  showListenCode(body.code);
+  return body.code;
+}
+
+async function clearListenCode() {
+  try {
+    await fetch("./api/studio/listen-code", {
+      method: "DELETE",
+      credentials: "include",
+    });
+  } catch {
+    /* ignore */
+  }
+  showListenCode(null);
 }
 
 function syncButtons() {
@@ -1197,6 +1236,12 @@ async function startStream() {
     await publishWhip(localStream, ingest);
     streaming = true;
     startPulse();
+    let code = "";
+    try {
+      code = await issueListenCode();
+    } catch (err) {
+      console.warn("[Hakou Studio] listen-code", err);
+    }
     const dest = selectedDestination();
     if (dest !== "hakou") {
       setStatus(
@@ -1238,7 +1283,7 @@ async function startStream() {
     setStatus(
       quiet
         ? `En direct (${destLabel}, ${audioLabels}) — silence. Recoche « Partager l’audio » ou le FLX4.`
-        : `En direct (${destLabel}, ${audioLabels}). Sur l’iPad : Stream → Écouter le live.`
+        : `En direct (${destLabel}, ${audioLabels}). Code spectateurs : ${code}.`
     );
     loadDestinations().catch(() => {});
   } catch (err) {
@@ -1275,6 +1320,7 @@ async function stopStream({ keepCapture = true } = {}) {
   await stopWhip();
   streaming = false;
   stopPulse();
+  await clearListenCode();
   startInFlight = false;
   releaseCapture();
   syncButtons();
@@ -1290,6 +1336,17 @@ async function stopAll() {
   if (recording) await stopRecord({ keepCapture: true });
   releaseCapture();
 }
+
+listenCodeCopy?.addEventListener("click", async () => {
+  const code = listenCodeValue?.textContent?.trim();
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+    setStatus(`Code copié : ${code}`);
+  } catch {
+    setStatus(`Code : ${code}`);
+  }
+});
 
 startBtn?.addEventListener("click", () => {
   startStream().catch((err) => console.warn("[Hakou Studio]", err));

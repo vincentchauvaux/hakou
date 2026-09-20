@@ -783,6 +783,37 @@ body {
   background: rgba(0, 0, 0, 0.28);
 }
 
+.studio-listen-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.9rem;
+  margin: 0.35rem 0 0.7rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(120, 210, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(8, 16, 28, 0.55);
+}
+
+.studio-listen-code[hidden] {
+  display: none !important;
+}
+
+.studio-listen-code__label {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.studio-listen-code__value {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+}
+
 .studio-recordings__frame {
   flex: 1 1 100%;
   aspect-ratio: 16 / 9;

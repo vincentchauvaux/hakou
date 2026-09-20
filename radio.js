@@ -187,6 +187,48 @@
     syncListenButton();
   }
 
+  function bindUnlockForm() {
+    const form = $("stream-unlock");
+    if (!form || form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const input = $("stream-unlock-code");
+      const errEl = $("stream-unlock-error");
+      const code = String(input?.value || "").trim();
+      if (errEl) {
+        errEl.hidden = true;
+        errEl.textContent = "";
+      }
+      if (!code) return;
+      try {
+        const res = await fetch("https://studio.hakou.be/api/stream/unlock", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (errEl) {
+            errEl.hidden = false;
+            errEl.textContent = body.error || "Code invalide";
+          }
+          return;
+        }
+        wantAudible = true;
+        lastAppliedKey = "";
+        await refresh();
+      } catch {
+        if (errEl) {
+          errEl.hidden = false;
+          errEl.textContent = "Impossible de vérifier le code.";
+        }
+      }
+    });
+  }
+
   function bindListenButton() {
     const btn = $("stream-listen");
     if (btn && !btn.dataset.bound) {
@@ -360,8 +402,10 @@
     video.playsInline = true;
     video.autoplay = true;
     video.muted = true;
+    video.crossOrigin = "use-credentials";
     video.setAttribute("playsinline", "");
     video.setAttribute("webkit-playsinline", "");
+    video.setAttribute("crossorigin", "use-credentials");
     video.title = title || "Hakou Radio Live";
     return video;
   }
@@ -474,7 +518,7 @@
     }
 
     const video = makeLiveVideo("radio-hls", title);
-    video.crossOrigin = "anonymous";
+    video.crossOrigin = "use-credentials";
     frame.appendChild(video);
     emitStreamMedia(video);
 
@@ -602,6 +646,7 @@
     return [
       data.live ? "1" : "0",
       data.studioLive ? "s" : data.twitchLive ? "t" : "y",
+      data.listenRequired ? "lock" : "open",
       data.hlsUrl || "",
       data.twitchLogin || "",
       data.liveVideoId || "",
@@ -649,6 +694,8 @@
     let twitchLive = false;
     let twitchLogin = twitchLoginLocal || null;
 
+    let listenRequired = false;
+
     try {
       const remote = await fetchStatusApi(statusApi);
       if (remote && remote.ok !== false) {
@@ -669,6 +716,16 @@
               : whepUrlFromHls(hlsUrl);
           studioLive = true;
           twitchLive = false;
+          listenRequired = false;
+        } else if (remote.studioLive && remote.listenRequired) {
+          live = true;
+          liveVideoId = null;
+          liveTitle = "Live — entre le code pour écouter";
+          hlsUrl = null;
+          whepUrl = null;
+          studioLive = true;
+          twitchLive = false;
+          listenRequired = true;
         } else if (remote.twitchLive && (remote.twitchLogin || twitchLogin)) {
           live = true;
           liveVideoId = null;
@@ -679,6 +736,7 @@
           whepUrl = null;
           studioLive = false;
           twitchLive = true;
+          listenRequired = false;
           twitchLogin = String(remote.twitchLogin || twitchLogin)
             .trim()
             .replace(/^@/, "")
@@ -693,6 +751,7 @@
           whepUrl = null;
           studioLive = false;
           twitchLive = false;
+          listenRequired = false;
         } else {
           live = false;
           liveVideoId = null;
@@ -701,6 +760,7 @@
           whepUrl = null;
           studioLive = false;
           twitchLive = false;
+          listenRequired = false;
         }
       }
     } catch (err) {
@@ -718,6 +778,7 @@
       studioLive,
       twitchLive,
       twitchLogin,
+      listenRequired,
       source,
     };
   }
@@ -736,6 +797,7 @@
       typeof data.whepUrl === "string" && data.whepUrl.trim()
         ? data.whepUrl.trim()
         : whepUrlFromHls(hlsUrl);
+    const listenRequired = Boolean(data.listenRequired) && !hlsUrl;
     const studioLive = Boolean(data.studioLive) && Boolean(hlsUrl);
     const twitchLogin =
       typeof data.twitchLogin === "string" && data.twitchLogin.trim()
@@ -768,6 +830,9 @@
     }
     lastAppliedKey = key;
 
+    const unlockForm = $("stream-unlock");
+    if (unlockForm) unlockForm.hidden = !listenRequired;
+
     const player = $("radio-player");
     player?.classList.toggle("is-audio-only", Boolean(studioLive));
 
@@ -776,12 +841,18 @@
     if (studioLive) {
       mode = "studio";
       setStatus("live", liveTitle);
-      playStudioLive(frame, emptyEl, { hlsUrl, whepUrl, title: liveTitle }).catch(
-        (err) => {
+      playStudioLive(frame, emptyEl, { hlsUrl, whepUrl, title: liveTitle })
+        .then(() => {
+          if (wantAudible) resumeLiveAudio();
+        })
+        .catch((err) => {
           console.warn(LOG, "studio live", err);
           showEmpty(frame, emptyEl, "Flux studio indisponible pour le moment.");
-        }
-      );
+        });
+    } else if (listenRequired) {
+      mode = "locked";
+      setStatus("live", liveTitle || "Live — entre le code pour écouter");
+      showOfflineLogo(frame, emptyEl);
     } else if (twitchLive) {
       mode = "twitch";
       setStatus("live", liveTitle);
@@ -824,7 +895,9 @@
       LOG,
       mode === "studio"
         ? `studio ${prefersStudioWebRtc() ? "WHEP" : "HLS"} ${prefersStudioWebRtc() ? whepUrl || hlsUrl : hlsUrl}`
-        : mode === "twitch"
+        : mode === "locked"
+          ? "studio locked"
+          : mode === "twitch"
           ? `twitch ${twitchLogin}`
           : mode === "yt-live"
             ? `live ${liveId}`
@@ -854,6 +927,7 @@
   }
 
   async function init() {
+    bindUnlockForm();
     bindListenButton();
     await refresh();
     if (pollTimer) clearInterval(pollTimer);

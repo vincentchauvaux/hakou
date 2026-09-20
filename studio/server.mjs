@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { getRadioStatus } from "./radio-status.mjs";
 import { attachRadioChat } from "./radio-chat.mjs";
 import { attachStreamPulse } from "./stream-pulse.mjs";
+import { createListenCodeStore } from "./listen-code.mjs";
 import { createRecordController } from "./record.mjs";
 import { createLiveAccounts } from "./live-accounts.mjs";
 import { createRestreamController } from "./restream.mjs";
@@ -209,6 +210,8 @@ const {
   clearSessionCookie,
   setMediaCookie,
   clearMediaCookie,
+  setListenCookie,
+  clearListenCookie,
 } = createSessionHelpers({
   secret: SESSION_SECRET,
   sessionCookie: SESSION_COOKIE,
@@ -219,6 +222,8 @@ const {
   mediaMaxAgeS: MEDIA_MAX_AGE_S,
   allowedEmails: ALLOWED_EMAILS,
 });
+
+const listenCodes = createListenCodeStore();
 
 const googleClient = GOOGLE_CLIENT_ID
   ? new OAuth2Client(GOOGLE_CLIENT_ID)
@@ -306,14 +311,20 @@ async function sendStreamStatus(req, res) {
       hlsPublicUrl: HLS_PUBLIC_URL,
       whepPublicUrl: WHEP_PUBLIC_URL,
     });
+    const canListen = Boolean(verifyMediaAccess(req));
+    const studioLive = Boolean(status.studioLive);
     res.setHeader(
       "Cache-Control",
-      session ? "private, no-store" : "public, max-age=12"
+      session || canListen ? "private, no-store" : "public, max-age=12"
     );
     res.json({
       ...status,
+      hlsUrl: canListen ? status.hlsUrl : null,
+      whepUrl: canListen ? status.whepUrl : null,
       archives: session ? status.archives || [] : [],
       authenticated: Boolean(session),
+      listenRequired: studioLive && !canListen,
+      listenOk: studioLive && canListen,
     });
   } catch (err) {
     console.error("[Hakou Studio] stream status", err.message || err);
@@ -336,6 +347,45 @@ async function sendStreamStatus(req, res) {
 app.get("/api/stream/status", sendStreamStatus);
 app.get("/api/radio/status", sendStreamStatus);
 attachStreamPulse(app, { requireSession, getClientIp, checkRateLimit });
+
+app.post("/api/stream/unlock", (req, res) => {
+  const ip = getClientIp(req);
+  if (
+    !checkRateLimit(ip, {
+      max: 12,
+      windowMs: 60 * 1000,
+      key: "stream-unlock",
+    })
+  ) {
+    res.status(429).json({ ok: false, error: "trop d’essais — patiente un peu" });
+    return;
+  }
+  if (!listenCodes.matches(req.body?.code)) {
+    res.status(403).json({ ok: false, error: "code invalide" });
+    return;
+  }
+  setListenCookie(res);
+  res.json({ ok: true });
+});
+
+app.get("/api/studio/listen-code", (req, res) => {
+  if (!requireSession(req, res)) return;
+  const code = listenCodes.current();
+  res.json({ ok: true, active: Boolean(code), code });
+});
+
+app.post("/api/studio/listen-code", (req, res) => {
+  if (!requireSession(req, res)) return;
+  const code = listenCodes.issue();
+  res.json({ ok: true, code });
+});
+
+app.delete("/api/studio/listen-code", (req, res) => {
+  if (!requireSession(req, res)) return;
+  listenCodes.clear();
+  clearListenCookie(res);
+  res.json({ ok: true });
+});
 
 /**
  * Public — challenge anti-spam arithmétique (HMAC, usage unique).

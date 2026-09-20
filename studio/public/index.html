@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./studio.css?v=20260920ac" />
+    <link rel="stylesheet" href="./studio.css?v=20260920aj" />
     <script type="importmap">
       {
         "imports": {
@@ -103,7 +103,14 @@
           Rec
         </button>
       </div>
-      <p id="studio-status" class="muted" role="status"></p>
+          <p id="studio-status" class="muted" role="status"></p>
+      <div id="studio-listen-code" class="studio-listen-code" hidden>
+        <p class="studio-listen-code__label">Code spectateurs</p>
+        <p id="studio-listen-code-value" class="studio-listen-code__value"></p>
+        <button type="button" id="studio-listen-copy" class="studio-btn studio-btn--ghost">
+          Copier
+        </button>
+      </div>
 
       <details class="studio-fold" id="studio-plus">
         <summary>YouTube, Twitch, extra</summary>
@@ -183,6 +190,6 @@
       </details>
     </main>
 
-    <script type="module" src="./studio.js?v=20260920ac"></script>
+    <script type="module" src="./studio.js?v=20260920aj"></script>
   </body>
 </html>

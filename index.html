@@ -20,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260920ai" />
+    <link rel="stylesheet" href="./styles.css?v=20260920aj" />
     <script type="importmap">
       {
         "imports": {
@@ -226,8 +226,9 @@
           <p class="tag">Zone Stream</p>
           <h2>Live mix et diffusion</h2>
           <p>
-          Quatre regards sur le système solaire. Tape « Écouter le live » :
-          l’espace vibre avec le mix.
+            Quatre regards sur le même ciel. Le mix est privé : Anaïs et Vincent
+            diffusent depuis le studio, les autres entrent le code du live pour
+            écouter.
           </p>
         </div>
 
@@ -254,6 +255,22 @@
                 role="radiogroup"
                 aria-label="Scène"
               ></div>
+              <form id="stream-unlock" class="stream-unlock" hidden>
+                <label class="stream-unlock__label" for="stream-unlock-code">Code du live</label>
+                <div class="stream-unlock__row">
+                  <input
+                    id="stream-unlock-code"
+                    name="code"
+                    maxlength="8"
+                    autocomplete="off"
+                    spellcheck="false"
+                    autocapitalize="characters"
+                    placeholder="ABC123"
+                  />
+                  <button type="submit" class="panel-btn">Écouter</button>
+                </div>
+                <p id="stream-unlock-error" class="stream-unlock__error" hidden></p>
+              </form>
               <button type="button" class="panel-btn panel-btn--ghost" id="stream-listen" hidden>
                 Écouter le live
               </button>
@@ -1011,14 +1028,14 @@
     </div>
 
     <script src="./consent.js" defer></script>
-    <script type="module" src="./stream-gate.js?v=20260920ac"></script>
+    <script type="module" src="./stream-gate.js?v=20260920aj"></script>
     <script type="module" src="./stream-recordings.js"></script>
     <script src="./youtube-videos.js" defer></script>
-    <script src="./radio.js?v=20260920ai" defer></script>
+    <script src="./radio.js?v=20260920aj" defer></script>
     <script src="./radio-chat.js" defer></script>
     <script src="./instagram-gallery.js" defer></script>
     <script src="./contact.js" defer></script>
-    <script type="module" src="./main.js?v=20260920ai"></script>
-    <script type="module" src="./stream-scenes.js?v=20260920ai"></script>
+    <script type="module" src="./main.js?v=20260920aj"></script>
+    <script type="module" src="./stream-scenes.js?v=20260920aj"></script>
   </body>
 </html>

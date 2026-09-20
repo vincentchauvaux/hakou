@@ -4184,7 +4184,7 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 }
 
 /* —— Intro gate (logo vectoriel + zoom caméra) —— */
-const INTRO_GATE_MS = 5200;
+const INTRO_GATE_MS = 4200;
 const INTRO_LOGO_URL = "./assets/logo-hakou.svg?v=41";
 
 let introGateActive = false;
@@ -4387,15 +4387,26 @@ function layoutIntroGate(elapsed = 0) {
   const camStart = introGateCamStart
     .copy(logoPos)
     .addScaledVector(introGateTmp, 9.5);
-  introGateThrough.copy(logoPos).addScaledVector(introGateTmp, -1.35);
   introGateCamEnd.copy(home.position);
-  introGateLookStart.copy(logoPos);
   introGateLookEnd.copy(home.lookAt);
 
   if (introLogoMesh) {
     introLogoMesh.position.copy(logoPos);
     introLogoMesh.lookAt(camStart);
+    introLogoMesh.updateWorldMatrix(true, true);
+    const logoBox = new THREE.Box3().setFromObject(introLogoMesh);
+    const logoSize = logoBox.getSize(introGateTmpB);
+    // Milieu des deux yeux : un peu au-dessus et à droite du centre du masque.
+    introGateLookStart.copy(logoPos).addScaledVector(camera.up, logoSize.y * 0.1);
+    introGateTmpB.crossVectors(introGateTmp, camera.up);
+    if (introGateTmpB.lengthSq() > 1e-8) {
+      introGateTmpB.normalize();
+      introGateLookStart.addScaledVector(introGateTmpB, logoSize.x * 0.04);
+    }
+  } else {
+    introGateLookStart.copy(logoPos);
   }
+  introGateThrough.copy(introGateLookStart).addScaledVector(introGateTmp, -2.4);
 
   if (introGateActive && !introGateZooming) {
     camera.position.copy(camStart);
@@ -4435,7 +4446,8 @@ function updateIntroGate(elapsed) {
 
   if (introLogoMesh && !introGateZooming) {
     introLogoMesh.scale.setScalar(introGateLogoBaseScale);
-    introLogoMesh.rotation.z = 0;
+    const content = introLogoMesh.getObjectByName("introLogoContent");
+    if (content) content.rotation.y = 0;
   }
 
   if (!introGateZooming) {
@@ -4445,7 +4457,7 @@ function updateIntroGate(elapsed) {
   }
 
   const t = clamp((performance.now() - introGateZoomStartMs) / INTRO_GATE_MS, 0, 1);
-  const punch = 0.7;
+  const punch = 0.58;
   const endFov = focalMmToFov(FOCAL_REST_MM[0]);
 
   syncIntroZoomDestination(elapsed);
@@ -4454,13 +4466,13 @@ function updateIntroGate(elapsed) {
     const u = easeInOutCubicLocal(t / punch);
     camera.position.lerpVectors(introGateCamStart, introGateThrough, u);
     camera.lookAt(introGateLookStart);
-    camera.fov = THREE.MathUtils.lerp(38, 24, u);
+    camera.fov = THREE.MathUtils.lerp(38, 22, u);
   } else {
     const u = easeInOutCubicLocal((t - punch) / (1 - punch));
     camera.position.lerpVectors(introGateThrough, introGateCamEnd, u);
     introGateTmp.lerpVectors(introGateLookStart, introGateLookEnd, u);
     camera.lookAt(introGateTmp);
-    camera.fov = THREE.MathUtils.lerp(24, endFov, u);
+    camera.fov = THREE.MathUtils.lerp(22, endFov, u);
   }
   camera.updateProjectionMatrix();
   smoothedCamPos.copy(camera.position);
@@ -4474,7 +4486,11 @@ function updateIntroGate(elapsed) {
   }
 
   if (introLogoMesh) {
-    setIntroLogoOpacity(1 - clamp((t - 0.72) / 0.22, 0, 1));
+    const through = clamp((t - 0.28) / 0.34, 0, 1);
+    introLogoMesh.scale.setScalar(introGateLogoBaseScale * (1 + through * 9));
+    const content = introLogoMesh.getObjectByName("introLogoContent");
+    if (content) content.rotation.y = through * Math.PI;
+    setIntroLogoOpacity(1 - clamp((t - 0.62) / 0.26, 0, 1));
   }
 
   if (t >= 1) {
@@ -4508,7 +4524,8 @@ export function setIntroGateActive(active) {
   if (introLogoMesh) {
     setIntroLogoOpacity(1);
     introLogoMesh.scale.setScalar(introGateLogoBaseScale);
-    introLogoMesh.rotation.z = 0;
+    const content = introLogoMesh.getObjectByName("introLogoContent");
+    if (content) content.rotation.y = 0;
   }
   const elapsed = clock?.getElapsedTime() ?? 0;
   if (introGateActive) {

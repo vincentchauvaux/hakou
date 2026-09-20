@@ -1,5 +1,6 @@
 /**
- * Stream public (scènes + plexus) ; chat / recordings / studio = allowlist.
+ * Stream : scènes + plexus visibles ; son = allowlist ou code du live.
+ * Chat / recordings / studio = allowlist Google.
  */
 import { fetchStudioSession } from "./auth-client.js";
 

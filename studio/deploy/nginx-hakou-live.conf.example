@@ -2,8 +2,8 @@
 # Inclure dans le server HTTPS de vps-e09ed6db.vps.ovh.net :
 #   include snippets/hakou-live.conf;
 #
-# Sécurité (sept. 2026) :
-# - HLS + WHEP : lecture publique (plexus hakou.be) — CORS origines allowlist.
+# Sécurité (20 sept. 2026) :
+# - HLS + WHEP : auth_request → cookie hakou_media (studio) ou hakou_listen (code spectateur).
 # - WHIP publish : auth_request → cookie hakou_media (allowlist Google).
 # - X-Forwarded-For = $remote_addr (anti spoof rate-limit).
 # - CORS credentials + origines allowlist (plus de *).
@@ -34,7 +34,7 @@ location @hakou_media_denied {
     return 401 "unauthorized";
 }
 
-# HLS — lecture publique (autoplay muet → plexus)
+# HLS — lecture avec cookie (studio allowlist ou code spectateur)
 location /hakou-live/hls/ {
     set $hakou_cors "";
     if ($http_origin ~* ^(https://hakou\.be|https://studio\.hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
@@ -51,6 +51,9 @@ location /hakou-live/hls/ {
         add_header Content-Type text/plain;
         return 204;
     }
+
+    auth_request /internal-hakou-media-auth;
+    error_page 401 = @hakou_media_denied;
 
     proxy_pass http://127.0.0.1:8888/;
     proxy_http_version 1.1;
@@ -123,7 +126,7 @@ location ^~ /hakou-live/whip/hakou/whip {
     add_header Access-Control-Expose-Headers "Location, Link, ETag" always;
 }
 
-# WHEP lecture publique (Safari / iOS) + ICE
+# WHEP lecture (Safari / iOS) — même cookie que HLS
 location /hakou-live/whip/ {
     set $whip_cors "";
     if ($http_origin ~* ^(https://hakou\.be|https://studio\.hakou\.be|http://localhost:3000|http://127\.0\.0\.1:3000|https://vps-e09ed6db\.vps\.ovh\.net)$) {
@@ -140,6 +143,9 @@ location /hakou-live/whip/ {
         add_header Content-Type text/plain;
         return 204;
     }
+
+    auth_request /internal-hakou-media-auth;
+    error_page 401 = @hakou_media_denied;
 
     proxy_pass http://127.0.0.1:8889/;
     proxy_http_version 1.1;
