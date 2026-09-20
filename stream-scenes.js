@@ -82,9 +82,17 @@ function initStreamScenes() {
       audio.peak *= 0.9;
     }
 
-    const remoteFresh = Date.now() - remote.t < 1400;
-    const useRemote = remoteFresh && localEnergy < 0.03 && remote.peak > 0.02;
-    setAudioVibe(useRemote ? remote : audio);
+    const remoteFresh = Date.now() - remote.t < 2000 && remote.t > 0;
+    if (remoteFresh) {
+      setAudioVibe({
+        bass: Math.min(1, Math.pow(remote.bass, 0.7) * 1.25),
+        mid: Math.min(1, Math.pow(remote.mid, 0.7) * 1.2),
+        high: Math.min(1, Math.pow(remote.high, 0.75) * 1.15),
+        peak: Math.min(1, Math.pow(remote.peak, 0.65) * 1.35),
+      });
+      return;
+    }
+    setAudioVibe(audio);
   }
 
   function disconnectAudio() {

@@ -497,21 +497,9 @@
     });
   }
 
-  async function playStudioLive(frame, emptyEl, { hlsUrl, whepUrl, title }) {
+  async function playStudioLive(frame, emptyEl, { hlsUrl, title }) {
     const ph = frame?.querySelector("[data-consent-placeholder]");
     if (ph) ph.hidden = true;
-    const whep = prefersStudioHost(
-      (typeof whepUrl === "string" && whepUrl.trim()) || whepUrlFromHls(hlsUrl)
-    );
-    if (prefersStudioWebRtc() && whep) {
-      try {
-        await playWhep(frame, emptyEl, whep, title);
-        return;
-      } catch (err) {
-        console.warn(LOG, "WHEP échoué — repli HLS natif", err);
-        destroyWhep();
-      }
-    }
     await playHls(frame, emptyEl, hlsUrl, title);
   }
 
@@ -736,6 +724,9 @@
       return;
     }
     lastAppliedKey = key;
+
+    const player = $("radio-player");
+    player?.classList.toggle("is-audio-only", Boolean(studioLive));
 
     let mode = "empty";
 

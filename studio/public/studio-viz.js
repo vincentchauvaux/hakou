@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { BELTS } from "./studio-belts.js?v=20260920x";
-import { createSolarSystem } from "./studio-system.js?v=20260920x";
+import { BELTS } from "./studio-belts.js?v=20260920y";
+import { createSolarSystem } from "./studio-system.js?v=20260920y";
 
 export { BELTS };
 
@@ -102,7 +102,9 @@ export async function initStudioViz(canvas) {
     ctx: null,
     analyser: null,
     source: null,
+    gain: null,
     freq: null,
+    time: null,
     bass: 0,
     mid: 0,
     high: 0,
@@ -130,13 +132,25 @@ export async function initStudioViz(canvas) {
       return;
     }
     audio.analyser.getByteFrequencyData(audio.freq);
-    const bass = avgBand(audio.freq, 1, 10);
-    const mid = avgBand(audio.freq, 10, 48);
-    const high = avgBand(audio.freq, 48, 140);
-    audio.bass += (bass - audio.bass) * 0.28;
-    audio.mid += (mid - audio.mid) * 0.2;
-    audio.high += (high - audio.high) * 0.24;
-    const energy = audio.bass * 0.55 + audio.mid * 0.3 + audio.high * 0.15;
+    if (audio.time) audio.analyser.getByteTimeDomainData(audio.time);
+    const bass = avgBand(audio.freq, 1, 14);
+    const mid = avgBand(audio.freq, 14, 64);
+    const high = avgBand(audio.freq, 64, 180);
+    let rms = 0;
+    if (audio.time) {
+      for (let i = 0; i < audio.time.length; i++) {
+        const d = (audio.time[i] - 128) / 128;
+        rms += d * d;
+      }
+      rms = Math.sqrt(rms / audio.time.length);
+    }
+    audio.bass += (Math.min(1, bass * 1.35) - audio.bass) * 0.34;
+    audio.mid += (Math.min(1, mid * 1.2) - audio.mid) * 0.24;
+    audio.high += (Math.min(1, high * 1.15) - audio.high) * 0.28;
+    const energy = Math.min(
+      1,
+      audio.bass * 0.5 + audio.mid * 0.28 + audio.high * 0.12 + rms * 1.4
+    );
     audio.peak += (energy - audio.peak) * 0.4;
   }
 
@@ -252,11 +266,17 @@ export async function initStudioViz(canvas) {
       if (!Ctx) return;
       audio.ctx = new Ctx();
       audio.source = audio.ctx.createMediaStreamSource(stream);
+      audio.gain = audio.ctx.createGain();
+      audio.gain.gain.value = 2.8;
       audio.analyser = audio.ctx.createAnalyser();
-      audio.analyser.fftSize = 1024;
-      audio.analyser.smoothingTimeConstant = 0.72;
-      audio.source.connect(audio.analyser);
+      audio.analyser.fftSize = 2048;
+      audio.analyser.smoothingTimeConstant = 0.42;
+      audio.analyser.minDecibels = -90;
+      audio.analyser.maxDecibels = -22;
+      audio.source.connect(audio.gain);
+      audio.gain.connect(audio.analyser);
       audio.freq = new Uint8Array(audio.analyser.frequencyBinCount);
+      audio.time = new Uint8Array(audio.analyser.fftSize);
       audio.ctx.resume?.();
     },
     disconnectAudio() {
@@ -272,8 +292,10 @@ export async function initStudioViz(canvas) {
       }
       audio.ctx = null;
       audio.source = null;
+      audio.gain = null;
       audio.analyser = null;
       audio.freq = null;
+      audio.time = null;
     },
     captureStream(fps = 30) {
       if (!capture) capture = canvas.captureStream(fps);

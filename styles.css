@@ -2355,8 +2355,17 @@ body[data-stream-auth="guest"] .radio-player {
   background: #000;
 }
 
-.radio-player__frame video.radio-hls {
-  object-fit: contain;
+.radio-player.is-audio-only .radio-player__frame {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  opacity: 0.02;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.radio-player.is-audio-only .radio-unmute {
+  display: none;
 }
 
 .radio-unmute {

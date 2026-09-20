@@ -335,7 +335,7 @@ async function sendStreamStatus(req, res) {
 
 app.get("/api/stream/status", sendStreamStatus);
 app.get("/api/radio/status", sendStreamStatus);
-attachStreamPulse(app, { requireSession });
+attachStreamPulse(app, { requireSession, getClientIp, checkRateLimit });
 
 /**
  * Public — challenge anti-spam arithmétique (HMAC, usage unique).

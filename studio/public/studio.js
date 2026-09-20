@@ -1,4 +1,4 @@
-import { BELTS } from "./studio-belts.js?v=20260920x";
+import { BELTS } from "./studio-belts.js?v=20260920y";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
@@ -127,7 +127,9 @@ function isContinuityMic(label) {
 
 function preferredInputId(inputs) {
   const hit = inputs.find((d) =>
-    /blackhole|rekordbox|loopback|vb-?audio|soundflower/i.test(d.label || "")
+    /blackhole|loopback|rekordbox|vb-?audio|soundflower|aggregate|ddj|flx|pioneer/i.test(
+      d.label || ""
+    )
   );
   return hit?.deviceId || "";
 }
@@ -140,15 +142,15 @@ function syncAudioSourceUi() {
     audioUnlockBtn.hidden = tab;
     audioUnlockBtn.disabled = audioControlsLocked();
     audioUnlockBtn.textContent = audioPermissionGranted
-      ? "Actualiser"
-      : "Lister les micros";
+      ? "Rebrancher le mix"
+      : "Brancher le mix";
   }
   if (audioHintEl) {
     audioHintEl.textContent = tab
       ? "Au Direct, Chrome demandera l’onglet — coche « Partager l’audio »."
       : audioPermissionGranted
-        ? "Cette entrée partira en live et en rec."
-        : "Clique « Lister les micros » pour voir BlackHole / Rekordbox / micro.";
+        ? "Le master Rekordbox doit passer par BlackHole (ou Multi-sortie FLX4 + BlackHole)."
+        : "Rekordbox / Serato : master → BlackHole, puis « Brancher le mix ».";
   }
   renderAudioDeviceList();
 }
@@ -177,6 +179,9 @@ function renderAudioDeviceList() {
       audioDeviceTouched = true;
       if (audioDeviceSel) audioDeviceSel.value = id;
       renderAudioDeviceList();
+      if (!audioControlsLocked()) {
+        armMix().catch((err) => console.warn("[Hakou Studio] arm", err));
+      }
     });
     audioListEl.append(btn);
   };
@@ -210,8 +215,8 @@ async function unlockAudioDevices({ interactive = false } = {}) {
     }
   }
   await refreshAudioDevices();
-  if (interactive && audioPermissionGranted && lastAudioInputs.length) {
-    setStatus("Choisis l’entrée à caster, puis Direct ou Rec.");
+  if (interactive && audioPermissionGranted) {
+    await armMix();
   }
 }
 
@@ -281,7 +286,7 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920x");
+    const { initStudioViz } = await import("./studio-viz.js?v=20260920y");
     studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {
@@ -855,6 +860,7 @@ async function acquireAudioStream() {
     echoCancellation: false,
     noiseSuppression: false,
     autoGainControl: false,
+    channelCount: 2,
   };
   const deviceId = audioDeviceSel?.value;
   if (deviceId) audio.deviceId = { exact: deviceId };
@@ -871,11 +877,53 @@ async function acquireAudioStream() {
   return mic;
 }
 
+function audioTrackAlive() {
+  return Boolean(
+    audioCaptureStream?.getAudioTracks?.().some((t) => t.readyState === "live")
+  );
+}
+
 function captureAlive() {
   return Boolean(
-    audioCaptureStream?.getAudioTracks?.().some((t) => t.readyState === "live") &&
+    audioTrackAlive() &&
       localStream?.getVideoTracks?.().some((t) => t.readyState === "live")
   );
+}
+
+async function armMix() {
+  if (!studioViz) {
+    throw new Error("Visualiseur indisponible (WebGL).");
+  }
+  audioCaptureStream?.getTracks()?.forEach((t) => t.stop());
+  audioCaptureStream = null;
+  studioViz.disconnectAudio();
+  audioCaptureStream = await acquireAudioStream();
+  studioViz.connectAudio(audioCaptureStream);
+  const label = audioCaptureStream.getAudioTracks()[0]?.label || "entrée audio";
+  setStatus(`Mix branché : ${label}. Joue un titre — la barre doit bouger.`);
+}
+
+function tickMeter() {
+  requestAnimationFrame(tickMeter);
+  const meterFill = document.getElementById("studio-meter-fill");
+  const meterLabel = document.getElementById("studio-meter-label");
+  const meterEl = document.getElementById("studio-meter");
+  const v = studioViz?.getVibe?.();
+  const level = v
+    ? Math.min(1, v.peak * 1.7 + v.bass * 0.9 + v.mid * 0.25)
+    : 0;
+  if (meterFill) meterFill.style.transform = `scaleX(${level})`;
+  const on = level > 0.05;
+  meterEl?.setAttribute("data-signal", on ? "on" : "off");
+  if (!meterLabel) return;
+  if (!audioTrackAlive()) {
+    meterLabel.textContent = "Pas de signal — branche le mix";
+  } else if (on) {
+    meterLabel.textContent = "Mix détecté";
+  } else {
+    meterLabel.textContent =
+      "Silence — master Rekordbox vers BlackHole, pas seulement le FLX4";
+  }
 }
 
 function stopPulse() {
@@ -925,8 +973,10 @@ async function ensureCapture() {
   if (!studioViz) {
     throw new Error("Visualiseur indisponible (WebGL).");
   }
-  audioCaptureStream = await acquireAudioStream();
-  studioViz.connectAudio(audioCaptureStream);
+  if (!audioTrackAlive()) {
+    audioCaptureStream = await acquireAudioStream();
+    studioViz.connectAudio(audioCaptureStream);
+  }
   const vizStream = studioViz.captureStream(30);
   const mixed = new MediaStream();
   for (const track of vizStream.getVideoTracks()) {
@@ -1346,19 +1396,19 @@ async function startStream() {
         : dest === "twitch"
           ? "Hakou + Twitch"
           : "Hakou";
-    const srcHint =
-      captureAudioKind === "tab" ? " Source : son d’onglet." : " Source : entrée audio.";
+    const vibe = studioViz?.getVibe?.();
+    const quiet = !vibe || vibe.peak < 0.04;
     setStatus(
-      recording
-        ? `En direct (${destLabel}, ${audioLabels}). L’enregistrement VPS continue à part.${srcHint}`
-        : `En direct (${destLabel}, ${audioLabels}). Sur Stream, clique « Activer le son ».${srcHint}`
+      quiet
+        ? `En direct (${destLabel}, ${audioLabels}) — mais silence. Master Rekordbox → BlackHole, puis Rebrancher le mix.`
+        : `En direct (${destLabel}, ${audioLabels}). Sur l’iPad : Stream → Écouter le live.`
     );
     loadDestinations().catch(() => {});
   } catch (err) {
     console.warn("[Hakou Studio]", err);
     await stopWhip();
     streaming = false;
-    releaseCapture();
+    localStream = null;
     const name = err?.name || "";
     if (name === "NotAllowedError" || name === "AbortError") {
       setStatus("Capture audio annulée ou refusée — réessaie « Passer en direct ».");
@@ -1534,6 +1584,7 @@ ytCopyUri?.addEventListener("click", async () => {
 syncButtons();
 renderBelts();
 bootStudio3d();
+tickMeter();
 if (isAppleWebKit()) {
   audioSrcField
     ?.querySelector('input[value="tab"]')
