@@ -1,4 +1,4 @@
-import { BELTS } from "./studio-belts.js?v=20260920z";
+import { BELTS } from "./studio-belts.js?v=20260920aa";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
@@ -169,8 +169,8 @@ function syncAudioSourceUi() {
   }
   if (audioHintEl) {
     audioHintEl.textContent = display
-      ? "Chrome va demander l’écran. Coche « Partager l’audio ». L’image est jetée : seuls les plexus partent en visuel."
-      : "Choisis le DDJ-FLX4 (contrôleur), pas le micro du Mac.";
+      ? "Allume PC MASTER OUT dans Rekordbox (sinon le mix reste uniquement sur le cinch). Puis Chrome → Partager l’audio. L’image ne part pas."
+      : "L’USB FLX4 n’est souvent pas le master analogique. Préfère PC MASTER OUT + son de l’écran.";
   }
   renderAudioDeviceList();
 }
@@ -318,7 +318,7 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920z");
+    const { initStudioViz } = await import("./studio-viz.js?v=20260920aa");
     studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {
@@ -883,7 +883,7 @@ async function acquireAudioStream() {
     if (!audios.length) {
       display.getTracks().forEach((t) => t.stop());
       throw new Error(
-        "Aucun son capturé. Dans la fenêtre Chrome, coche « Partager l’audio », puis réessaie."
+        "Aucun son. Allume PC MASTER OUT dans Rekordbox, puis dans Chrome coche « Partager l’audio »."
       );
     }
     audios.forEach((t) => {
@@ -982,8 +982,8 @@ function tickMeter() {
   } else {
     meterLabel.textContent =
       selectedAudioSource() === "display"
-        ? "Silence — recoche « Partager l’audio » dans Chrome"
-        : "Silence — choisis le DDJ-FLX4, pas le micro du Mac";
+        ? "Silence — PC MASTER OUT Rekordbox + « Partager l’audio » Chrome"
+        : "Silence — le cinch FLX4 n’entre pas en USB ; allume PC MASTER OUT";
   }
 }
 

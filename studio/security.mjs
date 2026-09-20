@@ -49,8 +49,10 @@ export function applySecurityHeaders(_req, res, next) {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader(
     "Permissions-Policy",
-    "camera=(), microphone=(self), display-capture=(self), geolocation=()"
+    "camera=(self), microphone=(self), display-capture=(self), geolocation=()"
   );
+  // camera=(self) : Chrome traite getDisplayMedia (vidéo écran, pas webcam) comme camera=.
+  // Pas de getUserMedia({video:true}) dans le studio.
   // Pas de Cross-Origin-Resource-Policy:same-site — le front hakou.be consomme l’API en CORS.
   res.setHeader(
     "Content-Security-Policy",
@@ -62,9 +64,10 @@ export function applySecurityHeaders(_req, res, next) {
       "script-src 'self' https://cdn.jsdelivr.net 'sha256-RiGkKRagE99FmhyYmo0dpJmbqYifHIuIFbxy5MaYby8='",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: https:",
-      "connect-src 'self' https://hakou.be https://studio.hakou.be https://vps-e09ed6db.vps.ovh.net https://cdn.jsdelivr.net wss://studio.hakou.be wss://vps-e09ed6db.vps.ovh.net",
+      "img-src 'self' data: blob: https:",
+      "connect-src 'self' blob: https://hakou.be https://studio.hakou.be https://vps-e09ed6db.vps.ovh.net https://cdn.jsdelivr.net wss://studio.hakou.be wss://vps-e09ed6db.vps.ovh.net",
       "media-src 'self' blob:",
+      "worker-src 'self' blob: https://cdn.jsdelivr.net",
       "object-src 'none'",
     ].join("; ")
   );

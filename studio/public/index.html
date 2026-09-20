@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./studio.css?v=20260920z" />
+    <link rel="stylesheet" href="./studio.css?v=20260920aa" />
     <script type="importmap">
       {
         "imports": {
@@ -50,15 +50,16 @@
 
       <section class="studio-mix" aria-label="Mix">
         <p class="studio-dest__hint" id="studio-audio-hint">
-          Le DDJ-FLX4 n’est pas un micro. On prend le son du mix, on jette l’image :
-          les spectateurs voient les plexus, pas ton écran.
+          Le cinch blanc/rouge du FLX4 n’entre pas dans Chrome. Allume
+          <strong>PC MASTER OUT</strong> dans Rekordbox (haut-parleur en haut à droite)
+          le temps du live — puis prends le son de l’écran.
         </p>
         <fieldset class="studio-mix-src" id="studio-audio-src" data-mode="display">
           <legend class="visually-hidden">Source du mix</legend>
           <label class="studio-src">
             <input type="radio" name="studio-audio-src" value="display" checked />
             <span class="studio-src__title">Son de l’écran</span>
-            <span class="studio-src__help">Comme avant. Chrome demande l’écran — coche « Partager l’audio ». L’image ne part pas.</span>
+            <span class="studio-src__help">Rekordbox : PC MASTER OUT allumé. Chrome : coche « Partager l’audio ». L’image est jetée.</span>
           </label>
           <label class="studio-src">
             <input type="radio" name="studio-audio-src" value="input" />
@@ -210,6 +211,6 @@
       </details>
     </main>
 
-    <script type="module" src="./studio.js?v=20260920z"></script>
+    <script type="module" src="./studio.js?v=20260920aa"></script>
   </body>
 </html>

@@ -89,7 +89,7 @@ Le live Stream (WHIP → MediaMTX) et l’enregistrement VPS sont **deux actions
 - **Enregistrer sur le VPS** : chunks MediaRecorder **pipés** dans ffmpeg (plus de concat WebM), puis MP4.
 - Tu peux faire les deux en même temps : même capture, deux pipelines.
 - Fichier : **vidéo H.264 compressée** (max 1280 px, CRF 28) + **audio AAC 320 kb/s**.
-- Badge studio : **son d’onglet** vs **micro (qualité limitée)**. Chrome + onglet + « Partager l’audio » pour un mix propre.
+- Badge studio : **son d’écran** vs **FLX4 USB**. Rekordbox : **PC MASTER OUT allumé** pendant le live (le cinch analogique n’entre pas dans Chrome). Chrome + « Partager l’audio » ; l’image d’écran est jetée.
 - Liste / téléchargement / suppression : page studio (auth allowlist).
 - Rétention : 60 jours / plafond ~20 Go.
 
