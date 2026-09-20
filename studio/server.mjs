@@ -1058,6 +1058,7 @@ app.get("/api/auth/session-check", (req, res) => {
 app.use(express.static(join(__dirname, "public"), { index: false }));
 
 app.get("/", requireAuthPage, (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   res.sendFile(join(__dirname, "public", "index.html"));
 });
 

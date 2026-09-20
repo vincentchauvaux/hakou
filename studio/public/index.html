@@ -12,17 +12,14 @@
       href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./studio.css?v=20260920viz" />
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
-        }
-      }
-    </script>
+    <link rel="stylesheet" href="./studio.css?v=20260920f" />
   </head>
   <body class="studio-body">
-    <canvas id="studio-space" aria-hidden="true"></canvas>
+    <canvas id="studio-space" width="1280" height="720" aria-label="Système solaire"></canvas>
+    <div class="studio-hud">
+      <span id="studio-rec-badge" class="studio-rec-badge" hidden>REC</span>
+      <span id="studio-audio-badge" class="studio-audio-badge" hidden></span>
+    </div>
     <header class="studio-top">
       <p class="tag">Studio</p>
       <div class="studio-top__actions">
@@ -33,57 +30,49 @@
       </div>
     </header>
 
-    <main class="studio-card studio-card--wide">
-      <h1>Champ d’astéroïdes</h1>
-      <p>
-        Le live envoie le <strong>son</strong> + le visualiseur — plus de
-        partage d’écran. Deux actions <strong>indépendantes</strong> : le
-        direct Stream, et l’enregistrement MP4 sur le VPS (animation 1280×720,
-        audio 320 kb/s).
-        <br />
-        <strong>Entrée audio</strong> (Rekordbox / BlackHole / micro) ou,
-        sur Chrome, le <strong>son d’onglet</strong>. Glisse dans le champ
-        pour l’explorer — il vibre dès qu’il y a du son.
-      </p>
+    <div class="studio-stage" aria-hidden="true"></div>
 
+    <main class="studio-dock">
       <div
         class="studio-belts"
         id="studio-belts"
         role="radiogroup"
-        aria-label="Ceinture d’astéroïdes"
+        aria-label="Point de vue"
       ></div>
-      <p id="studio-belt-hint" class="studio-belt-hint muted"></p>
 
-      <fieldset class="studio-dest studio-audio-src" id="studio-audio-src">
-        <legend>Source son</legend>
-        <label class="studio-dest__opt">
-          <input type="radio" name="studio-audio-src" value="input" checked />
-          Entrée audio (BlackHole / micro)
-        </label>
-        <label class="studio-dest__opt">
-          <input type="radio" name="studio-audio-src" value="tab" />
-          Son d’onglet Chrome
-        </label>
-        <label class="studio-audio-device" for="studio-audio-device">
-          Périphérique
-          <select id="studio-audio-device">
-            <option value="">Entrée par défaut</option>
-          </select>
-        </label>
-      </fieldset>
+      <div class="studio-dock__row">
+        <fieldset class="studio-dest studio-audio-src" id="studio-audio-src">
+          <legend>Son</legend>
+          <label class="studio-dest__opt">
+            <input type="radio" name="studio-audio-src" value="input" checked />
+            Entrée
+          </label>
+          <label class="studio-dest__opt">
+            <input type="radio" name="studio-audio-src" value="tab" />
+            Onglet
+          </label>
+          <label class="studio-audio-device" for="studio-audio-device">
+            <select id="studio-audio-device" aria-label="Périphérique">
+              <option value="">Défaut</option>
+            </select>
+          </label>
+        </fieldset>
 
-      <div class="studio-preview">
-        <canvas
-          id="studio-viz"
-          width="1280"
-          height="720"
-          aria-label="Visualiseur — champ d’astéroïdes"
-        ></canvas>
-        <p id="studio-preview-empty" class="studio-preview__empty">
-          Glisse pour explorer — passe en direct pour lier le son.
-        </p>
-        <span id="studio-rec-badge" class="studio-rec-badge" hidden>REC</span>
-        <span id="studio-audio-badge" class="studio-audio-badge" hidden></span>
+        <fieldset class="studio-dest" id="studio-dest">
+          <legend>Live</legend>
+          <label class="studio-dest__opt">
+            <input type="radio" name="studio-dest" value="hakou" checked />
+            Hakou
+          </label>
+          <label class="studio-dest__opt" id="studio-dest-youtube-label">
+            <input type="radio" name="studio-dest" value="youtube" disabled />
+            YouTube
+          </label>
+          <label class="studio-dest__opt" id="studio-dest-twitch-label">
+            <input type="radio" name="studio-dest" value="twitch" disabled />
+            Twitch
+          </label>
+        </fieldset>
       </div>
 
       <div class="studio-transport" id="studio-transport" hidden>
@@ -95,7 +84,7 @@
           class="studio-timeline"
           id="studio-timeline"
           role="meter"
-          aria-label="Durée d’enregistrement"
+          aria-label="Durée"
           aria-valuemin="0"
           aria-valuenow="0"
           aria-valuetext="0 secondes"
@@ -117,108 +106,76 @@
         </div>
       </div>
 
-      <fieldset class="studio-dest" id="studio-dest">
-        <legend>Destination live</legend>
-        <p class="studio-dest__hint muted">
-          Hakou.be, Twitch et YouTube voient le champ d’astéroïdes + le mix.
-          Branche Rekordbox sur l’entrée audio (ou un onglet Chrome avec
-          « Partager l’audio »).
-        </p>
-        <label class="studio-dest__opt">
-          <input type="radio" name="studio-dest" value="hakou" checked />
-          Hakou seulement
-        </label>
-        <label class="studio-dest__opt" id="studio-dest-youtube-label">
-          <input type="radio" name="studio-dest" value="youtube" disabled />
-          YouTube Live
-        </label>
-        <label class="studio-dest__opt" id="studio-dest-twitch-label">
-          <input type="radio" name="studio-dest" value="twitch" disabled />
-          Twitch
-        </label>
-      </fieldset>
-
       <div class="studio-actions">
         <button type="button" id="studio-start" class="studio-btn studio-btn--primary">
-          Passer en direct
+          Direct
         </button>
         <button type="button" id="studio-stop" class="studio-btn studio-btn--ghost" disabled>
-          Couper l’antenne
+          Stop live
         </button>
         <button type="button" id="studio-rec-start" class="studio-btn studio-btn--record">
-          Enregistrer sur le VPS
+          Rec
         </button>
       </div>
       <p id="studio-status" class="muted" role="status"></p>
-    </main>
 
-    <section class="studio-card studio-card--wide studio-accounts" id="studio-accounts" aria-labelledby="studio-accounts-title">
-      <h2 id="studio-accounts-title">Comptes live</h2>
-      <p class="muted">
-        Connecte YouTube et/ou enregistre ta clé Twitch, puis choisis la
-        destination ci-dessus avant « Passer en direct ». Hakou.be reste
-        toujours alimenté.
-      </p>
-      <div class="studio-accounts__grid">
-        <article class="studio-account" id="studio-account-youtube">
-          <h3>YouTube</h3>
-          <p id="studio-yt-status" class="studio-account__status muted">Non connecté</p>
-          <p id="studio-yt-help" class="studio-account__help muted"></p>
-          <div class="studio-account__actions">
-            <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-yt-connect" hidden href="./api/studio/youtube/connect">
-              Connecter YouTube
-            </a>
-            <button type="button" id="studio-yt-disconnect" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
-              Déconnecter
-            </button>
-            <button type="button" id="studio-yt-copy-uri" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
-              Copier l’URI de redirection
-            </button>
-          </div>
-        </article>
-        <article class="studio-account" id="studio-account-twitch">
-          <h3>Twitch</h3>
-          <p id="studio-tw-status" class="studio-account__status muted">Colle la clé de stream pour diffuser.</p>
-          <p id="studio-tw-result" class="studio-account__result" hidden role="status"></p>
-          <p class="studio-account__help muted">
-            La clé suffit (Dashboard Twitch → Paramètres → Stream). Après
-            enregistrement, le champ se vide (normal) : un bandeau vert confirme
-            que la clé est stockée sur le VPS.
-          </p>
-          <div class="studio-account__actions">
-            <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-tw-connect" hidden href="./api/studio/twitch/connect">
-              Connecter Twitch
-            </a>
-            <button type="button" id="studio-tw-disconnect" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
-              Déconnecter
-            </button>
-          </div>
-          <form id="studio-tw-key-form" class="studio-account__key" action="#studio-accounts" method="post">
-            <label for="studio-tw-key">Clé de stream (Dashboard → Paramètres → Stream)</label>
-            <div class="studio-account__key-row">
-              <input
-                id="studio-tw-key"
-                name="streamKey"
-                type="password"
-                autocomplete="off"
-                spellcheck="false"
-                placeholder="live_…"
-              />
-              <button type="button" id="studio-tw-key-save" class="studio-btn studio-btn--ghost studio-btn--tiny">
-                Enregistrer la clé
+      <details class="studio-fold" id="studio-accounts">
+        <summary>Comptes</summary>
+        <div class="studio-accounts__grid">
+          <article class="studio-account" id="studio-account-youtube">
+            <h3>YouTube</h3>
+            <p id="studio-yt-status" class="studio-account__status muted">—</p>
+            <p id="studio-yt-help" class="studio-account__help muted" hidden></p>
+            <div class="studio-account__actions">
+              <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-yt-connect" hidden href="./api/studio/youtube/connect">
+                Connecter
+              </a>
+              <button type="button" id="studio-yt-disconnect" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
+                Déconnecter
+              </button>
+              <button type="button" id="studio-yt-copy-uri" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
+                Copier URI
               </button>
             </div>
-          </form>
-        </article>
-      </div>
-    </section>
+          </article>
+          <article class="studio-account" id="studio-account-twitch">
+            <h3>Twitch</h3>
+            <p id="studio-tw-status" class="studio-account__status muted">—</p>
+            <p id="studio-tw-result" class="studio-account__result" hidden role="status"></p>
+            <div class="studio-account__actions">
+              <a class="studio-btn studio-btn--primary studio-btn--tiny" id="studio-tw-connect" hidden href="./api/studio/twitch/connect">
+                Connecter
+              </a>
+              <button type="button" id="studio-tw-disconnect" class="studio-btn studio-btn--ghost studio-btn--tiny" hidden>
+                Déconnecter
+              </button>
+            </div>
+            <form id="studio-tw-key-form" class="studio-account__key" action="#studio-accounts" method="post">
+              <label for="studio-tw-key">Clé stream</label>
+              <div class="studio-account__key-row">
+                <input
+                  id="studio-tw-key"
+                  name="streamKey"
+                  type="password"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="live_…"
+                />
+                <button type="button" id="studio-tw-key-save" class="studio-btn studio-btn--ghost studio-btn--tiny">
+                  Sauver
+                </button>
+              </div>
+            </form>
+          </article>
+        </div>
+      </details>
 
-    <section class="studio-card studio-card--wide studio-recordings" aria-labelledby="studio-recordings-title">
-      <h2 id="studio-recordings-title">Enregistrements VPS</h2>
-      <p class="muted">Captures en lecture — visibles uniquement connecté.</p>
-      <ul id="studio-recordings-list" class="studio-recordings__list"></ul>
-    </section>
+      <details class="studio-fold studio-recordings">
+        <summary>Enregistrements</summary>
+        <ul id="studio-recordings-list" class="studio-recordings__list"></ul>
+      </details>
+    </main>
 
-    <script type="module" src="./studio.js?v=20260920viz"></script>
+    <script type="module" src="./studio.js?v=20260920f"></script>
   </body>
 </html>

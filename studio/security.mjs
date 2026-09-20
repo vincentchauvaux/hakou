@@ -63,7 +63,7 @@ export function applySecurityHeaders(_req, res, next) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: https:",
-      "connect-src 'self' https://hakou.be https://studio.hakou.be https://vps-e09ed6db.vps.ovh.net wss://studio.hakou.be wss://vps-e09ed6db.vps.ovh.net",
+      "connect-src 'self' https://hakou.be https://studio.hakou.be https://vps-e09ed6db.vps.ovh.net https://cdn.jsdelivr.net wss://studio.hakou.be wss://vps-e09ed6db.vps.ovh.net",
       "media-src 'self' blob:",
       "object-src 'none'",
     ].join("; ")

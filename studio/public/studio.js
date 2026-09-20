@@ -1,27 +1,13 @@
-import { initStudioSpace } from "./studio-space.js";
-import { BELTS, initStudioViz } from "./studio-viz.js";
+import { BELTS } from "./studio-belts.js";
 
 const statusEl = document.getElementById("studio-status");
 const userEl = document.getElementById("studio-user");
 const previewWrap = document.querySelector(".studio-preview");
 const beltsEl = document.getElementById("studio-belts");
-const beltHintEl = document.getElementById("studio-belt-hint");
 const audioSrcField = document.getElementById("studio-audio-src");
 const audioDeviceSel = document.getElementById("studio-audio-device");
 
-const studioViz = (() => {
-  try {
-    return initStudioViz(document.getElementById("studio-viz"));
-  } catch (err) {
-    console.warn("[Hakou Studio] viz", err);
-    return null;
-  }
-})();
-try {
-  initStudioSpace(document.getElementById("studio-space"));
-} catch (err) {
-  console.warn("[Hakou Studio] space", err);
-}
+let studioViz = null;
 const startBtn = document.getElementById("studio-start");
 const stopBtn = document.getElementById("studio-stop");
 const recStartBtn = document.getElementById("studio-rec-start");
@@ -139,20 +125,25 @@ function renderBelts() {
     const label = document.createElement("span");
     label.className = "studio-belt__label";
     label.textContent = belt.label;
-    const hint = document.createElement("span");
-    hint.className = "studio-belt__hint";
-    hint.textContent = belt.hint.split("—")[0].trim();
-    btn.append(label, hint);
+    btn.append(label);
     btn.addEventListener("click", () => {
       selectedBeltId = belt.id;
       studioViz?.setBelt(belt.id);
       renderBelts();
-      if (beltHintEl) beltHintEl.textContent = belt.hint;
     });
     beltsEl.append(btn);
   }
-  const current = BELTS.find((b) => b.id === selectedBeltId) || BELTS[0];
-  if (beltHintEl && current) beltHintEl.textContent = current.hint;
+}
+
+async function bootStudio3d() {
+  try {
+    const { initStudioViz } = await import("./studio-viz.js");
+    studioViz = initStudioViz(document.getElementById("studio-space"));
+    studioViz?.setBelt(selectedBeltId);
+  } catch (err) {
+    console.warn("[Hakou Studio] 3D", err);
+    setStatus("3D bloqué — Cmd+Shift+R.", { sticky: true });
+  }
 }
 
 async function refreshAudioDevices() {
@@ -164,7 +155,7 @@ async function refreshAudioDevices() {
     audioDeviceSel.replaceChildren();
     const def = document.createElement("option");
     def.value = "";
-    def.textContent = "Entrée par défaut";
+    def.textContent = "Défaut";
     audioDeviceSel.append(def);
     for (const d of inputs) {
       const opt = document.createElement("option");
@@ -200,15 +191,13 @@ function applyDestinations(data) {
     ytStatusEl.textContent = ytOk
       ? `Connecté${destState.youtube.title ? ` — ${destState.youtube.title}` : ""}`
       : destState.youtubeOAuth
-        ? "Non connecté — colle l’URI dans Google Cloud puis clique « Connecter YouTube »."
-        : "OAuth YouTube non configuré sur le VPS";
+        ? "Non connecté"
+        : "OAuth VPS manquant";
   }
   if (ytHelpEl) {
     const uri = data.youtubeRedirectUri || "";
     ytHelpEl.hidden = ytOk || !uri;
-    ytHelpEl.textContent = uri
-      ? `Google Cloud → identifiants du client OAuth → URI de redirection autorisées : ${uri}`
-      : "";
+    ytHelpEl.textContent = uri || "";
   }
   if (ytCopyUri) {
     ytCopyUri.hidden = ytOk || !data.youtubeRedirectUri;
@@ -227,14 +216,13 @@ function applyDestinations(data) {
         destState.twitch.connected && destState.twitch.login
           ? ` @${destState.twitch.login}`
           : "";
-      twStatusEl.textContent = `Clé enregistrée${hint}${who}. Choisis Twitch en haut, puis Passer en direct.`;
+      twStatusEl.textContent = `Clé ok${hint}${who}`;
     } else if (!destState.twitchOAuth) {
-      twStatusEl.textContent =
-        "Colle la clé de stream ci-dessous (pas besoin de « Connecter Twitch »).";
+      twStatusEl.textContent = "Colle la clé";
     } else {
       twStatusEl.textContent = destState.twitch.connected
-        ? `@${destState.twitch.login} — colle encore la clé de stream.`
-        : "Colle la clé de stream, ou lie le compte puis la clé.";
+        ? `@${destState.twitch.login} — clé manquante`
+        : "Colle la clé";
     }
   }
   twAccountEl?.classList.toggle("is-ready", twReady);
@@ -244,7 +232,7 @@ function applyDestinations(data) {
       : "live_…";
   }
   if (twKeySave) {
-    twKeySave.textContent = twReady ? "Remplacer la clé" : "Enregistrer la clé";
+    twKeySave.textContent = twReady ? "Remplacer" : "Sauver";
   }
   if (!twReady) {
     setTwitchResult(null);
@@ -497,6 +485,9 @@ async function loadMe() {
   const res = await fetch("./api/auth/me", { credentials: "include" });
   if (!res.ok) {
     if (res.status === 401) {
+      // Navigateur Cursor : GIS ouvre des onglets au lieu de popups, le login
+      // Google ne revient jamais. ?preview=1 garde l’UI (APIs toujours 401).
+      if (new URLSearchParams(window.location.search).has("preview")) return;
       window.location.href = "https://hakou.be/";
       return;
     }
@@ -535,7 +526,7 @@ async function loadRecordings() {
     const items = Array.isArray(data.items) ? data.items : [];
     if (!items.length) {
       recordingsList.innerHTML =
-        "<li class=\"studio-recordings__empty\">Aucun enregistrement pour le moment.</li>";
+        "<li class=\"studio-recordings__empty\">Aucun.</li>";
       return;
     }
     recordingsList.replaceChildren();
@@ -1389,6 +1380,7 @@ ytCopyUri?.addEventListener("click", async () => {
 
 syncButtons();
 renderBelts();
+bootStudio3d();
 if (isAppleWebKit()) {
   audioSrcField
     ?.querySelector('input[value="tab"]')
