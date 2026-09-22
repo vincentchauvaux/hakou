@@ -322,7 +322,8 @@ async function sendStreamStatus(req, res) {
       hlsUrl: canListen ? status.hlsUrl : null,
       whepUrl: canListen ? status.whepUrl : null,
       archives: session ? status.archives || [] : [],
-      authenticated: Boolean(session),
+                    authenticated: Boolean(session),
+      canListen: canListen,
       listenRequired: studioLive && !canListen,
       listenOk: studioLive && canListen,
     });
@@ -1159,6 +1160,7 @@ attachRadioChat(httpServer, {
   nickSalt: SESSION_SECRET,
   cookieName: SESSION_COOKIE,
   verifySession,
+  verifyAccess: (req) => verifyMediaAccess(req),
   getClientIp,
 });
 

@@ -11,6 +11,8 @@
   let myId = null;
   let myNick = "";
   let editingNick = false;
+  let joined = false;
+  let chatUrl = DEFAULT_WS;
 
   const $ = (id) => document.getElementById(id);
 
@@ -65,6 +67,52 @@
       if (m.id && String(m.id) === myId) li.classList.add("is-me");
       list.appendChild(li);
     });
+  }
+
+  function setJoined(on) {
+    joined = Boolean(on);
+    const chat = $("radio-chat");
+    const room = $("radio-chat-room");
+    const enter = $("stream-chat-enter");
+    const online = $("radio-online");
+    chat?.classList.toggle("is-in", joined);
+    if (room) room.hidden = !joined;
+    if (enter) enter.hidden = joined;
+    if (online) online.hidden = !joined;
+  }
+
+  async function canEnterChat() {
+    try {
+      const res = await fetch("https://studio.hakou.be/api/stream/status?t=" + Date.now(), {
+        cache: "no-store",
+        mode: "cors",
+        credentials: "include",
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      return Boolean(data.canListen || data.authenticated || data.listenOk);
+    } catch {
+      return false;
+    }
+  }
+
+  async function onGetIn() {
+    const enter = $("stream-chat-enter");
+    if (enter) enter.disabled = true;
+    setStatus("Vérification…");
+    const ok = await canEnterChat();
+    if (!ok) {
+      if (enter) enter.disabled = false;
+      setStatus("Entre le code du live, ou connecte-toi.");
+      $("stream-unlock-code")?.focus();
+      document.getElementById("stream-unlock")?.scrollIntoView({
+        block: "nearest",
+        behavior: "smooth",
+      });
+      return;
+    }
+    setJoined(true);
+    connect(chatUrl);
   }
 
   function sendJson(payload) {
@@ -146,7 +194,15 @@
       }
     });
 
-    ws.addEventListener("close", () => {
+    ws.addEventListener("close", (ev) => {
+      if (!joined) return;
+      if (ev.code === 1008) {
+        setJoined(false);
+        const enter = $("stream-chat-enter");
+        if (enter) enter.disabled = false;
+        setStatus("Accès refusé — code ou connexion requise.");
+        return;
+      }
       setStatus("Chat déconnecté — reconnexion…");
       scheduleReconnect(url);
     });
@@ -157,6 +213,7 @@
   }
 
   function scheduleReconnect(url) {
+    if (!joined) return;
     if (reconnectTimer) return;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
@@ -254,18 +311,16 @@
     });
 
     const url = await resolveWsUrl();
-    connect(url);
+    chatUrl = url;
+    $("stream-chat-enter")?.addEventListener("click", () => {
+      onGetIn().catch((err) => console.warn(LOG, err));
+    });
+    setJoined(false);
+    setStatus("Get in pour rejoindre le chat.");
   }
 
   function boot() {
-    const start = () => {
-      init().catch((err) => console.warn(LOG, err));
-    };
-    if (window.HakouStreamGate?.whenAllowed) {
-      window.HakouStreamGate.whenAllowed(start);
-      return;
-    }
-    window.addEventListener("hakou:stream-allowed", start, { once: true });
+    init().catch((err) => console.warn(LOG, err));
   }
 
   if (document.readyState === "loading") {

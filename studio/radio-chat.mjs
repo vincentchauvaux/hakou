@@ -183,6 +183,7 @@ function allowBurst(client, now) {
  *   corsOrigins?: Set<string>,
  *   nickSalt?: string,
  *   cookieName?: string,
+ *   verifyAccess?: (req: import('node:http').IncomingMessage) => null | object,
  *   verifySession?: (token: string|undefined) => null | { email?: string, name?: string|null },
  * }} [opts]
  */
@@ -191,6 +192,7 @@ export function attachRadioChat(httpServer, opts = {}) {
   const nickSalt = opts.nickSalt || "hakou-radio-chat";
   const cookieName = opts.cookieName || "hakou_studio_session";
   const verifySession = opts.verifySession;
+  const verifyAccess = opts.verifyAccess;
   const resolveIp =
     typeof opts.getClientIp === "function" ? opts.getClientIp : clientIpFromReq;
 
@@ -211,7 +213,13 @@ export function attachRadioChat(httpServer, opts = {}) {
     }
 
     let session = null;
-    if (typeof verifySession === "function") {
+    if (typeof verifyAccess === "function") {
+      session = verifyAccess(req);
+      if (!session) {
+        ws.close(1008, "auth");
+        return;
+      }
+    } else if (typeof verifySession === "function") {
       const token = parseCookieHeader(req.headers.cookie, cookieName);
       session = verifySession(token);
       if (!session?.email) {

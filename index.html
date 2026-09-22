@@ -20,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260920aj" />
+    <link rel="stylesheet" href="./styles.css?v=20260920ak" />
     <script type="importmap">
       {
         "imports": {
@@ -226,9 +226,8 @@
           <p class="tag">Zone Stream</p>
           <h2>Live mix et diffusion</h2>
           <p>
-            Quatre regards sur le même ciel. Le mix est privé : Anaïs et Vincent
-            diffusent depuis le studio, les autres entrent le code du live pour
-            écouter.
+            Même ciel que le reste du site. Si un live tourne, l’espace vibre
+            partout. Pour écouter et pour le chat : code du live, puis Get in.
           </p>
         </div>
 
@@ -299,7 +298,7 @@
                 >
               </p>
             </div>
-            <div class="radio-online stream-crew" id="radio-online" aria-live="polite">
+            <div class="radio-online" id="radio-online" hidden aria-live="polite">
               <p class="radio-online__title">
                 <span id="radio-chat-count">0</span> en ligne
               </p>
@@ -307,17 +306,21 @@
             </div>
           </div>
 
-          <aside class="radio-chat stream-crew" id="radio-chat" aria-label="Chat Stream">
+          <aside class="radio-chat" id="radio-chat" aria-label="Chat Stream">
             <header class="radio-chat__header">
               <p class="radio-chat__title">Chat</p>
+              <button type="button" class="radio-chat__getin" id="stream-chat-enter">
+                Get in
+              </button>
             </header>
             <p class="radio-chat__legal">
-              Chat réservé aux comptes autorisés. Pseudo par défaut dérivé de l’IP
-              (modifiable).
+              Get in avec un compte autorisé ou le code du live. Sinon tu vois
+              seulement l’espace.
               <a href="./legal/cgu.html">Règles</a>
               ·
               <a href="./legal/confidentialite.html">Confidentialité</a>
             </p>
+            <div class="radio-chat__room" id="radio-chat-room" hidden>
             <div class="radio-chat__log" id="radio-chat-log" role="log" aria-live="polite"></div>
             <form class="radio-chat__form" id="radio-chat-form">
               <div class="radio-chat__identity">
@@ -353,6 +356,7 @@
                 Envoyer
               </button>
             </form>
+            </div>
             <p class="radio-chat__status" id="radio-chat-status" role="status"></p>
           </aside>
           </div>
@@ -1028,14 +1032,14 @@
     </div>
 
     <script src="./consent.js" defer></script>
-    <script type="module" src="./stream-gate.js?v=20260920aj"></script>
+    <script type="module" src="./stream-gate.js?v=20260920ak"></script>
     <script type="module" src="./stream-recordings.js"></script>
     <script src="./youtube-videos.js" defer></script>
-    <script src="./radio.js?v=20260920aj" defer></script>
-    <script src="./radio-chat.js" defer></script>
+    <script src="./radio.js?v=20260920ak" defer></script>
+    <script src="./radio-chat.js?v=20260920ak" defer></script>
     <script src="./instagram-gallery.js" defer></script>
     <script src="./contact.js" defer></script>
-    <script type="module" src="./main.js?v=20260920aj"></script>
-    <script type="module" src="./stream-scenes.js?v=20260920aj"></script>
+    <script type="module" src="./main.js?v=20260920ak"></script>
+    <script type="module" src="./stream-scenes.js?v=20260920ak"></script>
   </body>
 </html>

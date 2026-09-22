@@ -3947,11 +3947,6 @@ function updateAccentLight(displaySection, elapsed, glideState) {
 function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
   const inGlide = glideState?.animating && glideState.from !== glideState.to;
   const onStream = isOnStreamPanel(displaySection, glideState);
-  if (isStreamSpotHub(displaySection, glideState)) {
-    applyStreamSpotCamera(elapsed);
-    lastAtRestSectionIndex = STREAM_SECTION;
-    return;
-  }
 
   const cam = sampleCameraState(displaySection, elapsed, glideState);
   const inLongGlide = isLongGlide(glideState);
@@ -4173,7 +4168,8 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 
   if (fog) {
     const effectiveSection = getEffectiveDisplaySection(displaySection, glideState);
-    fog.density = 0.005 + effectiveSection * 0.00085;
+    fog.density =
+      0.005 + effectiveSection * 0.00085 + audioVibe.bass * 0.0035;
     const warmth = getSunHeat(displaySection, glideState);
     fog.color.setRGB(
       0.02 + warmth * 0.05,
@@ -4184,7 +4180,7 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 }
 
 /* —— Intro gate (logo vectoriel + zoom caméra) —— */
-const INTRO_GATE_MS = 4200;
+const INTRO_GATE_MS = 5200;
 const INTRO_LOGO_URL = "./assets/logo-hakou.svg?v=41";
 
 let introGateActive = false;
@@ -4202,7 +4198,6 @@ let introGateLogoBaseScale = 1;
 let introSceneBgRestore = null;
 const introGateTmp = new THREE.Vector3();
 const introGateTmpB = new THREE.Vector3();
-const introGateDir = new THREE.Vector3();
 const INTRO_SCENE_BG = 0x000000;
 
 function easeInOutCubicLocal(t) {
@@ -4383,35 +4378,27 @@ function layoutIntroGate(elapsed = 0) {
   const home = sectionCameras[0];
   if (!home) return;
 
-  introGateDir.copy(home.position).sub(home.lookAt).normalize();
-  introGateLookStart.copy(home.lookAt).addScaledVector(introGateDir, 7.2);
-  introGateCamStart.copy(introGateLookStart).addScaledVector(introGateDir, 9.5);
+  introGateTmp.copy(home.position).sub(home.lookAt).normalize();
+  const logoPos = introGateTmpB.copy(home.lookAt).addScaledVector(introGateTmp, 7.2);
+  const camStart = introGateCamStart
+    .copy(logoPos)
+    .addScaledVector(introGateTmp, 9.5);
+  introGateThrough.copy(logoPos).addScaledVector(introGateTmp, -1.35);
   introGateCamEnd.copy(home.position);
+  introGateLookStart.copy(logoPos);
   introGateLookEnd.copy(home.lookAt);
-  introGateThrough.copy(introGateLookStart);
 
   if (introLogoMesh) {
-    introLogoMesh.position.copy(introGateLookStart);
-    introLogoMesh.lookAt(introGateCamStart);
-    introLogoMesh.updateWorldMatrix(true, true);
-    const logoBox = new THREE.Box3().setFromObject(introLogoMesh);
-    const hy = logoBox.max.y - logoBox.min.y;
-    const hx = logoBox.max.x - logoBox.min.x;
-    introGateThrough.addScaledVector(camera.up, hy * 0.1);
-    introGateTmpB.crossVectors(introGateDir, camera.up);
-    if (introGateTmpB.lengthSq() > 1e-8) {
-      introGateTmpB.normalize();
-      introGateThrough.addScaledVector(introGateTmpB, hx * 0.04);
-    }
+    introLogoMesh.position.copy(logoPos);
+    introLogoMesh.lookAt(camStart);
   }
-  introGateThrough.addScaledVector(introGateDir, -2.4);
 
   if (introGateActive && !introGateZooming) {
-    camera.position.copy(introGateCamStart);
+    camera.position.copy(camStart);
     camera.lookAt(introGateLookStart);
     camera.fov = 38;
     camera.updateProjectionMatrix();
-    smoothedCamPos.copy(introGateCamStart);
+    smoothedCamPos.copy(camStart);
   }
 }
 
@@ -4444,8 +4431,7 @@ function updateIntroGate(elapsed) {
 
   if (introLogoMesh && !introGateZooming) {
     introLogoMesh.scale.setScalar(introGateLogoBaseScale);
-    const content = introLogoMesh.getObjectByName("introLogoContent");
-    if (content) content.rotation.y = 0;
+    introLogoMesh.rotation.z = 0;
   }
 
   if (!introGateZooming) {
@@ -4455,7 +4441,7 @@ function updateIntroGate(elapsed) {
   }
 
   const t = clamp((performance.now() - introGateZoomStartMs) / INTRO_GATE_MS, 0, 1);
-  const punch = 0.58;
+  const punch = 0.7;
   const endFov = focalMmToFov(FOCAL_REST_MM[0]);
 
   syncIntroZoomDestination(elapsed);
@@ -4463,16 +4449,14 @@ function updateIntroGate(elapsed) {
   if (t <= punch) {
     const u = easeInOutCubicLocal(t / punch);
     camera.position.lerpVectors(introGateCamStart, introGateThrough, u);
-    introGateTmpB.copy(introGateThrough).addScaledVector(introGateDir, 2.4);
-    introGateTmpB.lerpVectors(introGateLookStart, introGateTmpB, u);
-    camera.lookAt(introGateTmpB);
-    camera.fov = THREE.MathUtils.lerp(38, 22, u);
+    camera.lookAt(introGateLookStart);
+    camera.fov = THREE.MathUtils.lerp(38, 24, u);
   } else {
     const u = easeInOutCubicLocal((t - punch) / (1 - punch));
     camera.position.lerpVectors(introGateThrough, introGateCamEnd, u);
     introGateTmp.lerpVectors(introGateLookStart, introGateLookEnd, u);
     camera.lookAt(introGateTmp);
-    camera.fov = THREE.MathUtils.lerp(22, endFov, u);
+    camera.fov = THREE.MathUtils.lerp(24, endFov, u);
   }
   camera.updateProjectionMatrix();
   smoothedCamPos.copy(camera.position);
@@ -4486,11 +4470,7 @@ function updateIntroGate(elapsed) {
   }
 
   if (introLogoMesh) {
-    const through = clamp((t - 0.28) / 0.34, 0, 1);
-    introLogoMesh.scale.setScalar(introGateLogoBaseScale * (1 + through * 9));
-    const content = introLogoMesh.getObjectByName("introLogoContent");
-    if (content) content.rotation.y = through * Math.PI;
-    setIntroLogoOpacity(1 - clamp((t - 0.62) / 0.26, 0, 1));
+    setIntroLogoOpacity(1 - clamp((t - 0.72) / 0.22, 0, 1));
   }
 
   if (t >= 1) {
@@ -4524,8 +4504,7 @@ export function setIntroGateActive(active) {
   if (introLogoMesh) {
     setIntroLogoOpacity(1);
     introLogoMesh.scale.setScalar(introGateLogoBaseScale);
-    const content = introLogoMesh.getObjectByName("introLogoContent");
-    if (content) content.rotation.y = 0;
+    introLogoMesh.rotation.z = 0;
   }
   const elapsed = clock?.getElapsedTime() ?? 0;
   if (introGateActive) {
@@ -4596,8 +4575,7 @@ function attachSolarPlexus() {
 
 function tickAttachedPlexus(elapsed, displaySection, glideState) {
   if (!solarPlexus) return;
-  const show =
-    !introGateActive && isOnStreamPanel(displaySection, glideState);
+  const show = !introGateActive;
   for (const layer of solarPlexus.layers) {
     layer.rocks.visible = show;
     layer.lines.visible = show;

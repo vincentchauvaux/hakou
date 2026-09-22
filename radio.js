@@ -219,6 +219,7 @@
         }
         wantAudible = true;
         lastAppliedKey = "";
+        window.dispatchEvent(new CustomEvent("hakou:listen-ok"));
         await refresh();
       } catch {
         if (errEl) {

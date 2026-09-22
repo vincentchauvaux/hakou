@@ -1886,8 +1886,8 @@ body[data-stream-auth="guest"] .consent-placeholder {
 .radio-chat {
   display: flex;
   flex-direction: column;
-  min-height: 420px;
-  height: 100%;
+  min-height: 0;
+  height: auto;
   max-height: none;
   overflow: hidden;
   box-sizing: border-box;
@@ -1896,6 +1896,39 @@ body[data-stream-auth="guest"] .consent-placeholder {
   border-radius: 10px;
   background: var(--panel-card-bg, rgba(9, 13, 24, 0.72));
   color: var(--panel-text, var(--text));
+}
+
+.radio-chat.is-in {
+  min-height: 420px;
+  height: 100%;
+}
+
+.radio-chat__getin {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 237, 247, 0.32);
+  background: rgba(8, 12, 22, 0.65);
+  color: inherit;
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.radio-chat__getin:hover,
+.radio-chat__getin:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 55%, white);
+}
+
+.radio-chat__getin[hidden] {
+  display: none !important;
+}
+
+.radio-chat__room[hidden] {
+  display: none !important;
 }
 
 .radio-chat__header {
