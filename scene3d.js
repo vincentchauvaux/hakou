@@ -4194,11 +4194,18 @@ let introGateCamEnd = new THREE.Vector3();
 let introGateLookStart = new THREE.Vector3();
 let introGateLookEnd = new THREE.Vector3();
 let introGateThrough = new THREE.Vector3();
+let introGateEye = new THREE.Vector3();
 let introGateLogoBaseScale = 1;
+let introLogoWidth = 3.4;
+let introLogoHeight = 3.4;
 let introSceneBgRestore = null;
 const introGateTmp = new THREE.Vector3();
 const introGateTmpB = new THREE.Vector3();
+const introGateDir = new THREE.Vector3();
 const INTRO_SCENE_BG = 0x000000;
+/** Œil droit du masque, en fraction de la taille locale (pas le pont blanc). */
+const INTRO_EYE_X = 0.16;
+const INTRO_EYE_Y = 0.05;
 
 function easeInOutCubicLocal(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -4258,7 +4265,7 @@ function buildIntroLogoFromSvg(data) {
       color,
       transparent: false,
       opacity: 1,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
       depthTest: true,
       depthWrite: true,
       toneMapped: false,
@@ -4298,6 +4305,8 @@ function buildIntroLogoFromSvg(data) {
   root.scale.setScalar(s);
   disposeIntroLogo();
   introGateLogoBaseScale = s;
+  introLogoHeight = targetH;
+  introLogoWidth = targetH * (size.x / Math.max(size.y, 0.001));
   introLogoMesh = root;
   introGateGroup.add(introLogoMesh);
   if (introGateActive) {
@@ -4378,27 +4387,31 @@ function layoutIntroGate(elapsed = 0) {
   const home = sectionCameras[0];
   if (!home) return;
 
-  introGateTmp.copy(home.position).sub(home.lookAt).normalize();
-  const logoPos = introGateTmpB.copy(home.lookAt).addScaledVector(introGateTmp, 7.2);
-  const camStart = introGateCamStart
-    .copy(logoPos)
-    .addScaledVector(introGateTmp, 9.5);
-  introGateThrough.copy(logoPos).addScaledVector(introGateTmp, -1.35);
+  introGateDir.copy(home.position).sub(home.lookAt).normalize();
+  introGateLookStart.copy(home.lookAt).addScaledVector(introGateDir, 7.2);
+  introGateCamStart.copy(introGateLookStart).addScaledVector(introGateDir, 9.5);
   introGateCamEnd.copy(home.position);
-  introGateLookStart.copy(logoPos);
   introGateLookEnd.copy(home.lookAt);
+  introGateEye.copy(introGateLookStart);
 
   if (introLogoMesh) {
-    introLogoMesh.position.copy(logoPos);
-    introLogoMesh.lookAt(camStart);
+    introLogoMesh.position.copy(introGateLookStart);
+    introLogoMesh.lookAt(introGateCamStart);
+    introGateTmpB.crossVectors(introGateDir, tmpUp);
+    if (introGateTmpB.lengthSq() > 1e-8) {
+      introGateTmpB.normalize();
+      introGateEye.addScaledVector(introGateTmpB, introLogoWidth * INTRO_EYE_X);
+    }
+    introGateEye.addScaledVector(tmpUp, introLogoHeight * INTRO_EYE_Y);
   }
+  introGateThrough.copy(introGateEye).addScaledVector(introGateDir, -1.7);
 
   if (introGateActive && !introGateZooming) {
-    camera.position.copy(camStart);
+    camera.position.copy(introGateCamStart);
     camera.lookAt(introGateLookStart);
     camera.fov = 38;
     camera.updateProjectionMatrix();
-    smoothedCamPos.copy(camStart);
+    smoothedCamPos.copy(introGateCamStart);
   }
 }
 
@@ -4449,14 +4462,16 @@ function updateIntroGate(elapsed) {
   if (t <= punch) {
     const u = easeInOutCubicLocal(t / punch);
     camera.position.lerpVectors(introGateCamStart, introGateThrough, u);
-    camera.lookAt(introGateLookStart);
-    camera.fov = THREE.MathUtils.lerp(38, 24, u);
+    const lookU = easeInOutCubicLocal(Math.min(1, u * 2.4));
+    introGateTmp.lerpVectors(introGateLookStart, introGateEye, lookU);
+    camera.lookAt(introGateTmp);
+    camera.fov = THREE.MathUtils.lerp(38, 20, u);
   } else {
     const u = easeInOutCubicLocal((t - punch) / (1 - punch));
     camera.position.lerpVectors(introGateThrough, introGateCamEnd, u);
-    introGateTmp.lerpVectors(introGateLookStart, introGateLookEnd, u);
+    introGateTmp.lerpVectors(introGateEye, introGateLookEnd, u);
     camera.lookAt(introGateTmp);
-    camera.fov = THREE.MathUtils.lerp(24, endFov, u);
+    camera.fov = THREE.MathUtils.lerp(20, endFov, u);
   }
   camera.updateProjectionMatrix();
   smoothedCamPos.copy(camera.position);
@@ -4470,7 +4485,7 @@ function updateIntroGate(elapsed) {
   }
 
   if (introLogoMesh) {
-    setIntroLogoOpacity(1 - clamp((t - 0.72) / 0.22, 0, 1));
+    setIntroLogoOpacity(1 - clamp((t - 0.38) / 0.2, 0, 1));
   }
 
   if (t >= 1) {

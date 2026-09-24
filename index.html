@@ -20,7 +20,7 @@
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=20260920ak" />
+    <link rel="stylesheet" href="./styles.css?v=20260923d" />
     <script type="importmap">
       {
         "imports": {
@@ -30,7 +30,7 @@
       }
     </script>
   </head>
-  <body data-intro="pending">
+  <body data-intro="pending" data-stream-in="0">
     <canvas id="three-canvas" aria-hidden="true"></canvas>
 
     <div id="intro-gate" class="intro-gate" role="dialog" aria-modal="true" aria-labelledby="intro-brand">
@@ -248,12 +248,17 @@
                   rel="noopener noreferrer"
                 >Diffuser et enregistrer</a>
               </div>
+              <div class="stream-dock">
               <div
                 class="stream-scenes"
                 id="stream-scenes"
                 role="radiogroup"
                 aria-label="Scène"
               ></div>
+              <button type="button" class="radio-chat__getin" id="stream-chat-enter">
+                Get in
+              </button>
+              </div>
               <form id="stream-unlock" class="stream-unlock" hidden>
                 <label class="stream-unlock__label" for="stream-unlock-code">Code du live</label>
                 <div class="stream-unlock__row">
@@ -309,13 +314,8 @@
           <aside class="radio-chat" id="radio-chat" aria-label="Chat Stream">
             <header class="radio-chat__header">
               <p class="radio-chat__title">Chat</p>
-              <button type="button" class="radio-chat__getin" id="stream-chat-enter">
-                Get in
-              </button>
             </header>
             <p class="radio-chat__legal">
-              Get in avec un compte autorisé ou le code du live. Sinon tu vois
-              seulement l’espace.
               <a href="./legal/cgu.html">Règles</a>
               ·
               <a href="./legal/confidentialite.html">Confidentialité</a>
@@ -1032,14 +1032,14 @@
     </div>
 
     <script src="./consent.js" defer></script>
-    <script type="module" src="./stream-gate.js?v=20260920ak"></script>
+    <script type="module" src="./stream-gate.js?v=20260923d"></script>
     <script type="module" src="./stream-recordings.js"></script>
     <script src="./youtube-videos.js" defer></script>
-    <script src="./radio.js?v=20260920ak" defer></script>
-    <script src="./radio-chat.js?v=20260920ak" defer></script>
+    <script src="./radio.js?v=20260923d" defer></script>
+    <script src="./radio-chat.js?v=20260923d" defer></script>
     <script src="./instagram-gallery.js" defer></script>
     <script src="./contact.js" defer></script>
-    <script type="module" src="./main.js?v=20260920ak"></script>
-    <script type="module" src="./stream-scenes.js?v=20260920ak"></script>
+    <script type="module" src="./main.js?v=20260923d"></script>
+    <script type="module" src="./stream-scenes.js?v=20260923d"></script>
   </body>
 </html>

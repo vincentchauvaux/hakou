@@ -59,6 +59,18 @@ export function attachStreamPulse(app, { requireSession, getClientIp, checkRateL
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
     res.setHeader("Cache-Control", "no-store");
+    const stale = !pulse.t || Date.now() - pulse.t > 2800;
+    if (stale) {
+      res.json({
+        bass: 0,
+        mid: 0,
+        high: 0,
+        peak: 0,
+        bands: [0, 0, 0, 0, 0, 0, 0, 0],
+        t: pulse.t || 0,
+      });
+      return;
+    }
     res.json(pulse);
   });
 }

@@ -76,6 +76,8 @@
     const enter = $("stream-chat-enter");
     const online = $("radio-online");
     chat?.classList.toggle("is-in", joined);
+    document.body.dataset.streamIn = joined ? "1" : "0";
+    if (joined) delete document.body.dataset.streamCode;
     if (room) room.hidden = !joined;
     if (enter) enter.hidden = joined;
     if (online) online.hidden = !joined;
@@ -103,9 +105,12 @@
     const ok = await canEnterChat();
     if (!ok) {
       if (enter) enter.disabled = false;
-      setStatus("Entre le code du live, ou connecte-toi.");
+      setStatus("");
+      document.body.dataset.streamCode = "ask";
+      const form = $("stream-unlock");
+      if (form) form.hidden = false;
       $("stream-unlock-code")?.focus();
-      document.getElementById("stream-unlock")?.scrollIntoView({
+      form?.scrollIntoView({
         block: "nearest",
         behavior: "smooth",
       });

@@ -237,6 +237,8 @@ export function createSolarPlexus(scene) {
     const mid = vibe.mid || 0;
     const high = vibe.high || 0;
     const peak = vibe.peak || 0;
+    const energy = bass + mid * 0.85 + high * 0.7 + peak;
+    const hot = energy > 0.05;
     const earth = getPlanet("Earth");
     const ex = earth?.position?.x || 0;
     const ey = earth?.position?.y || 0;
@@ -287,16 +289,16 @@ export function createSolarPlexus(scene) {
         const highY = field.y * highAmt * 1.9 + flicker * high * 0.8;
         const highZ = field.z * highAmt * 1.9 + nz * flicker * high * 1.1;
 
-        const idle = Math.sin(elapsed * 0.28 + i * 0.17) * 0.12;
-        const pull = pointer.down ? 0.42 : 0.16;
+        const idle = hot ? Math.sin(elapsed * 0.28 + i * 0.17) * 0.12 : 0;
+        const pull = hot && pointer.down ? 0.42 : hot ? 0.16 : 0;
         dummy.position.set(
           bx + nx * (idle + bassPush) + midX + highX + (wellX - bx) * pull * 0.016,
           by + ny * (idle + bassPush) + midY + highY + (wellY - by) * pull * 0.016,
           bz + nz * (idle + bassPush) + midZ + highZ
         );
         dummy.rotation.set(
-          elapsed * layer.spins[i] * (0.22 + high * 1.1 + peak * 0.2),
-          elapsed * layer.spins[i] * (0.55 + mid * 0.9 + bass * 0.25),
+          elapsed * layer.spins[i] * (hot ? 0.22 + high * 1.1 + peak * 0.2 : 0.03),
+          elapsed * layer.spins[i] * (hot ? 0.55 + mid * 0.9 + bass * 0.25 : 0.05),
           i * 0.3
         );
         dummy.scale.setScalar(layer.scales[i] * (1 + bass * 0.95 + mid * 0.22 + high * 0.12));

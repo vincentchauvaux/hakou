@@ -1678,19 +1678,48 @@ body:not([data-stream-auth="ok"]) .stream-crew {
   display: none !important;
 }
 
-body[data-stream-auth="guest"] .radio-player {
-  width: 100%;
+.stream-dock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
 }
 
-body[data-stream-auth="guest"] .radio-player.is-audio-only .radio-player__frame {
-  width: 96px;
-  height: 54px;
-  max-width: 96px;
-  aspect-ratio: auto;
-  opacity: 0.2;
-  overflow: hidden;
-  pointer-events: none;
-  border-radius: 10px;
+.stream-dock .stream-scenes {
+  margin: 0;
+}
+
+.stream-dock .radio-chat__getin {
+  margin-left: auto;
+}
+
+body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-status,
+body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-player,
+body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) #stream-listen,
+body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-online,
+body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) #radio-chat,
+body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) #stream .panel-lead > p:not(.tag) {
+  display: none !important;
+}
+
+body:not([data-stream-in="1"]) #radio-chat {
+  display: none !important;
+}
+
+body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-layout {
+  display: block;
+}
+
+body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-card.panel-card {
+  gap: 0.65rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+body:not([data-stream-auth="ok"]):not([data-stream-code="ask"]) .stream-unlock {
+  display: none !important;
 }
 
 body[data-stream-auth="guest"] .radio-unmute {

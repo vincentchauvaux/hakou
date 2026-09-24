@@ -6,8 +6,16 @@ const PULSE_URL = "https://studio.hakou.be/api/stream/pulse";
 
 function lift(x) {
   const n = Number(x) || 0;
-  if (n <= 0) return 0;
+  if (n < 0.04) return 0;
   return Math.min(1, Math.pow(n, 0.55) * 1.6);
+}
+
+function zeroVibe(into) {
+  into.bass = 0;
+  into.mid = 0;
+  into.high = 0;
+  into.peak = 0;
+  for (let i = 0; i < 8; i++) into.bands[i] = 0;
 }
 
 function initStreamScenes() {
@@ -56,13 +64,17 @@ function initStreamScenes() {
 
   function tick() {
     requestAnimationFrame(tick);
-    const k = 0.28;
-    vibe.bass += (target.bass - vibe.bass) * k;
-    vibe.mid += (target.mid - vibe.mid) * k;
-    vibe.high += (target.high - vibe.high) * k;
-    vibe.peak += (target.peak - vibe.peak) * k;
-    for (let i = 0; i < 8; i++) {
-      vibe.bands[i] += ((target.bands[i] || 0) - vibe.bands[i]) * k;
+    if (target.bass + target.mid + target.high + target.peak < 1e-4) {
+      zeroVibe(vibe);
+    } else {
+      const k = 0.28;
+      vibe.bass += (target.bass - vibe.bass) * k;
+      vibe.mid += (target.mid - vibe.mid) * k;
+      vibe.high += (target.high - vibe.high) * k;
+      vibe.peak += (target.peak - vibe.peak) * k;
+      for (let i = 0; i < 8; i++) {
+        vibe.bands[i] += ((target.bands[i] || 0) - vibe.bands[i]) * k;
+      }
     }
     setAudioVibe(vibe);
   }
@@ -74,16 +86,15 @@ function initStreamScenes() {
         mode: "cors",
         credentials: "omit",
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        zeroVibe(target);
+        return;
+      }
       const data = await res.json();
       const t = Number(data.t) || 0;
       const fresh = t > 0 && Date.now() - t < 2800;
       if (!fresh) {
-        target.bass *= 0.82;
-        target.mid *= 0.82;
-        target.high *= 0.82;
-        target.peak *= 0.82;
-        for (let i = 0; i < 8; i++) target.bands[i] *= 0.82;
+        zeroVibe(target);
         return;
       }
       target.bass = lift(data.bass);
@@ -96,7 +107,7 @@ function initStreamScenes() {
         }
       }
     } catch {
-      /* hors ligne */
+      zeroVibe(target);
     }
   }
 

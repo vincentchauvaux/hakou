@@ -219,6 +219,9 @@
         }
         wantAudible = true;
         lastAppliedKey = "";
+        delete document.body.dataset.streamCode;
+        const form = $("stream-unlock");
+        if (form) form.hidden = true;
         window.dispatchEvent(new CustomEvent("hakou:listen-ok"));
         await refresh();
       } catch {
@@ -832,7 +835,11 @@
     lastAppliedKey = key;
 
     const unlockForm = $("stream-unlock");
-    if (unlockForm) unlockForm.hidden = !listenRequired;
+    if (unlockForm) {
+      const guest = document.body.dataset.streamAuth !== "ok";
+      const asking = document.body.dataset.streamCode === "ask";
+      unlockForm.hidden = guest ? !asking : !listenRequired;
+    }
 
     const player = $("radio-player");
     player?.classList.toggle("is-audio-only", Boolean(studioLive));
