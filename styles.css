@@ -1674,7 +1674,8 @@ audio {
   color: var(--panel-muted, var(--muted));
 }
 
-body:not([data-stream-auth="ok"]) .stream-crew {
+body:not([data-stream-auth="ok"]) .stream-crew,
+body:not([data-stream-auth="ok"]) .site-card--crew {
   display: none !important;
 }
 
@@ -1693,9 +1694,9 @@ body:not([data-stream-auth="ok"]) .stream-crew {
   margin-left: auto;
 }
 
-body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-status,
-body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-player,
-body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) #stream-listen,
+body:not([data-stream-auth="ok"]):not([data-stream-listen="1"]) .radio-status,
+body:not([data-stream-auth="ok"]):not([data-stream-listen="1"]) .radio-player,
+body:not([data-stream-auth="ok"]):not([data-stream-listen="1"]) #stream-listen,
 body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-online,
 body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) #radio-chat,
 body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) #stream .panel-lead > p:not(.tag) {
@@ -1706,11 +1707,11 @@ body:not([data-stream-in="1"]) #radio-chat {
   display: none !important;
 }
 
-body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-layout {
+body:not([data-stream-auth="ok"]):not([data-stream-listen="1"]):not([data-stream-in="1"]):not([data-stream-code="ask"]) .radio-layout {
   display: block;
 }
 
-body:not([data-stream-auth="ok"]):not([data-stream-in="1"]) .radio-card.panel-card {
+body:not([data-stream-auth="ok"]):not([data-stream-listen="1"]):not([data-stream-in="1"]):not([data-stream-code="ask"]) .radio-card.panel-card {
   gap: 0.65rem;
   padding: 0;
   border: none;
@@ -1722,7 +1723,7 @@ body:not([data-stream-auth="ok"]):not([data-stream-code="ask"]) .stream-unlock {
   display: none !important;
 }
 
-body[data-stream-auth="guest"] .radio-unmute {
+body[data-stream-auth="guest"]:not([data-stream-listen="1"]) .radio-unmute {
   display: none !important;
 }
 

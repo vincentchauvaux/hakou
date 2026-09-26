@@ -1,6 +1,7 @@
 /**
- * Stream : scènes + plexus visibles ; son = allowlist ou code du live.
- * Chat = Get in après session ou cookie hakou_listen. Recordings / studio = allowlist.
+ * Stream : scènes + plexus visibles pour tout le monde.
+ * Son = allowlist (Vincent / Anaïs) ou cookie code hakou_listen.
+ * Chat = Get in après son OK. Recordings / studio / OVH Hub = allowlist.
  */
 import { fetchStudioSession } from "./auth-client.js";
 

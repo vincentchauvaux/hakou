@@ -697,8 +697,9 @@ function preferH264Video(pc) {
 }
 
 /**
- * Partage d’écran + son, comme au début.
- * L’image est jetée : le visuel live = plexus (canvas).
+ * Partage d’écran + son. L’image est jetée : le visuel live = plexus (canvas).
+ * Sur Mac, une fenêtre Rekordbox n’envoie souvent PAS l’audio — il faut « Tout l’écran ».
+ * La piste vidéo reste active (désactiver coupe le son Chrome).
  */
 async function acquireAudioStream() {
   if (isAppleWebKit()) {
@@ -707,31 +708,43 @@ async function acquireAudioStream() {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error("Partage d’écran indisponible (Chrome recommandé).");
   }
-  setStatus("Choisis l’écran, et coche « Partager l’audio ». L’image ne partira pas.");
+  setStatus(
+    "Mac : choisis « Tout l’écran » (pas la fenêtre Rekordbox) et coche l’audio système."
+  );
   const display = await withTimeout(
     navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 1, width: { ideal: 16 }, height: { ideal: 16 } },
+      video: {
+        displaySurface: "monitor",
+        frameRate: { ideal: 8, max: 15 },
+      },
       audio: {
         echoCancellation: false,
         noiseSuppression: false,
         autoGainControl: false,
+        suppressLocalAudioPlayback: false,
         channelCount: 2,
       },
       systemAudio: "include",
       preferCurrentTab: false,
       selfBrowserSurface: "exclude",
+      monitorTypeSurfaces: "include",
     }),
     90_000,
     "Dialogue trop long — ferme-le s’il est resté ouvert, puis réessaie."
   );
   display.getVideoTracks().forEach((t) => {
-    t.enabled = false;
+    t.enabled = true;
+    try {
+      t.contentHint = "motion";
+    } catch {
+      /* ignore */
+    }
   });
   const audios = display.getAudioTracks();
   if (!audios.length) {
     display.getTracks().forEach((t) => t.stop());
     throw new Error(
-      "Aucun son. Dans Chrome, coche « Partager l’audio », puis réessaie."
+      "Aucun son. Sur Mac, prends « Tout l’écran » (pas une fenêtre) et coche « Partager l’audio du système »."
     );
   }
   audios.forEach((t) => {

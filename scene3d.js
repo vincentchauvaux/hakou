@@ -93,17 +93,17 @@ const zoneAccent = [
   0xc4b8a8, // Mercure
 ];
 
-/** Arches caméra entre sections — lift large (ellipse), side léger même signe (pas de S). */
+/** Souplesse Y au milieu d’un leg (sin πt) — la courbe principale est l’ellipse autour du Soleil. */
 const JOURNEY_ARC = [
-  { lift: 0.22, side: 0.055 },
-  { lift: 0.2, side: 0.05 },
-  { lift: 0.19, side: 0.048 },
-  { lift: 0.18, side: 0.045 },
-  { lift: 0.17, side: 0.042 },
-  { lift: 0.16, side: 0.04 },
-  { lift: 0.15, side: 0.038 },
-  { lift: 0.145, side: 0.035 },
-  { lift: 0.14, side: 0.032 },
+  { lift: 0.055, side: 0 },
+  { lift: 0.05, side: 0 },
+  { lift: 0.048, side: 0 },
+  { lift: 0.045, side: 0 },
+  { lift: 0.042, side: 0 },
+  { lift: 0.04, side: 0 },
+  { lift: 0.038, side: 0 },
+  { lift: 0.035, side: 0 },
+  { lift: 0.032, side: 0 },
 ];
 
 /** Ambiance calme — orbites + dérive repos (ratios planètes inchangés). */
@@ -142,9 +142,9 @@ const FOCUS_EXIT_MS = 680;
 /** Distance d’observation (× rayon planète) — vue « face au globe » après Voir. */
 const FOCUS_OBSERVE_RADIUS_MUL = 3.75;
 /** Derniers % du leg : convergence douce vers le cadrage héro destination. */
-const GLIDE_HERO_BLEND_START = 0.91;
-/** Trajectoire glide : mélange courbe Bézier + composante radiale Soleil. */
-const GLIDE_CURVE_RADIAL_BLEND = 0.58;
+const GLIDE_HERO_BLEND_START = 0.94;
+/** Apoapsis : rayon un peu plus large au milieu (ellipse souple, pas une corde). */
+const GLIDE_ELLIPSE_RADIUS_BULGE = 0.07;
 /** Respiration Y désactivée (source de tremblement). */
 const GLIDE_RADIAL_Y_BREATHE = 0;
 /** Demi-angle max du disque Soleil (rad) — évite le Soleil plein écran hors Contact. */
@@ -2468,8 +2468,8 @@ function enforcePathBodyClearance(
 }
 
 /**
- * Trajectoire vectorielle P0→P1 : courbe de Bézier (lift/side JOURNEY_ARC)
- * + légère composante radiale Soleil, sans micro-collision agressive (anti-tremblement).
+ * Trajectoire P0→P1 : ellipse autour du Soleil (ancre unique).
+ * P0 / P1 = caméras héro (déjà sur le rayon Soleil→planète). Pas de Bézier concurrent.
  */
 function sampleRectilinearTransfer(
   p0,
@@ -2490,63 +2490,18 @@ function sampleRectilinearTransfer(
     return out.copy(p1);
   }
 
-  const arc = JOURNEY_ARC[fromIndex] ?? { lift: 0.1, side: 0.05 };
-  tmpSeg.copy(p1).sub(p0);
-  const len = tmpSeg.length() || 1;
-  const distScale = clamp(len / 28, 0.75, 1.65);
+  rectilinearPointRaw(p0, p1, t, fromIndex, toIndex, out);
 
-  // Points de contrôle fixes (arc max au milieu) — courbes stables frame à frame.
-  computeArcControls(
-    p0,
-    p1,
-    arc.lift * distScale * 0.88,
-    arc.side * distScale * 0.85,
-    0.5,
-    tmpCamP1,
-    tmpCamP2
-  );
-
-  tmpMid.copy(p0).add(p1).multiplyScalar(0.5);
-  tmpToSun.copy(tmpMid).sub(sunOrigin);
-  if (tmpToSun.lengthSq() < 1e-6) {
-    tmpToSun.set(1, 0, 0);
-  } else {
-    tmpToSun.normalize();
+  const mid = Math.sin(Math.PI * t);
+  tmpSeg.copy(out).sub(sunOrigin);
+  const r = tmpSeg.length();
+  if (r > 1e-6 && GLIDE_ELLIPSE_RADIUS_BULGE > 0) {
+    tmpSeg.multiplyScalar(1 / r);
+    out.addScaledVector(tmpSeg, r * GLIDE_ELLIPSE_RADIUS_BULGE * mid);
   }
-  const outwardBulge = arc.lift * distScale * len * 0.42;
-  tmpCamP1.addScaledVector(tmpToSun, outwardBulge * 0.85);
-  tmpCamP2.addScaledVector(tmpToSun, outwardBulge * 0.72);
-
-  cubicBezier3(p0, tmpCamP1, tmpCamP2, p1, t, out);
-
-  // Composante radiale douce (voyage vers/depuis le Soleil) — sans push itératif.
-  if (GLIDE_CURVE_RADIAL_BLEND > 0) {
-    const r0 = tmpSeg.copy(p0).sub(sunOrigin).length();
-    const r1 = tmpMid.copy(p1).sub(sunOrigin).length();
-    const r = THREE.MathUtils.lerp(r0, r1, t);
-    tmpSeg.copy(p0).sub(sunOrigin);
-    if (tmpSeg.lengthSq() > 1e-8) tmpSeg.normalize();
-    else tmpSeg.set(1, 0, 0);
-    tmpMid.copy(p1).sub(sunOrigin);
-    if (tmpMid.lengthSq() > 1e-8) tmpMid.normalize();
-    else tmpMid.copy(tmpSeg);
-    const dot = clamp(tmpSeg.dot(tmpMid), -1, 1);
-    const omega = Math.acos(dot);
-    if (omega < 1e-5) {
-      tmpToSun.copy(tmpSeg);
-    } else {
-      const sinOmega = Math.sin(omega);
-      const w0 = Math.sin((1 - t) * omega) / sinOmega;
-      const w1 = Math.sin(t * omega) / sinOmega;
-      tmpToSun
-        .copy(tmpSeg)
-        .multiplyScalar(w0)
-        .addScaledVector(tmpMid, w1)
-        .normalize();
-    }
-    tmpLookDest.copy(sunOrigin).addScaledVector(tmpToSun, r);
-    out.lerp(tmpLookDest, GLIDE_CURVE_RADIAL_BLEND);
-  }
+  const arc = JOURNEY_ARC[fromIndex] ?? { lift: 0.04, side: 0 };
+  const chord = p0.distanceTo(p1) || 1;
+  out.y += arc.lift * chord * mid;
 
   const sunExtra = getSunPushExtraMargin(fromIndex, toIndex, displaySection) * 0.75;
   pushPointOutsideSun(out, sunExtra);
@@ -2673,8 +2628,9 @@ function computePlanetFocusWeight(legT) {
 }
 
 /**
- * Regard en transit : principalement le Soleil le long de la courbe.
- * Aux extrémités seulement, on reprend le cadrage héro (planète + horizon).
+ * Regard en transit : ancre = Soleil (point visé depuis la caméra).
+ * Aux extrémités seulement, cadrage héro (planète + horizon).
+ * Pas de lerp lookAt planète→planète (ça déplace l’ancre dans l’espace et retourne la caméra).
  */
 function computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySection, out, glideState) {
   if (fromIndex === toIndex) {
@@ -2683,17 +2639,16 @@ function computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySect
   }
 
   const t = clamp(legT, 0, 1);
-  const leave = 1 - smoothstep01(t / 0.34);
-  const arrive = smoothstep01((t - 0.66) / 0.34);
-  const sunWeight = 1 - Math.max(leave, arrive);
+  const leave = 1 - smoothstep01(t / 0.2);
+  const arrive = smoothstep01((t - 0.8) / 0.2);
 
-  tmpLookDest.copy(sunOrigin);
-  tmpLookDest.y += 0.42;
-
-  out
-    .copy(sectionCameras[fromIndex].lookAt)
-    .lerp(sectionCameras[toIndex].lookAt, t);
-  out.lerp(tmpLookDest, sunWeight * 0.94);
+  out.copy(sunOrigin);
+  out.y += 0.35;
+  if (leave > 0) {
+    out.lerp(sectionCameras[fromIndex].lookAt, leave);
+  } else if (arrive > 0) {
+    out.lerp(sectionCameras[toIndex].lookAt, arrive);
+  }
   return out;
 }
 
@@ -4401,6 +4356,7 @@ function layoutIntroGate(elapsed = 0) {
   if (!home) return;
 
   introGateDir.copy(home.position).sub(home.lookAt).normalize();
+  // dir = lookAt → caméra = extérieur (opposé Soleil). Punch = -dir (vers le Soleil).
   introGateLookStart.copy(home.lookAt).addScaledVector(introGateDir, 7.2);
   introGateCamStart.copy(introGateLookStart).addScaledVector(introGateDir, 9.5);
   introGateCamEnd.copy(home.position);
@@ -4477,26 +4433,16 @@ function updateIntroGate(elapsed) {
     camera.position.lerpVectors(introGateCamStart, introGateThrough, u);
     const lookU = easeInOutCubicLocal(Math.min(1, u * 2.4));
     introGateTmp.lerpVectors(introGateLookStart, introGateEye, lookU);
-    // Passage du trou : viser le Soleil (pas l'œil derrière après le plan).
-    const swing = easeInOutCubicLocal(clamp((u - 0.72) / 0.28, 0, 1));
-    introGateTmpB.copy(sunOrigin);
-    introGateTmpB.y += 0.45;
-    introGateTmp.lerp(introGateTmpB, swing);
+    // Après le plan du logo : regard AVANT (limbe/Soleil), jamais l'œil derrière.
+    const pass = easeInOutCubicLocal(clamp((u - 0.84) / 0.16, 0, 1));
+    introGateTmpB.copy(introGateLookEnd).lerp(sunOrigin, 0.22);
+    introGateTmp.lerp(introGateTmpB, pass);
     camera.lookAt(introGateTmp);
     camera.fov = THREE.MathUtils.lerp(38, 20, u);
   } else {
     const u = easeInOutCubicLocal((t - punch) / (1 - punch));
     camera.position.lerpVectors(introGateThrough, introGateCamEnd, u);
-    const bulge = Math.sin(Math.PI * u);
-    introGateTmpB.crossVectors(introGateDir, tmpUp);
-    if (introGateTmpB.lengthSq() > 1e-8) {
-      introGateTmpB.normalize();
-      camera.position.addScaledVector(introGateTmpB, bulge * 1.25);
-    }
-    camera.position.y += bulge * 0.48;
-    introGateTmp.copy(sunOrigin);
-    introGateTmp.y += 0.45;
-    introGateTmp.lerp(introGateLookEnd, smoothstep01(u));
+    introGateTmp.copy(introGateLookEnd).lerp(sunOrigin, 0.22 * (1 - u));
     camera.lookAt(introGateTmp);
     camera.fov = THREE.MathUtils.lerp(20, endFov, u);
   }

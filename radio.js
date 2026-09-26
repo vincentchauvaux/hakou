@@ -219,6 +219,7 @@
         }
         wantAudible = true;
         lastAppliedKey = "";
+        document.body.dataset.streamListen = "1";
         delete document.body.dataset.streamCode;
         const form = $("stream-unlock");
         if (form) form.hidden = true;
@@ -699,11 +700,13 @@
     let twitchLogin = twitchLoginLocal || null;
 
     let listenRequired = false;
+    let canListen = false;
 
     try {
       const remote = await fetchStatusApi(statusApi);
       if (remote && remote.ok !== false) {
         source = remote.source || "status-api";
+        canListen = Boolean(remote.canListen || remote.listenOk);
         if (typeof remote.twitchLogin === "string" && remote.twitchLogin.trim()) {
           twitchLogin = remote.twitchLogin.trim().replace(/^@/, "").toLowerCase();
         }
@@ -721,6 +724,7 @@
           studioLive = true;
           twitchLive = false;
           listenRequired = false;
+          canListen = true;
         } else if (remote.studioLive && remote.listenRequired) {
           live = true;
           liveVideoId = null;
@@ -783,6 +787,7 @@
       twitchLive,
       twitchLogin,
       listenRequired,
+      canListen,
       source,
     };
   }
@@ -801,8 +806,15 @@
       typeof data.whepUrl === "string" && data.whepUrl.trim()
         ? data.whepUrl.trim()
         : whepUrlFromHls(hlsUrl);
-    const listenRequired = Boolean(data.listenRequired) && !hlsUrl;
     const studioLive = Boolean(data.studioLive) && Boolean(hlsUrl);
+    const listenRequired = Boolean(data.listenRequired) && !hlsUrl;
+    const canListen = Boolean(data.canListen) || studioLive;
+    document.body.dataset.streamListen = canListen ? "1" : "0";
+    if (listenRequired) {
+      document.body.dataset.streamCode = "ask";
+    } else if (canListen) {
+      delete document.body.dataset.streamCode;
+    }
     const twitchLogin =
       typeof data.twitchLogin === "string" && data.twitchLogin.trim()
         ? data.twitchLogin.trim().replace(/^@/, "").toLowerCase()
@@ -836,9 +848,7 @@
 
     const unlockForm = $("stream-unlock");
     if (unlockForm) {
-      const guest = document.body.dataset.streamAuth !== "ok";
-      const asking = document.body.dataset.streamCode === "ask";
-      unlockForm.hidden = guest ? !asking : !listenRequired;
+      unlockForm.hidden = !listenRequired;
     }
 
     const player = $("radio-player");
