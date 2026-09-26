@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { BELTS, STREAM_SECTION } from "./solar-belts.js";
-import { createSolarPlexus } from "./solar-plexus.js?v=20260927a";
+import { createSolarPlexus } from "./solar-plexus.js?v=20260927b";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
 const PLANET_GLB_V = "40";
@@ -119,7 +119,8 @@ const REST_ORBIT_DRIFT = 0.06 * PLANET_ORBIT_SPEED_MUL;
 /** Après fin de glide : rampe dérive orbitale uniquement (pas position / FOV). */
 const REST_SETTLE_MS = 280;
 
-/** Mode observation : orbite libre autour du centre planète + zoom + inertie. */
+/** Mode observation : orbite libre autour du centre planète + zoom + inertie.
+ *  Sens drag = agrippage du globe (le doigt emmène la surface), pas une orbite caméra. */
 const FOCUS_ORBIT_AZ_SENS = 0.008;
 const FOCUS_ORBIT_EL_SENS = 0.0065;
 const FOCUS_ORBIT_ELEV_MIN = -1.4;
@@ -236,7 +237,7 @@ const SECTION_FRAMING = [
     safeSide: "east",
   },
   {
-    /* §2 Stream / Uranus */
+    /* §2 Visuel / Uranus */
     planetSide: 1,
     distScale: 0.78,
     tangentMul: 0.88,
@@ -272,7 +273,7 @@ const SECTION_FRAMING = [
     safeSide: "west",
   },
   {
-    /* §4 Visuel / Jupiter */
+    /* §4 Stream / Jupiter */
     planetSide: -1,
     distScale: 0.92,
     tangentMul: 0.96,
@@ -1761,8 +1762,8 @@ function onOrbitPointerMove(event) {
   if (!orbit.modified) {
     captureOrbitFromCamera(idx);
   }
-  const azDelta = dx * FOCUS_ORBIT_AZ_SENS;
-  const elDelta = -dy * FOCUS_ORBIT_EL_SENS;
+  const azDelta = -dx * FOCUS_ORBIT_AZ_SENS;
+  const elDelta = dy * FOCUS_ORBIT_EL_SENS;
   orbit.azimuth += azDelta;
   orbit.elevation = clamp(
     orbit.elevation + elDelta,
@@ -4319,10 +4320,8 @@ function setUniverseVisible(visible) {
   });
   if (solarPlexus?.layers) {
     for (const layer of solarPlexus.layers) {
-      if (!flag) {
-        layer.rocks.visible = false;
-        layer.lines.visible = false;
-      }
+      layer.rocks.visible = flag;
+      layer.lines.visible = flag;
     }
   }
 }
@@ -4552,7 +4551,8 @@ function attachSolarPlexus() {
 
 function tickAttachedPlexus(elapsed, displaySection, glideState) {
   if (!solarPlexus) return;
-  const show = !introGateActive;
+  // Logo au repos : univers masqué. Dès le zoom (et partout après) : plexus visibles.
+  const show = !introGateActive || introGateZooming;
   for (const layer of solarPlexus.layers) {
     layer.rocks.visible = show;
     layer.lines.visible = show;
@@ -4644,7 +4644,7 @@ function fillStreamSpotCamera(elapsed) {
   if (streamTouchRight.lengthSq() < 1e-6) streamTouchRight.set(1, 0, 0);
   streamTouchRight.normalize();
   streamTouchUp.crossVectors(streamHeroDir, streamTouchRight).normalize();
-  // Même ciel qu’Uranus §2, un peu reculé : les ceintures / plexus restent dans le cadre.
+  // Même ciel que Jupiter §4, un peu reculé : les ceintures / plexus restent dans le cadre.
   const pull = 2.85;
   streamCamOut.position
     .copy(streamCamOut.lookAt)

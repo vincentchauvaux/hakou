@@ -18,9 +18,8 @@ function zeroVibe(into) {
   for (let i = 0; i < 8; i++) into.bands[i] = 0;
 }
 
-function initStreamScenes() {
+function initPulseAndScenes() {
   const root = document.getElementById("stream-scenes");
-  if (!root) return;
 
   let selected =
     BELTS.some((b) => b.id === sessionStorage.getItem(STORAGE_KEY))
@@ -37,6 +36,7 @@ function initStreamScenes() {
   const target = { bass: 0, mid: 0, high: 0, peak: 0, bands: vibe.bands.slice() };
 
   function render() {
+    if (!root) return;
     root.replaceChildren();
     for (const belt of BELTS) {
       const btn = document.createElement("button");
@@ -118,4 +118,4 @@ function initStreamScenes() {
   setInterval(pullPulse, 90);
 }
 
-initStreamScenes();
+initPulseAndScenes();

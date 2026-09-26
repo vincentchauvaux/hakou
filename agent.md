@@ -8,7 +8,7 @@
 - **Stream privé + code** (22 sept. 2026) : HLS / WHEP derrière cookie session (`hakou_media`) **ou** cookie code (`hakou_listen`). Plexus animés partout par le **pouls studio** (`GET /api/stream/pulse`, public). Son : Stream + code + **Écouter le live**. Chat : bouton **Get in** (même cookie). Studio : bloc **Code spectateurs** (saisir 4–8 car. + **Valider** / Nouveau / Copier) au-dessus d’**En direct** — le code n’est plus généré en silence au live. Rec / WHIP = allowlist.
 - **Enregistrement VPS** (31 août 2026, MAJ 20 sept. 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks MediaRecorder **pipés** dans ffmpeg → MP4 AAC **320 kb/s** + visuel canvas 1280×720. Badge **son d’onglet** vs **entrée audio**. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
 - **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live. **URI Google exacte** : `https://studio.hakou.be/api/studio/youtube/callback` (sinon `redirect_uri_mismatch`). Twitch = **clé de stream collée** (OAuth Helix optionnel). Relais ffmpeg RTSP local `:8554` → RTMP **libx264 GOP 2 s**. WHIP : H264 préféré + **VP8 en repli**. Restream refuse sans piste vidéo — la piste vient du **visualiseur** (`canvas.captureStream`), plus du partage d’écran. Comptes chiffrés `studio/data/live-accounts.bin`.
-- **Studio visuel / ceintures** (26–27 sept. 2026) : intro logo → Pluton = **droite figée**. Glides ellipse Soleil. **OVH Hub** allowlist. Son = profil **ou** code. Studio : bloc **Code spectateurs**. Plexus : danse **calme** (`MOTION` 0.34, moins de flicker / spin / caméra). Capture Mac : **Tout l’écran**. Cache site `?v=20260927a` / studio `?v=20260927a`.
+- **Studio visuel / ceintures** (26–27 sept. 2026) : intro logo → Pluton = **droite figée**. Glides ellipse Soleil. **Stream = Jupiter §4**, Visuel = Uranus §2. **OVH Hub** allowlist. Son = profil **ou** code. Plexus visibles partout. Mode Voir : drag = **agrippage** du globe. Cache site `?v=20260927d` / studio `?v=20260927a`.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET https://studio.hakou.be/api/stream/status` (alias `/api/radio/status`) — **public** (live / HLS / WHEP) ; `archives` seulement si session allowlist.
@@ -53,7 +53,7 @@
 
 - **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
 - **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
-- **Stream** : mix privé. Son = allowlist **ou** code (`data-stream-listen`). Chat = **Get in**. Invités sans code = lieux + plexus (mouvement doux). **OVH Hub** allowlist. Cache `?v=20260927a`.
+- **Stream** : mix privé. Son = allowlist **ou** code (`data-stream-listen`). Chat = **Get in**. Invités sans code = lieux + plexus (mouvement doux **sur tout le site**). Stream ancré **Jupiter**. **OVH Hub** allowlist. Cache `?v=20260927d`.
 
 
 
@@ -77,7 +77,7 @@
 
   - **Contenu d’abord** : si le panel actif déborde, molette / clavier / touch font défiler le contenu tant que `panelCanScrollBy` ; changement de section **uniquement au bord strict** (bas réel → suivant, haut réel → précédent) + charge bord anti-zap.
 
-- **Menu latéral** (`index.html`) : ordre DOM **Contact → … → Intro** (desktop : colonne droite, proche Soleil en haut). Les `data-zone-link` restent 0–8 alignés sur les sections. **Desktop** : `.side-nav` en `width: fit-content`, `align-items: flex-start`, `padding` uniforme (10px ; 8px si `≤920px` ou laptop compact), `overflow-y: hidden` (pas de réserve scrollbar) ; `.nav-link` padding carré (8px desktop, 6px resserré) ; liens `width: auto` (évite le vide à droite des libellés courts). Scroll nav seulement en **laptop compact** (`overflow-y: auto`, `scrollbar-gutter: stable`). Grand desktop (`min-height: 821px`) : nav sans scroll. **`syncUI` / `syncNavLinks`** : état actif via `Number(link.dataset.zoneLink)`, **pas** l’index DOM ; **un seul** lien actif à la fois (y compris en transit). Panels : `getPanelZone(panel)` via `data-zone`. Entrée **Radio** (`data-zone-link="2"`) entre Son et Video ; **Visuel** (`data-zone-link="4"`) ; **Sites** (6) et **Plugin** (7) entre 3D et Contact.
+- **Menu latéral** (`index.html`) : ordre DOM **Contact → … → Intro** (desktop : colonne droite, proche Soleil en haut). Les `data-zone-link` restent 0–8 alignés sur les sections. **Desktop** : `.side-nav` en `width: fit-content`, `align-items: flex-start`, `padding` uniforme (10px ; 8px si `≤920px` ou laptop compact), `overflow-y: hidden` (pas de réserve scrollbar) ; `.nav-link` padding carré (8px desktop, 6px resserré) ; liens `width: auto` (évite le vide à droite des libellés courts). Scroll nav seulement en **laptop compact** (`overflow-y: auto`, `scrollbar-gutter: stable`). Grand desktop (`min-height: 821px`) : nav sans scroll. **`syncUI` / `syncNavLinks`** : état actif via `Number(link.dataset.zoneLink)`, **pas** l’index DOM ; **un seul** lien actif à la fois (y compris en transit). Panels : `getPanelZone(panel)` via `data-zone`. Entrée **Stream** (`data-zone-link="4"`, Jupiter) entre 3D et Video ; **Visuel** (`data-zone-link="2"`, Uranus) entre Video et Son ; **Sites** (6) et **Plugin** (7) entre 3D et Contact.
 
 - **Mobile (`≤680px`)** : échelle solaire **horizontale en haut** (Neptune à gauche, Soleil implicite au-delà de Mercure à droite ; marqueur `left: calc((1 - var(--scale-progress)) * 100%)`, **8×8 px**, ticks **1×6 px**, jauge `.solar-scale-gauge` en `width`/`left` pendant le glide uniquement). Menu **barre pleine largeur en bas** : **scroll horizontal** (`overflow-x: auto`, `touch-action: pan-x`, pills `flex: 0 0 auto` **48×40**, icônes **22 px** — plus de `flex: 1` compressé) ; ordre visuel **Intro → … → Contact** via `order` CSS sur `data-zone-link` (0–8). Touch sur `.side-nav` **exclu** du gating section (`onTouchStart` / `onTouchMove`) pour ne pas bloquer le swipe latéral. **`syncNavLinks`** : `scrollIntoView({ inline: "center" })` de l’item actif si la barre déborde. **Nav icônes** (`index.html`) : chaque `.nav-link` contient `.nav-icon` (SVG stroke `currentColor`, `aria-hidden`) + `.nav-label` (texte masqué visuellement en mobile via clip sr-only, lu par lecteurs d’écran) ; desktop garde le libellé texte, `.nav-icon` en `display: none`. Pictos : Intro maison + planète, Son casque, **Radio ondes**, Video cadre + play, Visuel grille 2×2, 3D cube, **Sites** globe, Plugin prise, Contact enveloppe. Gutter panels : `--mobile-solar-top` / `--mobile-chrome-top` (rail + safe-area) / `--mobile-chrome-bottom`. **Chrome viewport** : `body::before` (fixe, `z-index: var(--chrome-mask-z)` = 2, dégradé opaque `--bg` **sans** `backdrop-filter` — évite le voile clair sous l’échelle au glide) et `body::after` (verre + blur pour la nav bas) masquent le `#overlay` qui translate ; `#solar-scale` et `.side-nav` en `z-index: var(--chrome-z)` = **20** (`isolation: isolate` sur la nav) — **au-dessus** des masques et du canvas/overlay. `--mobile-chrome-top` = `calc(var(--mobile-solar-top) + 22px)`. **`#three-canvas`** (tous viewports) : `pointer-events: none` par défaut ; `pointer-events: auto` seulement en `.orbit-grabbing` (évite que le canvas plein écran masque ou bloque la nav). **`main.js`** : si WebGL échoue (`initScene` → `false`), `body[data-webgl="unavailable"]` et boucle RAF sans `renderScene`. Scripts defer : `youtube-videos.js` / `radio.js` / `instagram-gallery.js` en try/catch (RSS / radio / galerie ne bloquent pas la page).
 
@@ -139,9 +139,11 @@
 
 - **Plugin (§7, orbite Terre GLB)** : `camDistMul` **1,00**, `distScale` **0,86**, `horizonSunBias` **0,30**, focale **50 mm**.
 
-- **Visuel (§4, Uranus)** : `camDistMul` **1,09**, `distScale` **1,00**, `horizonSunBias` **0,38**, `sunFrameBias` **0,56**, `orbitSunLift` **0,10**, focale **36 mm**.
+- **Visuel (§2, Uranus)** : cadrage héro Uranus (`SECTION_FRAMING[2]`).
 
-- **Radio (§2, Pluton)** : `camDistMul` **1,18**, `distScale` **1,04**, focale **28 mm**, teinte mauve.
+- **Stream (§4, Jupiter)** : live ancré sur Jupiter (ceinture principale + L4).
+
+- **Uranus (§2, Visuel)** : focale repos **28 mm** (`FOCAL_REST_MM[2]`).
 
 - **3D (section 5, Mars)** : `distScale` **1,07**, `camDistMul` **1,21**, `horizonSunBias` **0,30**, `sunFrameBias` **0,62**, `orbitSunLift` **0,12**, `SUN_MAX_ANGULAR` §5 **0,072 rad**. **`getSunHeat` = 0** — halos éteints, disque Soleil lisible (`SUN_REST_CORE_EMISSIVE`). **Priorité** : Mars proche + Soleil discret à l’horizon.
 
@@ -181,7 +183,7 @@
 
 - Pendant un saut long : orbites planètes continues ; accent / proximité visuelle via `getActiveSectionIndex` / `getSectionProximity` (from/to).
 
-- **Orbit manuelle au repos** : hors mode focus, le canvas reste en `pointer-events: none` (nav / panels prioritaires). **Mode observation planète** (`#planet-focus`) : clic **Voir** → blend `FOCUS_ENTER_MS` 900 ms du cadrage héro (planète en bord, regard horizon) vers une **vue face au globe** (lookAt centre, rayon ~`FOCUS_OBSERVE_RADIUS_MUL` × taille, élévation adoucie) — plus de téléport au premier drag ; **Retour** → blend `FOCUS_EXIT_MS` 680 ms vers héro. Spin gelé pendant grab. Exports `setPlanetFocusMode` / `isPlanetFocusMode` ; `setPlanetFocus` / `isPlanetFocusActive`.
+- **Orbit manuelle au repos** : hors mode focus, le canvas reste en `pointer-events: none` (nav / panels prioritaires). **Mode observation planète** (`#planet-focus`) : clic **Voir** → blend `FOCUS_ENTER_MS` 900 ms du cadrage héro (planète en bord, regard horizon) vers une **vue face au globe** (lookAt centre, rayon ~`FOCUS_OBSERVE_RADIUS_MUL` × taille, élévation adoucie) — plus de téléport au premier drag ; **Retour** → blend `FOCUS_EXIT_MS` 680 ms vers héro. Spin gelé pendant grab. **Drag = agrippage** : glisser à gauche tourne le globe avec le doigt (signe inversé vs orbite caméra). Exports `setPlanetFocusMode` / `isPlanetFocusMode` ; `setPlanetFocus` / `isPlanetFocusActive`.
 
 - **Orbit manuelle (détail technique)** : free-orbit si `sectionUserOrbit.modified` via `focusOrbitToPos`. Entrée : branche caméra dédiée `focusEnterActive` (pas de héro parasite) → `commitFocusEnterOrbit` ; sortie : `beginFocusExitBlend` + clear `modified`. Spins : `spinSpeedFromPeriodHours` × `PLANET_SPIN_MUL` ; Uranus / Vénus rétrogrades.
 
@@ -255,11 +257,11 @@
 
 | 1 | Son | Neptune (GLB) | light |
 
-| 2 | Stream (`#stream`) | Uranus (GLB) | mid |
+| 2 | Visuel | Uranus (GLB) | mid |
 
 | 3 | Video | Saturne (GLB + anneaux) | mid |
 
-| 4 | Visuel | Jupiter (GLB) | mid |
+| 4 | Stream (`#stream`) | Jupiter (GLB) | mid |
 
 | 5 | 3D | Mars (GLB) | mid |
 
@@ -327,11 +329,11 @@ Site statique sans backend dédié : SoundCloud / modales Instagram / Radio YouT
 
 | **Son** (`#son`) | [soundcloud.com/hakou](https://soundcloud.com/hakou) | Lecteur iframe via oEmbed SoundCloud — user API `4170372`, hauteur 450 (mode visuel). |
 
-| **Stream** (`#stream`, `data-zone="2"`) | Twitch + [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `radio.js` : badge **LIVE** / Hors antenne. Priorité studio → Twitch → YouTube. **Son** = allowlist **ou** code (`canListen` / `data-stream-listen`) — player + **Écouter le live**. **Chat** = **Get in** (`data-stream-in`). Spectateurs sans code : lieux + plexus (pouls public). Studio capture : Chrome **Tout l’écran** + audio système (une fenêtre Rekordbox n’envoie souvent pas le son sur Mac). |
+| **Stream** (`#stream`, `data-zone="4"`) | Twitch + [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | Ancré **Jupiter**. `radio.js` : badge **LIVE** / Hors antenne. Priorité studio → Twitch → YouTube. **Son** = allowlist **ou** code (`canListen` / `data-stream-listen`) — player + **Écouter le live**. **Chat** = **Get in** (`data-stream-in`). Spectateurs sans code : lieux + plexus (pouls public). Studio capture : Chrome **Tout l’écran** + audio système (une fenêtre Rekordbox n’envoie souvent pas le son sur Mac). |
 
 | **Video** (`#video`, `data-zone="3"`) | [@MrEtibaliomecus](https://www.youtube.com/@MrEtibaliomecus) | `youtube-videos.js` : au load, **repli immédiat** des `[data-video-id]` dans `index.html`, puis sync **flux RSS** `…/feeds/videos.xml?channel_id=UCmm1lsi4IS7RzwFFhIax3ug` — parse **12** entrées récentes, **shuffle → 2** affichées (chaque visite peut différer). CORS : proxy `api.allorigins.win` ; échec → HTML inchangé (`.video-grid--syncing`, opacité ~0,97, pas de flash). Logs `[Hakou YouTube]`. Vignettes `img.youtube.com/vi/…/hqdefault.jpg`, modal `#youtube-video-modal`. |
 
-| **Visuel** (`#visuel`, `data-zone="4"`) | [@hakoulik](https://www.instagram.com/hakoulik/) | **Build / MAJ** : `node scripts/refresh-instagram-posts.mjs` — Graph API (`.env`), scrape Node, `content/instagram-sources.txt`, thumbs `assets/instagram/thumb-*.jpg` → `content/instagram-posts.json`. **UI** : grille native **3×2 simple** (carrés uniformes, 3 colonnes) — miniatures `media/?size=l` ou `assets/instagram/` ; iframe **masquée** si grille native. **Navigateur** : JSON frais → grille immédiate ; sinon **3 s** découverte ; **≥ 1 shortcode** ; sinon repli iframe embed standard (~**480–520px** desktop, **400–480** laptop, **360–420** mobile). Modales post inchangées. Logs `[Hakou Instagram]`. Voir **Pourquoi pas 6 images auto**. |
+| **Visuel** (`#visuel`, `data-zone="2"`) | [@hakoulik](https://www.instagram.com/hakoulik/) | Ancré **Uranus**. **Build / MAJ** : `node scripts/refresh-instagram-posts.mjs` — Graph API (`.env`), scrape Node, `content/instagram-sources.txt`, thumbs `assets/instagram/thumb-*.jpg` → `content/instagram-posts.json`. **UI** : grille native **3×2 simple** (carrés uniformes, 3 colonnes) — miniatures `media/?size=l` ou `assets/instagram/` ; iframe **masquée** si grille native. **Navigateur** : JSON frais → grille immédiate ; sinon **3 s** découverte ; **≥ 1 shortcode** ; sinon repli iframe embed standard (~**480–520px** desktop, **400–480** laptop, **360–420** mobile). Modales post inchangées. Logs `[Hakou Instagram]`. Voir **Pourquoi pas 6 images auto**. |
 
 | **3D** (`#espace-3d`, `data-zone="5"`) | Preview locale | Carte `.card-3d` + cube CSS animé (`.mini-scene`, `.cube`, `.face`) — pas d’embed WebGL dans le panel. |
 

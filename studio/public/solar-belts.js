@@ -7,13 +7,13 @@ const neptuneR = 50 * ORBIT_SCALE;
 const plutoR = 58 * ORBIT_SCALE;
 const saturnSize = 0.5 * Math.pow(9.449, 0.48);
 
-export const STREAM_SECTION = 2;
+export const STREAM_SECTION = 4;
 
 export const BELTS = [
   {
     id: "main",
     label: "Principale",
-    hint: "Cadrage Stream — même ciel, Uranus devant.",
+    hint: "Cadrage Stream — même ciel, Jupiter devant.",
     inner: marsR + 1.2,
     outer: jupiterR - 1.4,
     thick: 1.45,
@@ -25,7 +25,7 @@ export const BELTS = [
     dust: 0xffcc99,
     view: {
       kind: "hero",
-      section: 0,
+      section: 4,
       az: 0,
       el: 0,
       distMul: 1,

@@ -142,6 +142,7 @@ export function createSolarPlexus(scene) {
         metalness: 0.12,
         emissive: belt.emissive,
         emissiveIntensity: 0.42,
+        fog: false,
       }),
       n
     );
@@ -163,8 +164,11 @@ export function createSolarPlexus(scene) {
         opacity: 0.22,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
+        fog: false,
       })
     );
+    rocks.frustumCulled = false;
+    lines.frustumCulled = false;
     scene.add(lines);
 
     return {
@@ -253,7 +257,9 @@ export function createSolarPlexus(scene) {
 
     for (const layer of layers) {
       const n = layer.belt.count;
-      layer.lines.material.opacity = 0.1 + mid * 0.28 + bass * 0.08 + high * 0.1;
+      layer.lines.material.opacity = hot
+        ? 0.18 + mid * 0.38 + bass * 0.12 + high * 0.16
+        : 0.12;
       layer.rocks.material.emissiveIntensity =
         0.2 +
         bass * 0.22 +
