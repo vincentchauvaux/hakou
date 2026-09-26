@@ -93,17 +93,17 @@ const zoneAccent = [
   0xc4b8a8, // Mercure
 ];
 
-/** Arches caméra entre sections — base lift/side, × distance dynamique (sin π·pathT) */
+/** Arches caméra entre sections — lift large (ellipse), side léger même signe (pas de S). */
 const JOURNEY_ARC = [
-  { lift: 0.13, side: 0.08 },
-  { lift: 0.11, side: -0.07 },
-  { lift: 0.105, side: 0.065 },
-  { lift: 0.1, side: 0.06 },
-  { lift: 0.09, side: -0.05 },
-  { lift: 0.085, side: 0.045 },
-  { lift: 0.082, side: -0.042 },
-  { lift: 0.078, side: 0.038 },
-  { lift: 0.075, side: 0.035 },
+  { lift: 0.22, side: 0.055 },
+  { lift: 0.2, side: 0.05 },
+  { lift: 0.19, side: 0.048 },
+  { lift: 0.18, side: 0.045 },
+  { lift: 0.17, side: 0.042 },
+  { lift: 0.16, side: 0.04 },
+  { lift: 0.15, side: 0.038 },
+  { lift: 0.145, side: 0.035 },
+  { lift: 0.14, side: 0.032 },
 ];
 
 /** Ambiance calme — orbites + dérive repos (ratios planètes inchangés). */
@@ -142,9 +142,9 @@ const FOCUS_EXIT_MS = 680;
 /** Distance d’observation (× rayon planète) — vue « face au globe » après Voir. */
 const FOCUS_OBSERVE_RADIUS_MUL = 3.75;
 /** Derniers % du leg : convergence douce vers le cadrage héro destination. */
-const GLIDE_HERO_BLEND_START = 0.88;
+const GLIDE_HERO_BLEND_START = 0.91;
 /** Trajectoire glide : mélange courbe Bézier + composante radiale Soleil. */
-const GLIDE_CURVE_RADIAL_BLEND = 0.28;
+const GLIDE_CURVE_RADIAL_BLEND = 0.58;
 /** Respiration Y désactivée (source de tremblement). */
 const GLIDE_RADIAL_Y_BREATHE = 0;
 /** Demi-angle max du disque Soleil (rad) — évite le Soleil plein écran hors Contact. */
@@ -2499,8 +2499,8 @@ function sampleRectilinearTransfer(
   computeArcControls(
     p0,
     p1,
-    arc.lift * distScale * 0.62,
-    arc.side * distScale * 1.05,
+    arc.lift * distScale * 0.88,
+    arc.side * distScale * 0.85,
     0.5,
     tmpCamP1,
     tmpCamP2
@@ -2513,9 +2513,9 @@ function sampleRectilinearTransfer(
   } else {
     tmpToSun.normalize();
   }
-  const outwardBulge = arc.lift * distScale * len * 0.26;
-  tmpCamP1.addScaledVector(tmpToSun, outwardBulge * 0.7);
-  tmpCamP2.addScaledVector(tmpToSun, outwardBulge * 0.48);
+  const outwardBulge = arc.lift * distScale * len * 0.42;
+  tmpCamP1.addScaledVector(tmpToSun, outwardBulge * 0.85);
+  tmpCamP2.addScaledVector(tmpToSun, outwardBulge * 0.72);
 
   cubicBezier3(p0, tmpCamP1, tmpCamP2, p1, t, out);
 
@@ -2599,16 +2599,17 @@ function computeArcControls(p0, p3, arcLift, arcSide, pathT, outP1, outP2) {
   const lift = arcLift * midArc;
   const side = arcSide * midArc;
 
+  // Même côté P1/P2 → ellipse souple, pas de S (le -side fermait trop fort).
   outP1
     .copy(p0)
-    .lerp(tmpMid, 0.28)
-    .addScaledVector(tmpUp, lift * len * 0.42)
-    .addScaledVector(tmpTangent, side * len * 0.32);
+    .lerp(tmpMid, 0.42)
+    .addScaledVector(tmpUp, lift * len * 0.58)
+    .addScaledVector(tmpTangent, side * len * 0.36);
   outP2
     .copy(p3)
-    .lerp(tmpMid, 0.28)
-    .addScaledVector(tmpUp, lift * len * 0.38)
-    .addScaledVector(tmpTangent, -side * len * 0.22);
+    .lerp(tmpMid, 0.42)
+    .addScaledVector(tmpUp, lift * len * 0.58)
+    .addScaledVector(tmpTangent, side * len * 0.36);
   return { outP1, outP2 };
 }
 
@@ -2646,18 +2647,18 @@ function computeDynamicArcControls(
     tmpToSun.normalize();
   }
 
-  const outwardBulge = arc.lift * distScale * midArc * len * 0.38;
+  const outwardBulge = arc.lift * distScale * midArc * len * 0.48;
   computeArcControls(
     p0,
     p3,
-    arc.lift * distScale * 0.24,
-    arc.side * distScale * 0.65,
+    arc.lift * distScale * 0.42,
+    arc.side * distScale * 0.55,
     pathT,
     outP1,
     outP2
   );
-  outP1.addScaledVector(tmpToSun, outwardBulge * 0.52);
-  outP2.addScaledVector(tmpToSun, outwardBulge * 0.36);
+  outP1.addScaledVector(tmpToSun, outwardBulge * 0.72);
+  outP2.addScaledVector(tmpToSun, outwardBulge * 0.62);
   return { outP1, outP2 };
 }
 
@@ -2672,8 +2673,8 @@ function computePlanetFocusWeight(legT) {
 }
 
 /**
- * Regard en transit : blend continu Soleil ↔ planète destination (pas de phases dures).
- * legT déjà eased via navigation + spacecraftEase.
+ * Regard en transit : principalement le Soleil le long de la courbe.
+ * Aux extrémités seulement, on reprend le cadrage héro (planète + horizon).
  */
 function computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySection, out, glideState) {
   if (fromIndex === toIndex) {
@@ -2681,12 +2682,24 @@ function computeSmoothFocusLookAt(legT, fromIndex, toIndex, elapsed, displaySect
     return out;
   }
 
-  // legT déjà eased (navigation) — lerp linéaire dans cet espace = courbe douce.
   const t = clamp(legT, 0, 1);
+  const leave = 1 - smoothstep01(t / 0.34);
+  const arrive = smoothstep01((t - 0.66) / 0.34);
+  const sunWeight = 1 - Math.max(leave, arrive);
+
+  tmpLookDest.copy(sunOrigin);
+  tmpLookDest.y += 0.42;
+
   out
     .copy(sectionCameras[fromIndex].lookAt)
     .lerp(sectionCameras[toIndex].lookAt, t);
+  out.lerp(tmpLookDest, sunWeight * 0.94);
   return out;
+}
+
+function smoothstep01(t) {
+  const x = clamp(t, 0, 1);
+  return x * x * (3 - 2 * x);
 }
 
 /** Focale pendant un leg : repos départ → repos arrivée (t=1 = FOCAL_REST_MM[to]). */
@@ -4464,12 +4477,26 @@ function updateIntroGate(elapsed) {
     camera.position.lerpVectors(introGateCamStart, introGateThrough, u);
     const lookU = easeInOutCubicLocal(Math.min(1, u * 2.4));
     introGateTmp.lerpVectors(introGateLookStart, introGateEye, lookU);
+    // Passage du trou : viser le Soleil (pas l'œil derrière après le plan).
+    const swing = easeInOutCubicLocal(clamp((u - 0.72) / 0.28, 0, 1));
+    introGateTmpB.copy(sunOrigin);
+    introGateTmpB.y += 0.45;
+    introGateTmp.lerp(introGateTmpB, swing);
     camera.lookAt(introGateTmp);
     camera.fov = THREE.MathUtils.lerp(38, 20, u);
   } else {
     const u = easeInOutCubicLocal((t - punch) / (1 - punch));
     camera.position.lerpVectors(introGateThrough, introGateCamEnd, u);
-    introGateTmp.lerpVectors(introGateEye, introGateLookEnd, u);
+    const bulge = Math.sin(Math.PI * u);
+    introGateTmpB.crossVectors(introGateDir, tmpUp);
+    if (introGateTmpB.lengthSq() > 1e-8) {
+      introGateTmpB.normalize();
+      camera.position.addScaledVector(introGateTmpB, bulge * 1.25);
+    }
+    camera.position.y += bulge * 0.48;
+    introGateTmp.copy(sunOrigin);
+    introGateTmp.y += 0.45;
+    introGateTmp.lerp(introGateLookEnd, smoothstep01(u));
     camera.lookAt(introGateTmp);
     camera.fov = THREE.MathUtils.lerp(20, endFov, u);
   }

@@ -8,7 +8,7 @@
 - **Stream privé + code** (22 sept. 2026) : HLS / WHEP derrière cookie session (`hakou_media`) **ou** cookie code (`hakou_listen`). Plexus animés partout par le **pouls studio** (`GET /api/stream/pulse`, public). Son : Stream + code + **Écouter le live**. Chat : bouton **Get in** (même cookie). Studio : **Brancher le mix** + vu-mètre (BlackHole / FLX4) puis **En direct**. Rec / WHIP = allowlist.
 - **Enregistrement VPS** (31 août 2026, MAJ 20 sept. 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks MediaRecorder **pipés** dans ffmpeg → MP4 AAC **320 kb/s** + visuel canvas 1280×720. Badge **son d’onglet** vs **entrée audio**. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
 - **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live. **URI Google exacte** : `https://studio.hakou.be/api/studio/youtube/callback` (sinon `redirect_uri_mismatch`). Twitch = **clé de stream collée** (OAuth Helix optionnel). Relais ffmpeg RTSP local `:8554` → RTMP **libx264 GOP 2 s**. WHIP : H264 préféré + **VP8 en repli**. Restream refuse sans piste vidéo — la piste vient du **visualiseur** (`canvas.captureStream`), plus du partage d’écran. Comptes chiffrés `studio/data/live-accounts.bin`.
-- **Studio visuel / ceintures** (23 sept. 2026) : intro = traversée d’œil. Invités Stream : **Get in + lieux**. Plexus **immobiles hors live** (idle coupé si pouls < 0,05 / pas frais). Cache `?v=20260923d`. **Publish** : GitHub Pages + VPS `stream-pulse.mjs` / `solar-plexus.js`.
+- **Studio visuel / ceintures** (26 sept. 2026) : intro = traversée d’œil puis **regard Soleil** (plus de demi-tour). Glides = **ellipses souples**, lookAt **Soleil** en transit. Invités Stream : **Get in + lieux**. Plexus **immobiles hors live**. Cache `?v=20260926a`.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET https://studio.hakou.be/api/stream/status` (alias `/api/radio/status`) — **public** (live / HLS / WHEP) ; `archives` seulement si session allowlist.
@@ -53,7 +53,7 @@
 
 - **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
 - **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
-- **Stream** : mix privé. Invités = lieux + **Get in**. Plexus figés hors live. Chat/player après Get in. Cache `?v=20260923d`.
+- **Stream** : mix privé. Invités = lieux + **Get in**. Plexus figés hors live. Chat/player après Get in. Cache `?v=20260926a`.
 
 
 
@@ -151,11 +151,11 @@
 
 - **FOV / focale** : `computeGlideFocalMm` — interpolation linéaire `FOCAL_REST_MM[from]` → `FOCAL_REST_MM[to]` sur tout le leg (`legT=1` = focale repos destination). `FOCAL_REST_MM` : `[42, 22, 28, 32, 36, 42, 46, 50, 52]`. Lissage exponentiel (`FOV_LERP_ALPHA`) **uniquement avant 90 % du leg** ; à partir de `GLIDE_FOV_DIRECT_START` (0,9) et en convergence héro : FOV appliqué **directement** (pas de rattrapage post-arrivée).
 
-- **Cadrage Soleil / horizon** : regard au-dessus du limbe + biais Soleil + **`getHeroLookSunLerp`** ; caméra via `sunFrameBias`, **`orbitSunLift`** (hors axe radial), `planetSide`. §7 : blend `lookSunLift` + lerp Contact. Halos (`haloPresence = sunHeat²`) quasi éteints avant §5 ; tone-mapping `1,02 + sunHeat × 0,22`.
+- **Cadrage Soleil / horizon** : regard au-dessus du limbe + biais Soleil + **`getHeroLookSunLerp`** au **repos** ; caméra via `sunFrameBias`, **`orbitSunLift`** (hors axe radial), `planetSide`. §7 : blend `lookSunLift` + lerp Contact. Halos (`haloPresence = sunHeat²`) quasi éteints avant §5 ; tone-mapping `1,02 + sunHeat × 0,22`.
 
-- **Convergence héro** (`GLIDE_HERO_BLEND_START` **0,92**) : derniers 8 % — position glide → cadrage héro destination (`computeSectionCamera`). `sampleRectilinearTransfer` force `p1` à `t=1`. Snap position (`posAlpha=1`) dès 92 % ; regard héro pur dès `GLIDE_LOOKAT_HERO_START` (0,95).
+- **Convergence héro** (`GLIDE_HERO_BLEND_START` **0,91**) : derniers 9 % — position glide → cadrage héro destination (`computeSectionCamera`). `sampleRectilinearTransfer` force `p1` à `t=1`. Snap position (`posAlpha=1`) dès 91 %.
 
-- **Glide radial** (`rectilinearPointRaw`) : interpolation **rayon depuis le Soleil** (slerp direction P0→P1), **up stable** (`GLIDE_TORUS_REVOLUTION` **0**, `GLIDE_RADIAL_Y_BREATHE` **0,004**). **+1 section** = rayon décroissant (vers Soleil) ; **−1** = rayon croissant. Pas de bosse / tore déroutants ; `enforceMinSunViewDistance` sur la trajectoire.
+- **Glide radial** (`rectilinearPointRaw` + Bézier) : interpolation **rayon depuis le Soleil** (slerp direction P0→P1), blend **`GLIDE_CURVE_RADIAL_BLEND` 0,58**. Arcs **même côté** (ellipse, plus de S P2 `-side`). Lift `JOURNEY_ARC` élargi. **+1 section** = rayon décroissant (vers Soleil) ; **−1** = rayon croissant. `enforceMinSunViewDistance` sur la trajectoire.
 
 - **Anneaux d'orbite 3D** : `TorusGeometry` (tube **0,01**), `MeshBasicMaterial` **#5a7098**, opacité **0,22** max, blending additif — pas de `depthWrite` ni `renderOrder`. Halo atmosphère : sphère ×1,14, shader rim `depthWrite: false`. **Revert juin 2026** (fix « torus caché par atmosphère ») : retrait occluder profondeur invisible, `depthWrite`/`renderOrder` planètes-halo-torus et anneaux Saturne `depthWrite` — assombrissait toute la scène ; luminosité = état d'avant. Compromis connu : le tore peut à nouveau dessiner devant le halo atmosphère (comme avant le fix).
 
@@ -173,9 +173,9 @@
 
 - **Repos après glide** (`REST_SETTLE_MS` 280 ms) : **rampe dérive orbitale uniquement** — plus de re-cadrage position / FOV / settle héro séparé (suppression du bloc `settleT` dans `sampleCameraState`).
 
-- Regard aux extrémités de leg : `lookAt` héro (`from`/`to`) ; milieu de leg : `computeSmoothFocusLookAt`.
+- Regard **repos** = cadrage héro (planète + horizon). **Transit** : `computeSmoothFocusLookAt` vise surtout le **Soleil** au milieu du leg (blend héro seulement aux extrémités) — plus de lerp lookAt planète→planète qui retournait la caméra.
 
-- Arcs Bézier (`computeDynamicArcControls`) conservés en fichier mais non utilisés pour le sampling caméra.
+- Trajectoire glide = Bézier `computeArcControls` (bosse **même côté**) + slerp radial autour du Soleil.
 
 - Dérive orbitale repos **~0,005 rad/s** (`0,06 × PLANET_ORBIT_SPEED_MUL`), lerp position doux.
 
@@ -399,7 +399,7 @@ Le site **ne peut pas** ouvrir `instagram.com/@hakoulik`, lire le DOM de la gril
 Au chargement, le site affiche une **porte d’entrée 3D** avant l’accueil Pluton (§0).
 
 - **Assets** : [`assets/logo-hakou.svg`](assets/logo-hakou.svg) chargé via **`SVGLoader`** → `ShapeGeometry` (fill blanc si classe CSS absente) ; fog intro densité 0 ; `material.fog = false` ; plexus masqués pendant le gate. PNG `logo-hakou.png` conservé en secours. **Favicon** : [`assets/favicon.svg`](assets/favicon.svg) (logo blanc, fond transparent) dans l’onglet navigateur. **Icône d’app** (écran d’accueil / PWA) : même logo en PNG opaque [`assets/apple-touch-icon.png`](assets/apple-touch-icon.png) 180×180 + [`assets/icon-192.png`](assets/icon-192.png) / [`assets/icon-512.png`](assets/icon-512.png) via [`site.webmanifest`](site.webmanifest) (iOS n’accepte pas le SVG en `apple-touch-icon`). Branché dans `index.html` ; pages `legal/` et studio : SVG + PNG 180. Anciennes nébuleuses `assets/nebula/*.png` non utilisées (retirées de l’intro).
-- **Scène** (`scene3d.js`) : groupe `introGate` — logo SVG vectoriel (stable, **sans bounce**). Au repos : fond `#000` + **univers masqué**, cadrage **logo entier**. Clic → **traversée de l’œil droit** (~5,2 s, `punch` 0,7) : lookAt glisse vers le trou, caméra passe dedans, logo fade **avant** le plan (`t` 0,38–0,58) + `FrontSide` (pas de verso). **Pas** de scale/rotation inversée.
+- **Scène** (`scene3d.js`) : groupe `introGate` — logo SVG vectoriel (stable, **sans bounce**). Au repos : fond `#000` + **univers masqué**, cadrage **logo entier**. Clic → **traversée de l’œil droit** (~5,2 s, `punch` 0,7) : lookAt glisse vers le trou, caméra passe dedans, logo fade **avant** le plan (`t` 0,38–0,58) + `FrontSide` (pas de verso). **Après l’œil** : regard vers le **Soleil** (jamais l’œil derrière) puis courbe douce vers le cadrage §0. **Pas** de scale/rotation inversée.
 - **Import ES unique** : `main.js` / `navigation.js` / `intro-gate.js` / `stream-scenes.js` importent **`./scene3d.js` sans query string**. Un `?v=` sur l’import crée une **2ᵉ instance** du module (état `introGateActive` / `scene` désynchronisés → logo intro invisible, univers visible pendant le gate). Cache-bust = uniquement l’entrée `index.html` → `main.js?v=…`.
 - **UI** (`#intro-gate`) : hit-area `#intro-enter` centrée sur le logo 3D (~52 % viewport haut, sans halo / outline / tap-highlight au clic) ; copy `.intro-copy` **sous le bord bas du logo** : wordmark **hakou** (`.intro-brand`, police **Orbitron**, tracking large, sans `.be`). **Pas** de hint « Cliquer sur le logo ». Bouton `#intro-login` haut-droite. **`.chrome-actions`** bas-gauche (visible si `data-intro="done"`) : `#chrome-login` « Se connecter » (GIS → studio allowlist ; label « Studio » si déjà connecté) ; `#planet-focus` → mode observation planète (voir Navigation / Scène 3D).
 - **État** : `body[data-intro="pending"|"playing"|"done"]` masque nav / échelle / overlay pendant pending+playing. `sessionStorage` clé `hakou-intro-done` : skip au refresh de session. `setNavigationLocked(true)` bloque molette / clavier / touch / menu. **Menu latéral** : scrollbar masquée aussi en laptop compact (`scrollbar-width: none` / `::-webkit-scrollbar`).
