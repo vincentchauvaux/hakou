@@ -119,8 +119,11 @@ function layerAnchor(belt, jupiter, saturn) {
   return { x: Math.cos(a) * r, y: 0, z: Math.sin(a) * r };
 }
 
+/** Déplacements / spins : 1 = ancien, plus bas = plus calme. */
+const MOTION = 0.34;
+
 /**
- * Les 4 plexus, toujours visibles, réactifs au son.
+ * Les 4 plexus, toujours visibles, réactifs au son — danse douce, pas explosive.
  * @param {import("three").Scene} scene
  */
 export function createSolarPlexus(scene) {
@@ -243,16 +246,19 @@ export function createSolarPlexus(scene) {
     const ex = earth?.position?.x || 0;
     const ey = earth?.position?.y || 0;
     const ez = earth?.position?.z || 0;
-    const wellX = pointer.x * 8;
-    const wellY = pointer.y * 4.5;
-    const noiseScale = 0.18 + mid * 0.2;
-    const noiseTravel = elapsed * (0.22 + mid * 1.1 + high * 0.8);
+    const wellX = pointer.x * 5;
+    const wellY = pointer.y * 2.8;
+    const noiseScale = 0.14 + mid * 0.08;
+    const noiseTravel = elapsed * (0.1 + mid * 0.28 + high * 0.16);
 
     for (const layer of layers) {
       const n = layer.belt.count;
-      layer.lines.material.opacity = 0.1 + mid * 0.72 + bass * 0.18 + high * 0.28;
+      layer.lines.material.opacity = 0.1 + mid * 0.28 + bass * 0.08 + high * 0.1;
       layer.rocks.material.emissiveIntensity =
-        0.22 + bass * 0.55 + mid * 0.35 + high * (0.9 + 0.8 * (0.5 + 0.5 * Math.sin(elapsed * 14)));
+        0.2 +
+        bass * 0.22 +
+        mid * 0.12 +
+        high * (0.22 + 0.12 * (0.5 + 0.5 * Math.sin(elapsed * 3.2)));
       for (let i = 0; i < n; i++) {
         const bx = layer.base[i * 3];
         const by = layer.base[i * 3 + 1];
@@ -274,34 +280,36 @@ export function createSolarPlexus(scene) {
           bz * noiseScale + nz * noiseTravel
         );
 
-        const bassWave = Math.sin(r * 0.26 - elapsed * (0.5 + bass * 2.6));
-        const bassPush = bass * (2.8 + 3.6 * (0.5 + 0.5 * bassWave));
+        const bassWave = Math.sin(r * 0.22 - elapsed * (0.22 + bass * 0.85));
+        const bassPush = bass * (0.85 + 0.7 * (0.5 + 0.5 * bassWave)) * MOTION;
 
-        const midAng = elapsed * (0.9 + mid * 3.6) + i * 0.11;
-        const midAmt = mid * 3.1;
-        const midX = tx * Math.sin(midAng) * midAmt + field.x * mid * 1.25;
-        const midY = Math.cos(midAng * 0.85) * mid * 1.55;
-        const midZ = tz * Math.sin(midAng) * midAmt + field.z * mid * 1.25;
+        const midAng = elapsed * (0.32 + mid * 1.05) + i * 0.11;
+        const midAmt = mid * 1.05 * MOTION;
+        const midX = tx * Math.sin(midAng) * midAmt + field.x * mid * 0.42 * MOTION;
+        const midY = Math.cos(midAng * 0.85) * mid * 0.55 * MOTION;
+        const midZ = tz * Math.sin(midAng) * midAmt + field.z * mid * 0.42 * MOTION;
 
-        const flicker = hash(i * 13.7 + Math.floor(elapsed * 22)) - 0.5;
-        const highAmt = high * 1.35;
-        const highX = field.x * highAmt * 1.9 + nx * flicker * high * 1.1;
-        const highY = field.y * highAmt * 1.9 + flicker * high * 0.8;
-        const highZ = field.z * highAmt * 1.9 + nz * flicker * high * 1.1;
+        const flicker = hash(i * 13.7 + Math.floor(elapsed * 7)) - 0.5;
+        const highAmt = high * 0.42 * MOTION;
+        const highX = field.x * highAmt * 1.15 + nx * flicker * high * 0.28 * MOTION;
+        const highY = field.y * highAmt * 1.15 + flicker * high * 0.18 * MOTION;
+        const highZ = field.z * highAmt * 1.15 + nz * flicker * high * 0.28 * MOTION;
 
-        const idle = hot ? Math.sin(elapsed * 0.28 + i * 0.17) * 0.12 : 0;
-        const pull = hot && pointer.down ? 0.42 : hot ? 0.16 : 0;
+        const idle = hot ? Math.sin(elapsed * 0.18 + i * 0.17) * 0.05 : 0;
+        const pull = hot && pointer.down ? 0.22 : hot ? 0.08 : 0;
         dummy.position.set(
-          bx + nx * (idle + bassPush) + midX + highX + (wellX - bx) * pull * 0.016,
-          by + ny * (idle + bassPush) + midY + highY + (wellY - by) * pull * 0.016,
+          bx + nx * (idle + bassPush) + midX + highX + (wellX - bx) * pull * 0.01,
+          by + ny * (idle + bassPush) + midY + highY + (wellY - by) * pull * 0.01,
           bz + nz * (idle + bassPush) + midZ + highZ
         );
         dummy.rotation.set(
-          elapsed * layer.spins[i] * (hot ? 0.22 + high * 1.1 + peak * 0.2 : 0.03),
-          elapsed * layer.spins[i] * (hot ? 0.55 + mid * 0.9 + bass * 0.25 : 0.05),
+          elapsed * layer.spins[i] * (hot ? 0.08 + high * 0.28 + peak * 0.06 : 0.02),
+          elapsed * layer.spins[i] * (hot ? 0.16 + mid * 0.22 + bass * 0.08 : 0.03),
           i * 0.3
         );
-        dummy.scale.setScalar(layer.scales[i] * (1 + bass * 0.95 + mid * 0.22 + high * 0.12));
+        dummy.scale.setScalar(
+          layer.scales[i] * (1 + bass * 0.28 + mid * 0.08 + high * 0.04)
+        );
         dummy.updateMatrix();
         layer.rocks.setMatrixAt(i, dummy.matrix);
       }

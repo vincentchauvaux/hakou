@@ -377,8 +377,12 @@ app.get("/api/studio/listen-code", (req, res) => {
 
 app.post("/api/studio/listen-code", (req, res) => {
   if (!requireSession(req, res)) return;
-  const code = listenCodes.issue();
-  res.json({ ok: true, code });
+  try {
+    const code = listenCodes.issue(req.body?.code);
+    res.json({ ok: true, code });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message || "Code invalide." });
+  }
 });
 
 app.delete("/api/studio/listen-code", (req, res) => {

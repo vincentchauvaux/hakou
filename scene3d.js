@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { BELTS, STREAM_SECTION } from "./solar-belts.js";
-import { createSolarPlexus } from "./solar-plexus.js";
+import { createSolarPlexus } from "./solar-plexus.js?v=20260927a";
 
 /** Cache-bust assets/planets/*.glb (WebP 2K, sans meshopt). */
 const PLANET_GLB_V = "40";
@@ -4423,29 +4423,18 @@ function updateIntroGate(elapsed) {
   }
 
   const t = clamp((performance.now() - introGateZoomStartMs) / INTRO_GATE_MS, 0, 1);
-  const punch = 0.7;
+  const u = easeInOutCubicLocal(t);
   const endFov = focalMmToFov(FOCAL_REST_MM[0]);
 
-  syncIntroZoomDestination(elapsed);
+  // Une droite figée logo → cadrage Pluton (pas de waypoint œil, pas de cible qui bouge).
+  camera.position.lerpVectors(introGateCamStart, introGateCamEnd, u);
 
-  if (t <= punch) {
-    const u = easeInOutCubicLocal(t / punch);
-    camera.position.lerpVectors(introGateCamStart, introGateThrough, u);
-    const lookU = easeInOutCubicLocal(Math.min(1, u * 2.4));
-    introGateTmp.lerpVectors(introGateLookStart, introGateEye, lookU);
-    // Après le plan du logo : regard AVANT (limbe/Soleil), jamais l'œil derrière.
-    const pass = easeInOutCubicLocal(clamp((u - 0.84) / 0.16, 0, 1));
-    introGateTmpB.copy(introGateLookEnd).lerp(sunOrigin, 0.22);
-    introGateTmp.lerp(introGateTmpB, pass);
-    camera.lookAt(introGateTmp);
-    camera.fov = THREE.MathUtils.lerp(38, 20, u);
-  } else {
-    const u = easeInOutCubicLocal((t - punch) / (1 - punch));
-    camera.position.lerpVectors(introGateThrough, introGateCamEnd, u);
-    introGateTmp.copy(introGateLookEnd).lerp(sunOrigin, 0.22 * (1 - u));
-    camera.lookAt(introGateTmp);
-    camera.fov = THREE.MathUtils.lerp(20, endFov, u);
-  }
+  const lookAim = easeInOutCubicLocal(Math.min(1, t / 0.36));
+  introGateTmp.lerpVectors(introGateLookStart, introGateEye, lookAim);
+  const toPlanet = easeInOutCubicLocal(clamp((t - 0.4) / 0.22, 0, 1));
+  introGateTmp.lerp(introGateLookEnd, toPlanet);
+  camera.lookAt(introGateTmp);
+  camera.fov = THREE.MathUtils.lerp(38, endFov, u);
   camera.updateProjectionMatrix();
   smoothedCamPos.copy(camera.position);
 
@@ -4512,7 +4501,7 @@ export function startIntroGateZoom(onComplete) {
   const elapsed = clock?.getElapsedTime() ?? 0;
   layoutIntroGate(elapsed);
   setUniverseVisible(true);
-  // Départ figé ; l’arrivée suit §0 live pendant tout le zoom
+  // Départ et arrivée figés — droite logo → Pluton (l’arrivée live fermait trop).
   introGateCamStart.copy(camera.position);
   syncIntroZoomDestination(elapsed);
   introGateZooming = true;
@@ -4697,13 +4686,13 @@ function applyStreamSpotCamera(elapsed) {
       );
     }
   }
-  const throb = audioVibe.bass * 0.9 + audioVibe.peak * 0.55;
+  const throb = audioVibe.bass * 0.32 + audioVibe.peak * 0.18;
   if (throb > 0.01 && streamTouchFwd.lengthSq() > 1e-6) {
     camera.position.addScaledVector(
       streamTouchFwd,
-      Math.sin(elapsed * 7.2) * throb * 0.28
+      Math.sin(elapsed * 3.1) * throb * 0.1
     );
-    camera.position.y += Math.sin(elapsed * 5.1) * audioVibe.mid * 0.12;
+    camera.position.y += Math.sin(elapsed * 2.4) * audioVibe.mid * 0.04;
   }
   if (fog) {
     fog.density = 0.005 + STREAM_SECTION * 0.00085 + audioVibe.bass * 0.0045;

@@ -29,6 +29,9 @@ const destFieldset = document.getElementById("studio-dest");
 const listenCodeWrap = document.getElementById("studio-listen-code");
 const listenCodeValue = document.getElementById("studio-listen-code-value");
 const listenCodeCopy = document.getElementById("studio-listen-copy");
+const listenCodeInput = document.getElementById("studio-listen-code-input");
+const listenCodeApply = document.getElementById("studio-listen-apply");
+const listenCodeGen = document.getElementById("studio-listen-gen");
 const ytStatusEl = document.getElementById("studio-yt-status");
 const twStatusEl = document.getElementById("studio-tw-status");
 const ytConnect = document.getElementById("studio-yt-connect");
@@ -143,7 +146,7 @@ function renderBelts() {
 
 async function bootStudio3d() {
   try {
-    const { initStudioViz } = await import("./studio-viz.js?v=20260920ac");
+    const { initStudioViz } = await import("./studio-viz.js?v=20260927a");
     studioViz = await initStudioViz(document.getElementById("studio-space"));
     studioViz?.setBelt(selectedBeltId);
   } catch (err) {
@@ -417,20 +420,18 @@ function pauseSupported() {
 }
 
 function showListenCode(code) {
-  if (!listenCodeWrap) return;
-  if (code) {
-    listenCodeWrap.hidden = false;
-    if (listenCodeValue) listenCodeValue.textContent = code;
-  } else {
-    listenCodeWrap.hidden = true;
-    if (listenCodeValue) listenCodeValue.textContent = "";
-  }
+  const active = String(code || "").trim();
+  if (listenCodeValue) listenCodeValue.textContent = active || "—";
+  if (listenCodeInput && active) listenCodeInput.value = active;
+  listenCodeWrap?.classList.toggle("is-on", Boolean(active));
 }
 
-async function issueListenCode() {
+async function issueListenCode(preferred) {
   const res = await fetch("./api/studio/listen-code", {
     method: "POST",
     credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(preferred ? { code: preferred } : {}),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || !body.code) {
@@ -438,6 +439,19 @@ async function issueListenCode() {
   }
   showListenCode(body.code);
   return body.code;
+}
+
+async function loadListenCode() {
+  try {
+    const res = await fetch("./api/studio/listen-code", {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.code) showListenCode(body.code);
+  } catch {
+    /* ignore */
+  }
 }
 
 async function clearListenCode() {
@@ -1249,9 +1263,13 @@ async function startStream() {
     await publishWhip(localStream, ingest);
     streaming = true;
     startPulse();
-    let code = "";
+    let code =
+      listenCodeValue?.textContent?.trim() &&
+      listenCodeValue.textContent.trim() !== "—"
+        ? listenCodeValue.textContent.trim()
+        : String(listenCodeInput?.value || "").trim();
     try {
-      code = await issueListenCode();
+      code = await issueListenCode(code || undefined);
     } catch (err) {
       console.warn("[Hakou Studio] listen-code", err);
     }
@@ -1350,9 +1368,25 @@ async function stopAll() {
   releaseCapture();
 }
 
+listenCodeApply?.addEventListener("click", () => {
+  const typed = String(listenCodeInput?.value || "").trim();
+  issueListenCode(typed || undefined)
+    .then((code) => setStatus(`Code spectateurs validé : ${code}`))
+    .catch((err) => setStatus(err?.message || "Code non validé."));
+});
+listenCodeGen?.addEventListener("click", () => {
+  issueListenCode()
+    .then((code) => setStatus(`Nouveau code : ${code}`))
+    .catch((err) => setStatus(err?.message || "Code non créé."));
+});
+listenCodeInput?.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Enter") return;
+  ev.preventDefault();
+  listenCodeApply?.click();
+});
 listenCodeCopy?.addEventListener("click", async () => {
   const code = listenCodeValue?.textContent?.trim();
-  if (!code) return;
+  if (!code || code === "—") return;
   try {
     await navigator.clipboard.writeText(code);
     setStatus(`Code copié : ${code}`);
@@ -1503,6 +1537,7 @@ loadMe().catch((err) => {
   console.warn(err);
   setStatus("Session illisible — reconnecte-toi depuis hakou.be.");
 });
+loadListenCode();
 loadRecordings().catch(() => {});
 loadDestinations()
   .then(() => consumeAccountsQuery())

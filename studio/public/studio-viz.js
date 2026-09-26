@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { BELTS } from "./studio-belts.js?v=20260920ac";
-import { createSolarSystem } from "./studio-system.js?v=20260920ac";
+import { createSolarSystem } from "./studio-system.js?v=20260927a";
 
 export { BELTS };
 
@@ -199,7 +199,7 @@ export async function initStudioViz(canvas) {
       }
     }
 
-    const shake = audio.peak * 0.14 + audio.bass * 0.08;
+    const shake = audio.peak * 0.045 + audio.bass * 0.025;
     camGoal.x += Math.sin(t * 7) * shake;
     if (snapCam) {
       camera.position.copy(camGoal);

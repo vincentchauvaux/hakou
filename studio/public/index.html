@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./studio.css?v=20260926c" />
+    <link rel="stylesheet" href="./studio.css?v=20260927a" />
     <script type="importmap">
       {
         "imports": {
@@ -92,6 +92,35 @@
         </div>
       </div>
 
+      <section class="studio-listen-code" id="studio-listen-code" aria-label="Code spectateurs">
+        <p class="studio-listen-code__label">Code spectateurs</p>
+        <p class="studio-listen-code__hint">
+          Valide un code ici. Les viewers l’entrent sur hakou.be → Stream pour écouter.
+        </p>
+        <div class="studio-listen-code__row">
+          <label class="visually-hidden" for="studio-listen-code-input">Code</label>
+          <input
+            id="studio-listen-code-input"
+            name="listenCode"
+            maxlength="8"
+            autocomplete="off"
+            spellcheck="false"
+            autocapitalize="characters"
+            placeholder="ABC123"
+          />
+          <button type="button" id="studio-listen-apply" class="studio-btn studio-btn--primary">
+            Valider
+          </button>
+          <button type="button" id="studio-listen-gen" class="studio-btn studio-btn--ghost">
+            Nouveau
+          </button>
+          <button type="button" id="studio-listen-copy" class="studio-btn studio-btn--ghost">
+            Copier
+          </button>
+        </div>
+        <p id="studio-listen-code-value" class="studio-listen-code__value">—</p>
+      </section>
+
       <div class="studio-actions">
         <button type="button" id="studio-start" class="studio-btn studio-btn--primary">
           En direct
@@ -103,14 +132,7 @@
           Rec
         </button>
       </div>
-          <p id="studio-status" class="muted" role="status"></p>
-      <div id="studio-listen-code" class="studio-listen-code" hidden>
-        <p class="studio-listen-code__label">Code spectateurs</p>
-        <p id="studio-listen-code-value" class="studio-listen-code__value"></p>
-        <button type="button" id="studio-listen-copy" class="studio-btn studio-btn--ghost">
-          Copier
-        </button>
-      </div>
+      <p id="studio-status" class="muted" role="status"></p>
 
       <details class="studio-fold" id="studio-plus">
         <summary>YouTube, Twitch, extra</summary>
@@ -190,6 +212,6 @@
       </details>
     </main>
 
-    <script type="module" src="./studio.js?v=20260926c"></script>
+    <script type="module" src="./studio.js?v=20260927a"></script>
   </body>
 </html>
