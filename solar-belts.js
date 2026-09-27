@@ -47,9 +47,9 @@ export const BELTS = [
     view: {
       kind: "hero",
       section: 4,
-      az: 0.42,
-      el: 0.06,
-      distMul: 1.08,
+      az: 0.78,
+      el: 0.1,
+      distMul: 1.22,
     },
   },
   {

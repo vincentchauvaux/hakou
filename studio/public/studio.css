@@ -886,3 +886,139 @@ body {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+.studio-dock__chrome {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.55rem;
+}
+
+.studio-dock__chrome-title {
+  margin: 0;
+  flex: 1 1 auto;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.studio-hud-code {
+  display: none;
+  margin: 0;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid rgba(90, 220, 160, 0.4);
+  border-radius: 999px;
+  background: rgba(8, 22, 18, 0.55);
+  color: #d7ffe8;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.studio-hud-code[hidden] {
+  display: none !important;
+}
+
+.studio-hud-toggle {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.studio-hud-toggle:hover,
+.studio-hud-toggle:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 55%, white);
+}
+
+body.studio-stowed {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  padding: 0;
+}
+
+body.studio-stowed .studio-top,
+body.studio-stowed .studio-stage {
+  display: none;
+}
+
+body.studio-stowed .studio-dock {
+  position: fixed;
+  z-index: 6;
+  right: 12px;
+  bottom: 12px;
+  left: auto;
+  top: auto;
+  width: min(300px, calc(100vw - 24px));
+  max-height: min(52vh, 420px);
+  overflow: auto;
+  margin: 0;
+  padding: 0.55rem 0.6rem 0.65rem;
+}
+
+body.studio-stowed .studio-dock__chrome {
+  margin-bottom: 0.4rem;
+}
+
+body.studio-stowed .studio-dock__chrome-title {
+  display: none;
+}
+
+body.studio-stowed .studio-hud-code:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+}
+
+body.studio-stowed .studio-listen-code,
+body.studio-stowed .studio-fold,
+body.studio-stowed #studio-status,
+body.studio-stowed .studio-mix .studio-dest__hint {
+  display: none !important;
+}
+
+body.studio-stowed .studio-belts {
+  gap: 0.28rem;
+  margin-bottom: 0.4rem;
+}
+
+body.studio-stowed .studio-belt {
+  min-height: 30px;
+  padding: 0.22rem 0.2rem;
+}
+
+body.studio-stowed .studio-belt__label {
+  font-size: 0.72rem;
+}
+
+body.studio-stowed .studio-mix {
+  margin-bottom: 0.4rem;
+}
+
+body.studio-stowed .studio-meter__label {
+  display: none;
+}
+
+body.studio-stowed .studio-btn {
+  min-height: 34px;
+  padding: 0.32rem 0.7rem;
+  font-size: 0.8rem;
+}
+
+body.studio-stowed .studio-actions {
+  gap: 0.35rem;
+}
+
+body.studio-stowed .studio-transport {
+  margin: 0.35rem 0;
+}

@@ -32,6 +32,9 @@ const listenCodeCopy = document.getElementById("studio-listen-copy");
 const listenCodeInput = document.getElementById("studio-listen-code-input");
 const listenCodeApply = document.getElementById("studio-listen-apply");
 const listenCodeGen = document.getElementById("studio-listen-gen");
+const hudToggle = document.getElementById("studio-hud-toggle");
+const hudCode = document.getElementById("studio-hud-code");
+const HUD_KEY = "hakou-studio-hud";
 const ytStatusEl = document.getElementById("studio-yt-status");
 const twStatusEl = document.getElementById("studio-tw-status");
 const ytConnect = document.getElementById("studio-yt-connect");
@@ -419,11 +422,33 @@ function pauseSupported() {
   return Boolean(mediaRecorder && typeof mediaRecorder.pause === "function");
 }
 
+function setStudioHudStowed(stowed) {
+  const on = Boolean(stowed);
+  document.body.classList.toggle("studio-stowed", on);
+  try {
+    sessionStorage.setItem(HUD_KEY, on ? "stowed" : "open");
+  } catch {
+    /* ignore */
+  }
+  if (hudToggle) {
+    hudToggle.setAttribute("aria-expanded", on ? "false" : "true");
+    hudToggle.textContent = on ? "Déplier" : "Ranger";
+  }
+}
+
+function syncHudCode(code) {
+  const active = String(code || "").trim();
+  if (!hudCode) return;
+  hudCode.hidden = !active;
+  hudCode.textContent = active;
+}
+
 function showListenCode(code) {
   const active = String(code || "").trim();
   if (listenCodeValue) listenCodeValue.textContent = active || "—";
   if (listenCodeInput && active) listenCodeInput.value = active;
   listenCodeWrap?.classList.toggle("is-on", Boolean(active));
+  syncHudCode(active);
 }
 
 async function issueListenCode(preferred) {
@@ -448,7 +473,16 @@ async function loadListenCode() {
       cache: "no-store",
     });
     const body = await res.json().catch(() => ({}));
-    if (res.ok && body.code) showListenCode(body.code);
+    if (res.ok && body.code) {
+      showListenCode(body.code);
+      let pref = "";
+      try {
+        pref = sessionStorage.getItem(HUD_KEY) || "";
+      } catch {
+        pref = "";
+      }
+      if (pref !== "open") setStudioHudStowed(true);
+    }
   } catch {
     /* ignore */
   }
@@ -1270,6 +1304,7 @@ async function startStream() {
         : String(listenCodeInput?.value || "").trim();
     try {
       code = await issueListenCode(code || undefined);
+      setStudioHudStowed(true);
     } catch (err) {
       console.warn("[Hakou Studio] listen-code", err);
     }
@@ -1371,12 +1406,24 @@ async function stopAll() {
 listenCodeApply?.addEventListener("click", () => {
   const typed = String(listenCodeInput?.value || "").trim();
   issueListenCode(typed || undefined)
-    .then((code) => setStatus(`Code spectateurs validé : ${code}`))
+    .then((code) => {
+      setStatus(`Code spectateurs validé : ${code}`);
+      setStudioHudStowed(true);
+    })
     .catch((err) => setStatus(err?.message || "Code non validé."));
+});
+hudToggle?.addEventListener("click", () => {
+  setStudioHudStowed(!document.body.classList.contains("studio-stowed"));
+});
+hudCode?.addEventListener("click", () => {
+  listenCodeCopy?.click();
 });
 listenCodeGen?.addEventListener("click", () => {
   issueListenCode()
-    .then((code) => setStatus(`Nouveau code : ${code}`))
+    .then((code) => {
+      setStatus(`Nouveau code : ${code}`);
+      setStudioHudStowed(true);
+    })
     .catch((err) => setStatus(err?.message || "Code non créé."));
 });
 listenCodeInput?.addEventListener("keydown", (ev) => {

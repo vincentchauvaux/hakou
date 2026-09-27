@@ -12,7 +12,7 @@
       href="https://fonts.googleapis.com/css2?family=Italiana&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./studio.css?v=20260927a" />
+    <link rel="stylesheet" href="./studio.css?v=20260927g" />
     <script type="importmap">
       {
         "imports": {
@@ -41,6 +41,25 @@
     <div class="studio-stage" aria-hidden="true"></div>
 
     <main class="studio-dock">
+      <div class="studio-dock__chrome">
+        <p class="studio-dock__chrome-title">Cockpit</p>
+        <button
+          type="button"
+          id="studio-hud-code"
+          class="studio-hud-code"
+          hidden
+          title="Copier le code"
+        ></button>
+        <button
+          type="button"
+          id="studio-hud-toggle"
+          class="studio-hud-toggle"
+          aria-expanded="true"
+          aria-controls="studio-listen-code"
+        >
+          Ranger
+        </button>
+      </div>
       <div
         class="studio-belts"
         id="studio-belts"
@@ -212,6 +231,6 @@
       </details>
     </main>
 
-    <script type="module" src="./studio.js?v=20260927d"></script>
+    <script type="module" src="./studio.js?v=20260927i"></script>
   </body>
 </html>

@@ -48,6 +48,7 @@ function initPulseAndScenes() {
       btn.classList.toggle("is-active", on);
       btn.setAttribute("aria-checked", on ? "true" : "false");
       btn.title = belt.hint;
+      btn.setAttribute("aria-label", `Voyager : ${belt.label}. ${belt.hint}`);
       const label = document.createElement("span");
       label.className = "stream-scene__label";
       label.textContent = belt.label;

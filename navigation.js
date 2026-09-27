@@ -384,14 +384,14 @@ function syncPlanetFocusButton() {
   const label = planetFocusBtn.querySelector(".planet-focus__label");
   if (label) label.textContent = on ? "Retour" : "Voir";
   planetFocusBtn.disabled =
-    !on && (navigationLocked || isAnimating || document.body.dataset.intro !== "done");
+    !on && (navigationLocked || document.body.dataset.intro !== "done");
 }
 
 function setPlanetFocusActive(active) {
   const next = Boolean(active);
   if (next === planetFocusActive) return;
   if (next) {
-    if (navigationLocked || isAnimating || document.body.dataset.intro !== "done") {
+    if (navigationLocked || document.body.dataset.intro !== "done") {
       return;
     }
     if (document.body.dataset.webgl === "unavailable") return;
@@ -399,7 +399,7 @@ function setPlanetFocusActive(active) {
 
   planetFocusActive = next;
   document.body.dataset.planetFocus = next ? "on" : "off";
-  setPlanetFocusMode(next);
+  setPlanetFocusMode(next, isAnimating ? glideToIndex : currentSection);
   resetGate();
   syncPlanetFocusButton();
   syncScrollGate();
@@ -635,7 +635,7 @@ function clearLongJumpPanels() {
 /** Crossfade séquentiel : départ 1→0 première moitié, arrivée 0→1 seconde moitié. */
 function longJumpFadeWeights(t) {
   const fadeOut = clamp(1 - t * 2, 0, 1);
-  const fadeIn = clamp((t - 0.5) * 2, 0, 1);
+  const fadeIn = clamp((t - 0.12) * 1.55, 0, 1);
   return { fadeOut, fadeIn };
 }
 
@@ -693,7 +693,7 @@ function syncLongJumpPanels(t) {
     } else if (zone === glideToIndex) {
       panel.classList.add("is-long-jump-to");
       panel.style.opacity = String(fadeIn);
-      panel.classList.toggle("is-active", t >= 0.5);
+      panel.classList.toggle("is-active", fadeIn > 0.08);
     } else {
       panel.classList.add("is-long-jump-hidden");
       panel.style.opacity = "0";
@@ -717,7 +717,7 @@ function syncAdjacentGlidePanels(t) {
       panel.classList.toggle("is-active", t < 0.5);
     } else if (zone === glideToIndex) {
       panel.style.opacity = String(fadeIn);
-      panel.classList.toggle("is-active", t >= 0.5);
+      panel.classList.toggle("is-active", fadeIn > 0.08);
     } else {
       panel.classList.remove("is-active");
     }

@@ -5,10 +5,10 @@
 ## Stream + Twitch (août 2026)
 
 - UI : zone **Stream** (`#stream`, nav « Stream ») — ex-Radio.
-- **Stream privé + code** (22 sept. 2026) : HLS / WHEP derrière cookie session (`hakou_media`) **ou** cookie code (`hakou_listen`). Plexus animés partout par le **pouls studio** (`GET /api/stream/pulse`, public). Son : Stream + code + **Écouter le live**. Chat : bouton **Get in** (même cookie). Studio : bloc **Code spectateurs** (saisir 4–8 car. + **Valider** / Nouveau / Copier) au-dessus d’**En direct** — le code n’est plus généré en silence au live. Rec / WHIP = allowlist.
+- **Stream privé + code** (22 sept. 2026) : HLS / WHEP derrière cookie session (`hakou_media`) **ou** cookie code (`hakou_listen`). Plexus animés partout par le **pouls studio** (`GET /api/stream/pulse`, public). Son : Stream + code + **Écouter le live**. Chat : **Get in** pour les invités (code) ; **allowlist = déjà dedans** (pas de Get in). Studio : bloc **Code spectateurs**. Rec / WHIP = allowlist.
 - **Enregistrement VPS** (31 août 2026, MAJ 20 sept. 2026) : **indépendant du live**. Studio : **Enregistrer** + barre **chrono / timeline / Pause / Stop**. Chunks MediaRecorder **pipés** dans ffmpeg → MP4 AAC **320 kb/s** + visuel canvas 1280×720. Badge **son d’onglet** vs **entrée audio**. **Lecture / suppression** : galerie `#stream` + studio « Enregistrements VPS » (auth allowlist). Fichiers `hakou-YYYYMMDD-HHMMSS.mp4` dans `RECORD_DIR`.
 - **Destination live** (31 août 2026) : studio — Hakou seulement / YouTube Live / Twitch (un réseau à la fois). Hakou HLS continue toujours. YouTube = OAuth Live. **URI Google exacte** : `https://studio.hakou.be/api/studio/youtube/callback` (sinon `redirect_uri_mismatch`). Twitch = **clé de stream collée** (OAuth Helix optionnel). Relais ffmpeg RTSP local `:8554` → RTMP **libx264 GOP 2 s**. WHIP : H264 préféré + **VP8 en repli**. Restream refuse sans piste vidéo — la piste vient du **visualiseur** (`canvas.captureStream`), plus du partage d’écran. Comptes chiffrés `studio/data/live-accounts.bin`.
-- **Studio visuel / ceintures** (26–27 sept. 2026) : intro logo → Pluton = **droite figée**. Glides ellipse Soleil. **Stream = Jupiter §4**, Visuel = Uranus §2. **OVH Hub** allowlist. Son = profil **ou** code. Plexus visibles partout. Mode Voir : drag = **agrippage** du globe. Cache site `?v=20260927d` / studio `?v=20260927d`.
+- **Studio visuel / ceintures** (26–27 sept. 2026) : intro logo → Pluton = **droite figée**. Glides ellipse Soleil. **Stream = Jupiter §4**, Visuel = Uranus §2. Allowlist : **pas de Get in**, chat auto. Lieux Stream (Principale / L4 / Kuiper / Saturne) : libellé **Voyager** ; clic = **voyage caméra** (ellipse, overlay Stream inchangé). Pendant un glide nav, les lieux **steerent** le reste du path. **Studio** : Valider le code range le cockpit. **Spectateur** : HUD gauche étroit. Cache site `?v=20260927i` / studio `?v=20260927i`.
 - Priorité live : **studio MediaMTX** → **Twitch** → **YouTube** ; hors antenne → **logo Hakou** (plus de playlist YouTube).
 - **Logo hors antenne** (4 août 2026) : `assets/logo-hakou.svg` avec `viewBox` calé sur les bounds du path (plus de crop) ; CSS `object-fit: contain`, animation opacité seule (pas de `scale` qui coupait dans le frame `overflow: hidden`).
 - API : `GET https://studio.hakou.be/api/stream/status` (alias `/api/radio/status`) — **public** (live / HLS / WHEP) ; `archives` seulement si session allowlist.
@@ -53,7 +53,7 @@
 
 - **Consentement** : `localStorage` clé `hakou-consent-v1` = `accepted` \| `essential`. Live studio HLS/WHEP = 1ʳᵉ partie (pas bloqué). YouTube / SoundCloud / Instagram = après acceptation.
 - **Déploiement VPS** : redémarrer `hakou-studio` après pull pour appliquer `server.mjs` / `contact.mjs` ; optionnel `CONTACT_RETENTION_DAYS=365` dans `/opt/hakou-studio/.env`.
-- **Stream** : mix privé. Son = allowlist **ou** code (`data-stream-listen`). Chat = **Get in**. Invités sans code = lieux + plexus (mouvement doux **sur tout le site**). Stream ancré **Jupiter**. **OVH Hub** allowlist. Cache `?v=20260927d`.
+- **Stream** : mix privé. Son = allowlist **ou** code (`data-stream-listen`). Chat = **Get in**. Invités sans code = lieux + plexus (mouvement doux **sur tout le site**). Stream ancré **Jupiter**. **OVH Hub** allowlist. Cache `?v=20260927i`.
 
 
 
@@ -91,13 +91,13 @@
 
 - **Mobile chrome** (`styles.css`, `≤680px`) : échelle en barre fine en haut (`--mobile-solar-top`, sans verre) ; masque haut `body::before` opaque (pas de flash clair quand la scène 3D ou les panels passent derrière) ; masque bas `body::after` en verre pour la nav. Panels : `justify-content: safe center` dans la zone entre chrome haut/bas.
 
-- **Transition adjacente** (`span ≤ 1`) : overlay défile verticalement, durée base **3200 ms**, crossfade séquentiel (départ puis arrivée) via `longJumpFadeWeights` + `data-adjacent-glide` (pas de transition CSS parasite).
+- **Transition adjacente** (`span ≤ 1`) : overlay défile verticalement, durée base **3200 ms**, crossfade via `longJumpFadeWeights` (arrivée dès **t ≈ 0,12**, panel destination `is-active` dès qu’elle est lisible) + `data-adjacent-glide`.
 
 - **Saut long** (`span > 1`, ex. Intro→Contact) :
 
   - Overlay **ancré sur la section d'arrivée** (`-glideToIndex × 100vh`) — pas de snap final.
 
-  - Panel départ décalé par `--long-jump-offset` ; panel arrivée à opacité 0 jusqu'à `t > 0.5`.
+  - Panel départ décalé par `--long-jump-offset` ; panel arrivée fade-in dès **t ≈ 0,12** (cliquable pendant le reste du glide).
 
   - Crossfade séquentiel : départ `1→0` (0–50 %), arrivée `0→1` (50–100 %).
 
@@ -183,7 +183,7 @@
 
 - Pendant un saut long : orbites planètes continues ; accent / proximité visuelle via `getActiveSectionIndex` / `getSectionProximity` (from/to).
 
-- **Orbit manuelle au repos** : hors mode focus, le canvas reste en `pointer-events: none` (nav / panels prioritaires). **Mode observation planète** (`#planet-focus`) : clic **Voir** → blend `FOCUS_ENTER_MS` 900 ms du cadrage héro (planète en bord, regard horizon) vers une **vue face au globe** (lookAt centre, rayon ~`FOCUS_OBSERVE_RADIUS_MUL` × taille, élévation adoucie) — plus de téléport au premier drag ; **Retour** → blend `FOCUS_EXIT_MS` 680 ms vers héro. Spin gelé pendant grab. **Drag = agrippage** : glisser à gauche tourne le globe avec le doigt (signe inversé vs orbite caméra). Exports `setPlanetFocusMode` / `isPlanetFocusMode` ; `setPlanetFocus` / `isPlanetFocusActive`.
+- **Orbit manuelle au repos** : hors mode focus, le canvas reste en `pointer-events: none` (nav / panels prioritaires). **Mode observation planète** (`#planet-focus`) : clic **Voir** → blend `FOCUS_ENTER_MS` 900 ms du cadrage héro (planète en bord, regard horizon) vers une **vue face au globe** (lookAt centre, rayon ~`FOCUS_OBSERVE_RADIUS_MUL` × taille, élévation adoucie) — plus de téléport au premier drag ; **Retour** → blend `FOCUS_EXIT_MS` 680 ms vers héro. **Voir / grab autorisés pendant le glide** : la caméra quitte l’ellipse et observe la **planète d’arrivée**. Spin gelé pendant grab. **Drag = agrippage** : glisser à gauche tourne le globe avec le doigt (signe inversé vs orbite caméra). Exports `setPlanetFocusMode` / `isPlanetFocusMode` ; `setPlanetFocus` / `isPlanetFocusActive`.
 
 - **Orbit manuelle (détail technique)** : free-orbit si `sectionUserOrbit.modified` via `focusOrbitToPos`. Entrée : branche caméra dédiée `focusEnterActive` (pas de héro parasite) → `commitFocusEnterOrbit` ; sortie : `beginFocusExitBlend` + clear `modified`. Spins : `spinSpeedFromPeriodHours` × `PLANET_SPIN_MUL` ; Uranus / Vénus rétrogrades.
 

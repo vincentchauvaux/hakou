@@ -851,6 +851,12 @@ const streamCamOut = {
 const streamHeroDir = new THREE.Vector3();
 const streamLookSmooth = new THREE.Vector3();
 let streamLookReady = false;
+/** Clic lieu Stream pendant un glide : la caméra quitte l’ellipse et vise ce spot. */
+let streamSpotSteer = false;
+/** Voyage interne Stream (overlay inchangé) : from/to = indices planète. */
+let spotVoyage = null;
+let onStreamLive = false;
+let streamSpotLerpBoost = 0;
 const plexusPointer = { x: 0, y: 0, down: false };
 const plexusPointerSmooth = { x: 0, y: 0 };
 const streamTouchFwd = new THREE.Vector3();
@@ -1519,7 +1525,7 @@ function resetFocusSpinHold() {
 }
 
 function canOrbitDrag() {
-  return planetFocusMode && !introGateActive && !lastGlideAnimating;
+  return planetFocusMode && !introGateActive;
 }
 
 /** Pivot d’observation = centre de la planète (mesh live ou position orbitale). */
@@ -2116,13 +2122,20 @@ function finishFocusEnterBlend(snapToTarget = true) {
 }
 
 /** Active le mode observation (drag + zoom caméra autour de la planète). */
-export function setPlanetFocusMode(active) {
+export function setPlanetFocusMode(active, sectionIndex) {
   const next = Boolean(active);
   if (next === planetFocusMode) return;
   if (orbitCanvas) {
     orbitCanvas.classList.toggle("planet-focus-canvas", next);
   }
   if (next) {
+    if (Number.isFinite(sectionIndex)) {
+      lastAtRestSectionIndex = clamp(
+        Math.round(sectionIndex),
+        0,
+        SECTION_COUNT - 1
+      );
+    }
     focusExitActive = false;
     planetFocusMode = true;
     focusOrbitLastTickMs = performance.now();
@@ -3919,7 +3932,13 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
 
   const cam = sampleCameraState(displaySection, elapsed, glideState);
   const inLongGlide = isLongGlide(glideState);
-  const sectionIndex = getActiveSectionIndex(displaySection, glideState);
+  const destIndex =
+    inGlide && Number.isFinite(glideState?.to)
+      ? glideState.to
+      : getActiveSectionIndex(displaySection, glideState);
+  const sectionIndex = planetFocusMode
+    ? destIndex
+    : getActiveSectionIndex(displaySection, glideState);
   const planetDisplay = displaySection;
   const planetGlide = glideState;
   const framing = SECTION_FRAMING[sectionIndex] ?? SECTION_FRAMING[0];
@@ -3949,8 +3968,7 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
   const restPosAlpha = 0.16 + activeBlend * 0.48;
   const atRest =
     !inGlide && settleT >= 1 && introSnapFrames >= INTRO_SNAP_FRAMES;
-  const focusOrbit =
-    planetFocusMode && !inGlide && isFocusFreeOrbitActive(sectionIndex);
+  const focusOrbit = planetFocusMode && isFocusFreeOrbitActive(sectionIndex);
   const userOrbit =
     focusOrbit || (atRest && sectionUserOrbit[sectionIndex]?.modified);
   lastAtRestSectionIndex = sectionIndex;
@@ -3964,8 +3982,8 @@ function updateCamera(displaySection, elapsed, glideState, settleT = 1) {
     }
     introSnapFrames += 1;
     camSmoothReady = true;
-  } else if (focusEnterActive && !inGlide) {
-    // Entrée Voir : uniquement le blend héro → face planète (pas de cadrage héro parasite).
+  } else if (focusEnterActive) {
+    // Entrée Voir : blend héro → face planète, même pendant un glide d’arrivée.
     if (!camSmoothReady) {
       smoothedCamPos.copy(focusEnterFromPos);
       camSmoothReady = true;
@@ -4575,9 +4593,51 @@ export { BELTS, STREAM_SECTION };
 
 export function setStreamSpot(id) {
   const next = BELTS.some((b) => b.id === id) ? id : "main";
-  if (next === streamSpotId) return;
+  const prevId = streamSpotId;
   streamSpotId = next;
-  lastAtRestSectionIndex = STREAM_SECTION;
+  const belt = BELTS.find((b) => b.id === next) || BELTS[0];
+  const sec = Number(belt.view?.section);
+  const from = lastAtRestSectionIndex;
+  if (Number.isFinite(sec)) lastAtRestSectionIndex = sec;
+  if (lastGlideAnimating) {
+    streamSpotSteer = true;
+    streamLookReady = false;
+    return;
+  }
+  if (!onStreamLive || introGateActive) return;
+  if (next === prevId && !spotVoyage) return;
+  const dest = Number.isFinite(sec) ? sec : STREAM_SECTION;
+  if (from !== dest) {
+    const span = Math.abs(dest - from);
+    spotVoyage = {
+      from,
+      to: dest,
+      start: performance.now(),
+      duration: 1100 + span * 380,
+    };
+    streamSpotSteer = true;
+  } else {
+    streamSpotLerpBoost = 1;
+  }
+}
+
+function applySpotVoyage(elapsed) {
+  const v = spotVoyage;
+  if (!v) return;
+  const u = clamp((performance.now() - v.start) / v.duration, 0, 1);
+  const t = spacecraftEase(u);
+  const display = v.from + (v.to - v.from) * t;
+  updateCamera(display, elapsed, {
+    from: v.from,
+    to: v.to,
+    t,
+    animating: true,
+  }, 1);
+  if (u >= 1) {
+    lastAtRestSectionIndex = v.to;
+    spotVoyage = null;
+    streamLookReady = false;
+  }
 }
 
 export function getStreamSpot() {
@@ -4604,21 +4664,18 @@ function streamSpotDef() {
 }
 
 function isOnStreamPanel(displaySection, glideState) {
-  const inGlide = Boolean(glideState?.animating && glideState.from !== glideState.to);
-  return (
-    !introGateActive &&
-    !inGlide &&
-    Math.abs(displaySection - STREAM_SECTION) < 0.08
-  );
+  if (introGateActive) return false;
+  if (glideState?.animating && glideState.from !== glideState.to) {
+    return glideState.to === STREAM_SECTION;
+  }
+  return Math.abs(displaySection - STREAM_SECTION) < 0.08;
 }
 
 function isStreamSpotHub(displaySection, glideState) {
-  return (
-    isOnStreamPanel(displaySection, glideState) &&
-    !planetFocusMode &&
-    !focusEnterActive &&
-    !focusExitActive
-  );
+  if (!isOnStreamPanel(displaySection, glideState)) return false;
+  if (planetFocusMode || focusEnterActive || focusExitActive) return false;
+  const inGlide = Boolean(glideState?.animating && glideState.from !== glideState.to);
+  return !inGlide || streamSpotSteer;
 }
 
 const streamCamState = {
@@ -4632,8 +4689,11 @@ const streamCamState = {
 };
 
 function fillStreamSpotCamera(elapsed) {
-  getHeroCamera(STREAM_SECTION, elapsed, STREAM_SECTION, streamCamOut);
   const v = streamSpotDef().view || {};
+  const section = Number.isFinite(Number(v.section))
+    ? Number(v.section)
+    : STREAM_SECTION;
+  getHeroCamera(section, elapsed, section, streamCamOut);
   const distMul = Number(v.distMul) > 0 ? Number(v.distMul) : 1;
   const az = Number(v.az) || 0;
   const el = Number(v.el) || 0;
@@ -4644,15 +4704,13 @@ function fillStreamSpotCamera(elapsed) {
   if (streamTouchRight.lengthSq() < 1e-6) streamTouchRight.set(1, 0, 0);
   streamTouchRight.normalize();
   streamTouchUp.crossVectors(streamHeroDir, streamTouchRight).normalize();
-  // Même ciel que Jupiter §4, un peu reculé : les ceintures / plexus restent dans le cadre.
-  const pull = 2.85;
   streamCamOut.position
     .copy(streamCamOut.lookAt)
-    .addScaledVector(streamHeroDir, len * distMul * pull)
-    .addScaledVector(streamTouchRight, az * len * pull)
-    .addScaledVector(streamTouchUp, el * len * pull);
-  streamCamState.fromIndex = STREAM_SECTION;
-  streamCamState.toIndex = STREAM_SECTION;
+    .addScaledVector(streamHeroDir, len * distMul)
+    .addScaledVector(streamTouchRight, az * len)
+    .addScaledVector(streamTouchUp, el * len);
+  streamCamState.fromIndex = section;
+  streamCamState.toIndex = section;
   streamCamState.fov = streamCamOut.fov ?? 32;
   return streamCamState;
 }
@@ -4663,8 +4721,9 @@ function applyStreamSpotCamera(elapsed) {
     streamLookSmooth.copy(streamCamOut.lookAt);
     streamLookReady = true;
   }
-  smoothedCamPos.lerp(streamCamOut.position, 0.08);
-  streamLookSmooth.lerp(streamCamOut.lookAt, 0.09);
+  smoothedCamPos.lerp(streamCamOut.position, streamSpotLerpBoost > 0.08 ? 0.2 : 0.08);
+  streamLookSmooth.lerp(streamCamOut.lookAt, streamSpotLerpBoost > 0.08 ? 0.22 : 0.09);
+  if (streamSpotLerpBoost > 0) streamSpotLerpBoost *= 0.9;
   camera.position.copy(smoothedCamPos);
   const fov = streamCamOut.fov ?? camera.fov;
   camera.fov += (fov - camera.fov) * 0.09;
@@ -4878,6 +4937,7 @@ export function renderScene(displaySection, glideState = null) {
   }
   tickFocusOrbitInertia();
   const onStream = isOnStreamPanel(displaySection, glideState);
+  onStreamLive = onStream;
   updatePlanets(elapsed, displaySection, glideState);
   updateOrbitRings(displaySection, glideState);
   updateStars(elapsed, camera.position, displaySection, glideState);
@@ -4886,8 +4946,15 @@ export function renderScene(displaySection, glideState = null) {
 
   if (introGateActive) {
     updateIntroGate(elapsed);
+  } else if (spotVoyage) {
+    applySpotVoyage(elapsed);
+  } else if (isStreamSpotHub(displaySection, glideState)) {
+    applyStreamSpotCamera(elapsed);
   } else {
-    if (!onStream) streamLookReady = false;
+    if (!onStream) {
+      streamLookReady = false;
+      streamSpotSteer = false;
+    }
     updateCamera(displaySection, elapsed, glideState, settleT);
   }
 

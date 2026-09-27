@@ -320,8 +320,25 @@
     $("stream-chat-enter")?.addEventListener("click", () => {
       onGetIn().catch((err) => console.warn(LOG, err));
     });
-    setJoined(false);
-    setStatus("Get in pour rejoindre le chat.");
+
+    function autoJoinIfAllowed() {
+      if (joined) return;
+      if (document.body.dataset.streamAuth !== "ok") return;
+      setJoined(true);
+      connect(chatUrl);
+      setStatus("");
+    }
+
+    window.addEventListener("hakou:stream-allowed", autoJoinIfAllowed);
+    if (window.HakouStreamGate?.whenAllowed) {
+      window.HakouStreamGate.whenAllowed(() => autoJoinIfAllowed());
+    }
+    if (document.body.dataset.streamAuth === "ok") {
+      autoJoinIfAllowed();
+    } else {
+      setJoined(false);
+      setStatus("Get in pour rejoindre le chat.");
+    }
   }
 
   function boot() {
