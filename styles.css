@@ -1682,8 +1682,11 @@ body:not([data-stream-auth="ok"]) .site-card--crew {
 .stream-dock {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.55rem;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .stream-dock__label {
@@ -1696,19 +1699,20 @@ body:not([data-stream-auth="ok"]) .site-card--crew {
 
 .stream-dock .stream-scenes {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   width: 100%;
   margin: 0;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .stream-dock .radio-chat__getin {
   margin-left: 0;
+  align-self: flex-start;
 }
 
 body:not([data-stream-in="1"]):not([data-stream-auth="ok"]) #stream .stream-dock {
   width: 100%;
-  padding: 0.45rem 0.5rem 0.5rem;
+  padding: 0.55rem 0.6rem 0.6rem;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(7, 10, 18, 0.42);
@@ -1716,6 +1720,7 @@ body:not([data-stream-in="1"]):not([data-stream-auth="ok"]) #stream .stream-dock
   -webkit-backdrop-filter: blur(14px) saturate(1.1);
 }
 
+body:not([data-stream-auth="ok"]) .radio-status:not([data-state="live"]),
 body:not([data-stream-auth="ok"]):not([data-stream-listen="1"]) .radio-status,
 body:not([data-stream-auth="ok"]):not([data-stream-listen="1"]) .radio-player,
 body:not([data-stream-auth="ok"]):not([data-stream-listen="1"]) #stream-listen,
@@ -1912,6 +1917,10 @@ body[data-stream-auth="guest"] .consent-placeholder {
   max-width: none;
   width: 100%;
   align-self: stretch;
+}
+
+#stream.panel > #stream-content {
+  max-width: 100%;
 }
 
 /*
@@ -2386,11 +2395,12 @@ body[data-stream-auth="ok"] #stream.panel.panel--frame-right {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   width: 100%;
   max-width: 100%;
-  min-height: 32px;
-  padding: 0.32rem 0.45rem;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0.4rem 0.55rem;
   border-radius: 999px;
   border: 1px solid var(--panel-card-border, rgba(147, 170, 219, 0.28));
   background: rgba(0, 0, 0, 0.22);
@@ -2419,10 +2429,13 @@ body[data-stream-auth="ok"] #stream.panel.panel--frame-right {
 }
 
 .stream-scene__label {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 650;
   line-height: 1.2;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .stream-recordings {
@@ -3467,6 +3480,10 @@ body.youtube-video-modal-open {
       480px,
       calc(100vw - var(--solar-scale-gutter) - var(--side-nav-gutter) - 48px)
     );
+  }
+
+  .stream-dock .stream-scenes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   #stream.panel {
